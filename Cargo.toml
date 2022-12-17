@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "remglk",
+]
+
+[profile.release]
+lto = true
