@@ -18,7 +18,7 @@ use filerefs::FileRef;
 
 const GLK_NULL: u32 = 0;
 
-pub type GlkStream = GlkObject<dyn Stream>;
+pub type GlkStream<T, Dest, Src> = GlkObject<dyn Stream<T, Dest, Src>>;
 
 #[derive(Error, Debug)]
 pub enum StreamError {
@@ -34,20 +34,26 @@ pub struct StreamResult {
     pub write_count: u32,
 }
 
-pub trait Stream {
+pub trait Stream<T, Dest, Src>
+where
+    [Dest]: GlkArray + SetGlkBuffer<[T]>
+{
     fn close(&self) -> StreamResult;
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> Result<u32, StreamError>;
+    fn get_buffer(&mut self, buf: &mut [Dest]) -> Result<u32, StreamError>;
     fn get_char(&mut self, uni: bool) -> Result<i32, StreamError>;
-    fn get_line(&mut self, buf: &mut GlkArray) -> Result<u32, StreamError>;
+    fn get_line(&mut self, buf: &mut [Dest]) -> Result<u32, StreamError>;
     fn get_position(&self) -> u32;
-    fn put_buffer(&mut self, buf: &GlkArray) -> Result<(), StreamError>;
+    fn put_buffer(&mut self, buf: &[Src]) -> Result<(), StreamError>;
     fn put_char(&mut self, ch: u32) -> Result<(), StreamError>;
     fn set_position(&mut self, mode: SeekMode, pos: i32);
 }
 
 /** A fixed-length TypedArray backed stream */
-pub struct ArrayBackedStream<'a> {
-    buf: &'a mut GlkArray<'a>,
+pub struct ArrayBackedStream<'a, T>
+where
+    [T]: GlkArray,
+{
+    buf: &'a mut [T],
     close_cb: Option<fn()>,
     fmode: FileMode,
     /** The length of the active region of the buffer.
@@ -60,8 +66,11 @@ pub struct ArrayBackedStream<'a> {
     write_count: usize,
 }
 
-impl<'a> ArrayBackedStream<'a> {
-    pub fn new(buf: &'a mut GlkArray<'a>, fmode: FileMode, close_cb: Option<fn()>) -> ArrayBackedStream<'a> {
+impl<'a, T> ArrayBackedStream<'a, T>
+where
+    [T]: GlkArray,
+{
+    pub fn new(buf: &'a mut [T], fmode: FileMode, close_cb: Option<fn()>) -> ArrayBackedStream<'a, T> {
         let buf_len = buf.len();
         ArrayBackedStream {
             buf,
@@ -79,7 +88,11 @@ impl<'a> ArrayBackedStream<'a> {
 }
 
 /*** An ArrayBackedStream is the basis of memory and file streams */
-impl Stream for ArrayBackedStream<'_> {
+impl<T, Dest, Src> Stream<T, Dest, Src> for ArrayBackedStream<'_, T>
+where
+    [Dest]: GlkArray + SetGlkBuffer<[T]>,
+    [T]: GlkArray + SetGlkBuffer<[Src]>,
+{
     fn close(&self) -> StreamResult {
         if let Some(cb) = self.close_cb {
             cb();
@@ -90,7 +103,7 @@ impl Stream for ArrayBackedStream<'_> {
         }
     }
 
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> Result<u32, StreamError> {
+    fn get_buffer(&mut self, buf: &mut [Dest]) -> Result<u32, StreamError> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
             return Err(StreamError::ReadFromWriteOnly);
         }
@@ -98,7 +111,7 @@ impl Stream for ArrayBackedStream<'_> {
         if read_length == 0 {
             return Ok(0);
         }
-        buf.set_slice(self.buf, self.pos, 0, read_length);
+        buf[..read_length].set_buffer(&self.buf[self.pos..(self.pos + read_length)]);
         self.pos += read_length;
         self.read_count += read_length;
         Ok(read_length as u32)
@@ -117,7 +130,7 @@ impl Stream for ArrayBackedStream<'_> {
         Ok(-1)
     }
 
-    fn get_line(&mut self, buf: &mut GlkArray) -> Result<u32, StreamError> {
+    fn get_line(&mut self, buf: &mut [Dest]) -> Result<u32, StreamError> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
             return Err(StreamError::ReadFromWriteOnly);
         }
@@ -144,14 +157,14 @@ impl Stream for ArrayBackedStream<'_> {
         self.pos as u32
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> Result<(), StreamError> {
+    fn put_buffer(&mut self, buf: &[Src]) -> Result<(), StreamError> {
         if let FileMode::Read = self.fmode {
             return Err(StreamError::WriteToReadOnly);
         }
         let buf_length = buf.len();
         let write_length = min(buf_length, self.len - self.pos);
         if write_length > 0 {
-            self.buf.set_slice(buf, 0, self.pos, write_length);
+            self.buf[self.pos..(self.pos + write_length)].set_buffer(&buf[..write_length]);
             self.pos += write_length;
         }
         self.write_count += buf_length;
@@ -180,6 +193,7 @@ impl Stream for ArrayBackedStream<'_> {
     }
 }
 
+/*
 /** FileStreams are based on array backed streams, but can grow in length */
 pub struct FileStream<'buf, 'fref> {
     fref: &'fref FileRef,
@@ -242,8 +256,9 @@ impl Stream for FileStream<'_, '_> {
         self.str.set_position(mode, pos)
     }
 }
+*/
 
-/*** A NullStream is only used for a memory stream with no buffer */
+/** A NullStream is only used for a memory stream with no buffer */
 pub struct NullStream {
     write_count: usize,
 }
@@ -256,7 +271,10 @@ impl NullStream {
     }
 }
 
-impl Stream for NullStream {
+impl<T, Dest, Src> Stream<T, Dest, Src> for NullStream
+where
+    [Dest]: GlkArray + SetGlkBuffer<[T]>,
+{
     fn close(&self) -> StreamResult {
         StreamResult {
             read_count: 0,
@@ -264,7 +282,7 @@ impl Stream for NullStream {
         }
     }
 
-    fn get_buffer(&mut self, _: &mut GlkArray) -> Result<u32, StreamError> {
+    fn get_buffer(&mut self, _: &mut [Dest]) -> Result<u32, StreamError> {
         Ok(0)
     }
 
@@ -272,7 +290,7 @@ impl Stream for NullStream {
         Ok(-1)
     }
 
-    fn get_line(&mut self, _: &mut GlkArray) -> Result<u32, StreamError> {
+    fn get_line(&mut self, _: &mut [Dest]) -> Result<u32, StreamError> {
         Ok(0)
     }
 
@@ -280,7 +298,7 @@ impl Stream for NullStream {
         0
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> Result<(), StreamError> {
+    fn put_buffer(&mut self, buf: &[Src]) -> Result<(), StreamError> {
         self.write_count += buf.len();
         Ok(())
     }

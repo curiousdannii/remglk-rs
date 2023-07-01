@@ -9,8 +9,6 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-use super::*;
-
 pub struct FileRef {}
 
 impl FileRef {
@@ -24,5 +22,5 @@ impl FileRef {
         None
     }
 
-    pub fn write(_: &GlkArray) {}
+    pub fn write<T>(_: &[T]) {}
 }
