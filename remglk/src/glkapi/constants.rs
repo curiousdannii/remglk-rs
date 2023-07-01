@@ -126,6 +126,7 @@ pub const filemode_Write: u32 = 0x01;
 pub const filemode_Read: u32 = 0x02;
 pub const filemode_ReadWrite: u32 = 0x03;
 pub const filemode_WriteAppend: u32 = 0x05;
+#[derive(Copy, Clone)]
 pub enum FileMode {
     Read = 0x02,
     ReadWrite = 0x03,
@@ -136,6 +137,7 @@ pub enum FileMode {
 pub const seekmode_Start: u32 = 0;
 pub const seekmode_Current: u32 = 1;
 pub const seekmode_End: u32 = 2;
+#[derive(Copy, Clone)]
 pub enum SeekMode {
     Current = 1,
     End = 2,

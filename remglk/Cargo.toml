@@ -8,4 +8,7 @@ homepage = "https://github.com/curiousdannii/remglk-rs"
 license = "MIT"
 repository = "https://github.com/curiousdannii/remglk-rs"
 
+[dependencies]
+thiserror = "1.0.40"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
