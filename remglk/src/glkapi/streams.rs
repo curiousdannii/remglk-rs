@@ -9,12 +9,13 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-use std::cmp::{max, min};
+use std::cmp::min;
 use thiserror::Error;
 
 use super::*;
+use arrays::*;
 use constants::*;
-use filerefs::FileRef;
+use protocol::FileRef;
 
 const GLK_NULL: u32 = 0;
 
@@ -48,16 +49,21 @@ where
     fn set_position(&mut self, mode: SeekMode, pos: i32);
 }
 
-/** A fixed-length TypedArray backed stream */
+/** A fixed-length stream based on a buffer (slice).
+    An ArrayBackedStream are used for memory and resource streams, and are the basis of file streams.
+*/
 pub struct ArrayBackedStream<'a, T>
 where
     [T]: GlkArray,
 {
-    buf: &'a mut [T],
+    buf: DataSource<'a, T>,
     close_cb: Option<fn()>,
+    /** Whether we need to check if we should expand the active buffer region before writing */
+    expandable: bool,
     fmode: FileMode,
     /** The length of the active region of the buffer.
-        This can be shorter than the actual length of the buffer in two situations: a file stream, or a `filemode_Write` memory stream.
+        This can be shorter than the actual length of the buffer in a `filemode_Write` memory stream.
+        Expanding filestreams is handled differently, see below.
         See https://github.com/iftechfoundation/ifarchive-if-specs/issues/8
     */
     len: usize,
@@ -70,11 +76,12 @@ impl<'a, T> ArrayBackedStream<'a, T>
 where
     [T]: GlkArray,
 {
-    pub fn new(buf: &'a mut [T], fmode: FileMode, close_cb: Option<fn()>) -> ArrayBackedStream<'a, T> {
+    pub fn new(buf: DataSource<'a, T>, fmode: FileMode, close_cb: Option<fn()>) -> ArrayBackedStream<'a, T> {
         let buf_len = buf.len();
         ArrayBackedStream {
             buf,
             close_cb,
+            expandable: fmode == FileMode::Write,
             fmode,
             len: match fmode {
                 FileMode::Write => 0,
@@ -85,9 +92,15 @@ where
             write_count: 0,
         }
     }
+
+    fn expand(&mut self, increase: usize) {
+        self.len = min(self.pos + increase, self.buf.len());
+        if self.len == self.buf.len() {
+            self.expandable = false;
+        }
+    }
 }
 
-/*** An ArrayBackedStream is the basis of memory and file streams */
 impl<T, Dest, Src> Stream<T, Dest, Src> for ArrayBackedStream<'_, T>
 where
     [Dest]: GlkArray + SetGlkBuffer<[T]>,
@@ -161,13 +174,15 @@ where
         if let FileMode::Read = self.fmode {
             return Err(StreamError::WriteToReadOnly);
         }
-        let buf_length = buf.len();
-        let write_length = min(buf_length, self.len - self.pos);
+        self.write_count += buf.len();
+        if self.pos + buf.len() > self.len && self.expandable {
+            self.expand(buf.len());
+        }
+        let write_length = min(buf.len(), self.len - self.pos);
         if write_length > 0 {
             self.buf[self.pos..(self.pos + write_length)].set_buffer(&buf[..write_length]);
             self.pos += write_length;
         }
-        self.write_count += buf_length;
         Ok(())
     }
 
@@ -175,11 +190,14 @@ where
         if let FileMode::Read = self.fmode {
             return Err(StreamError::WriteToReadOnly);
         }
+        self.write_count += 1;
+        if self.pos == self.len && self.expandable {
+            self.expand(1);
+        }
         if self.pos < self.len {
             self.buf.set_u32(self.pos, ch);
             self.pos += 1;
         }
-        self.write_count += 1;
         Ok(())
     }
 
@@ -193,34 +211,51 @@ where
     }
 }
 
-/*
-/** FileStreams are based on array backed streams, but can grow in length */
-pub struct FileStream<'buf, 'fref> {
+/** Writable FileStreams are based on array backed streams, but can grow in length.
+    Read-only file streams just use an ArrayBackedStream directly.
+*/
+pub struct FileStream<'buf, 'fref, T>
+where
+    T: Clone + Default,
+    [T]: GlkArray,
+{
     fref: &'fref FileRef,
-    str: ArrayBackedStream<'buf>,
+    str: ArrayBackedStream<'buf, T>,
 }
 
-impl<'buf, 'fref> FileStream<'buf, 'fref> {
-    pub fn new(fref: &'fref FileRef, buf: &'buf mut GlkArray<'buf>, fmode: FileMode, ) -> FileStream<'buf, 'fref> {
+impl<'buf, 'fref, T> FileStream<'buf, 'fref, T>
+where
+    T: Clone + Default,
+    [T]: GlkArray,
+{
+    pub fn new(fref: &'fref FileRef, fmode: FileMode) -> FileStream<'buf, 'fref, T> {
+        assert!(fmode != FileMode::Read);
         FileStream {
             fref,
-            str: ArrayBackedStream::new(buf, fmode, None),
+            str: ArrayBackedStream::new(DataSource::Owned(Vec::<T>::new()), fmode, None),
         }
     }
 
     fn expand(&mut self, increase: usize) {
         let end_pos = self.str.pos + increase;
-        self.str.len = end_pos;
-        let mut max_len = self.str.buf.len();
-        if end_pos > max_len {
-            // Always expand by at least 100
-            max_len += max(end_pos - max_len, 100);
-
+        if end_pos > self.str.buf.len() {
+            match self.str.buf {
+                DataSource::Owned(ref mut v) => {
+                    v.resize(end_pos, T::default());
+                },
+                _ => unreachable!(),
+            };
+            self.str.len = end_pos;
         }
     }
 }
 
-impl Stream for FileStream<'_, '_> {
+impl<T, Dest, Src> Stream<T, Dest, Src> for FileStream<'_, '_, T>
+where
+    [Dest]: GlkArray + SetGlkBuffer<[T]>,
+    T: Clone + Default,
+    [T]: GlkArray + SetGlkBuffer<[Src]>,
+{
     fn close(&self) -> StreamResult {
         StreamResult {
             read_count: self.str.read_count as u32,
@@ -228,7 +263,7 @@ impl Stream for FileStream<'_, '_> {
         }
     }
 
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> Result<u32, StreamError> {
+    fn get_buffer(&mut self, buf: &mut [Dest]) -> Result<u32, StreamError> {
         self.str.get_buffer(buf)
     }
 
@@ -236,7 +271,7 @@ impl Stream for FileStream<'_, '_> {
         self.str.get_char(uni)
     }
 
-    fn get_line(&mut self, buf: &mut GlkArray) -> Result<u32, StreamError> {
+    fn get_line(&mut self, buf: &mut [Dest]) -> Result<u32, StreamError> {
         self.str.get_line(buf)
     }
 
@@ -244,11 +279,17 @@ impl Stream for FileStream<'_, '_> {
         self.str.get_position()
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> Result<(), StreamError> {
+    fn put_buffer(&mut self, buf: &[Src]) -> Result<(), StreamError> {
+        if self.str.pos + buf.len() > self.str.len {
+            self.expand(buf.len());
+        }
         self.str.put_buffer(buf)
     }
 
     fn put_char(&mut self, ch: u32) -> Result<(), StreamError> {
+        if self.str.pos == self.str.len {
+            self.expand(1);
+        }
         self.str.put_char(ch)
     }
 
@@ -256,7 +297,6 @@ impl Stream for FileStream<'_, '_> {
         self.str.set_position(mode, pos)
     }
 }
-*/
 
 /** A NullStream is only used for a memory stream with no buffer */
 pub struct NullStream {
