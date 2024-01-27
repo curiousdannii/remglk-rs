@@ -34,6 +34,13 @@ pub struct GlkApi {
 }
 
 impl GlkApi {
+    pub fn new() -> Self {
+        GlkApi {
+            streams: GlkObjectStore::new(),
+            current_stream: None,
+        }
+    }
+
     pub fn glk_get_buffer_stream(&mut self, str_id: Option<NonZeroU32>, buf: Vec<u8>) -> GlkResult<u32> {
         stream_op!(self, str_id, |str: &mut Stream| str.get_buffer(&mut GlkArray::U8(buf)))
     }

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "remglk",
+    "remglk_capi",
 ]
 
 [profile.release]

@@ -42,6 +42,7 @@ pub trait StreamOperations {
 }
 
 /** Final read/write character counts of a stream */
+#[repr(C)]
 pub struct StreamResultCounts {
     pub read_count: u32,
     pub write_count: u32,
