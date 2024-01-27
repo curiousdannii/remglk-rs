@@ -15,7 +15,6 @@ macro_rules! stream_op {
             let str = $self.streams.get_mut($str_id)
                 .ok_or(InvalidReference)?;
             $func(str)
-                .map_err(|err| StreamError(err))
         }
     }
 }

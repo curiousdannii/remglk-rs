@@ -10,44 +10,45 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 
 /** A store for Glk objects of a particular type.
     The object store will own the objects.
  */
 // TODO: Can we use a new type here?
 pub struct GlkObjectStore<T> {
-    counter: u32,
-    first: Option<u32>,
-    store: HashMap<u32, GlkObject<T>>,
+    counter: NonZeroU32,
+    first: Option<NonZeroU32>,
+    store: HashMap<NonZeroU32, GlkObject<T>>,
 }
 
 pub struct IterationResult {
-    pub id: u32,
+    pub id: NonZeroU32,
     pub rock: u32,
 }
 
 impl<T> GlkObjectStore<T> {
     pub fn new() -> Self {
         GlkObjectStore {
-            counter: 0,
+            counter: NonZeroU32::new(1).unwrap(),
             first: None,
             store: HashMap::new(),
         }
     }
 
-    pub fn get(&self, id: Option<u32>) -> Option<&T> {
+    pub fn get(&self, id: Option<NonZeroU32>) -> Option<&T> {
         self.store.get(&id?).map(|obj| &obj.obj)
     }
 
-    pub fn get_mut(&mut self, id: Option<u32>) -> Option<&mut T> {
+    pub fn get_mut(&mut self, id: Option<NonZeroU32>) -> Option<&mut T> {
         self.store.get_mut(&id?).map(|obj| &mut obj.obj)
     }
 
-    pub fn get_rock(&self, id: Option<u32>) -> Option<u32> {
+    pub fn get_rock(&self, id: Option<NonZeroU32>) -> Option<u32> {
         self.store.get(&id?).map(|obj| obj.rock)
     }
 
-    pub fn iterate(&self, id: Option<u32>) -> Option<IterationResult> {
+    pub fn iterate(&self, id: Option<NonZeroU32>) -> Option<IterationResult> {
         let next = match id {
             None => self.first,
             Some(id) => self.store.get(&id).unwrap().next,
@@ -58,9 +59,9 @@ impl<T> GlkObjectStore<T> {
         })
     }
 
-    pub fn register(&mut self, obj: T, rock: u32) -> u32 {
+    pub fn register(&mut self, obj: T, rock: u32) -> NonZeroU32 {
         let new_id = self.counter;
-        self.counter += 1;
+        self.counter = self.counter.checked_add(1).expect("ran out of object IDs!");
         let mut glk_object = GlkObject::new(obj, rock);
         match self.first {
             None => {
@@ -78,7 +79,7 @@ impl<T> GlkObjectStore<T> {
     }
 
     /** Remove an object from the store */
-    pub fn unregister(&mut self, id: u32) {
+    pub fn unregister(&mut self, id: NonZeroU32) {
         let prev = self.store.get_mut(&id).unwrap().prev;
         let next = self.store.get_mut(&id).unwrap().next;
         if let Some(prev_id) = prev {
@@ -99,9 +100,9 @@ impl<T> GlkObjectStore<T> {
 /** Contains the private data we keep in each object store */
 struct GlkObject<T> {
     _disprock: Option<u32>,
-    next: Option<u32>,
+    next: Option<NonZeroU32>,
     obj: T,
-    prev: Option<u32>,
+    prev: Option<NonZeroU32>,
     rock: u32,
 }
 

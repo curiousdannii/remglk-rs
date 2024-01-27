@@ -12,10 +12,11 @@ https://github.com/curiousdannii/remglk-rs
 use std::cmp::min;
 
 use enum_dispatch::enum_dispatch;
-use thiserror::Error;
 
 use super::*;
 use arrays::*;
+use common::*;
+use GlkApiError::*;
 use constants::*;
 use protocol::FileRef;
 
@@ -30,26 +31,15 @@ pub enum Stream {
 
 #[enum_dispatch(Stream)]
 pub trait StreamOperations {
-    fn close(&self) -> StreamResult<StreamResultCounts>;
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> StreamResult<u32>;
-    fn get_char(&mut self, uni: bool) -> StreamResult<i32>;
-    fn get_line(&mut self, buf: &mut GlkArray) -> StreamResult<u32>;
+    fn close(&self) -> GlkResult<StreamResultCounts>;
+    fn get_buffer(&mut self, buf: &mut GlkArray) -> GlkResult<u32>;
+    fn get_char(&mut self, uni: bool) -> GlkResult<i32>;
+    fn get_line(&mut self, buf: &mut GlkArray) -> GlkResult<u32>;
     fn get_position(&self) -> u32;
-    fn put_buffer(&mut self, buf: &GlkArray) -> StreamResult<()>;
-    fn put_char(&mut self, ch: u32) -> StreamResult<()>;
+    fn put_buffer(&mut self, buf: &GlkArray) -> GlkResult<()>;
+    fn put_char(&mut self, ch: u32) -> GlkResult<()>;
     fn set_position(&mut self, mode: SeekMode, pos: i32);
 }
-
-#[derive(Error, Debug)]
-pub enum StreamError {
-    #[error("cannot close window stream")]
-    CannotCloseWindowStream,
-    #[error("cannot read from write-only stream")]
-    ReadFromWriteOnly,
-    #[error("cannot write to read-only stream")]
-    WriteToReadOnly,
-}
-pub type StreamResult<T> = Result<T, StreamError>;
 
 /** Final read/write character counts of a stream */
 pub struct StreamResultCounts {
@@ -104,7 +94,7 @@ impl ArrayBackedStream {
 }
 
 impl StreamOperations for ArrayBackedStream {
-    fn close(&self) -> StreamResult<StreamResultCounts> {
+    fn close(&self) -> GlkResult<StreamResultCounts> {
         if let Some(cb) = self.close_cb {
             cb();
         }
@@ -114,9 +104,9 @@ impl StreamOperations for ArrayBackedStream {
         })
     }
 
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> StreamResult<u32> {
+    fn get_buffer(&mut self, buf: &mut GlkArray) -> GlkResult<u32> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
-            return Err(StreamError::ReadFromWriteOnly);
+            return Err(ReadFromWriteOnly);
         }
         let read_length = min(buf.len(), self.len - self.pos);
         if read_length == 0 {
@@ -128,9 +118,9 @@ impl StreamOperations for ArrayBackedStream {
         Ok(read_length as u32)
     }
 
-    fn get_char(&mut self, uni: bool) -> StreamResult<i32> {
+    fn get_char(&mut self, uni: bool) -> GlkResult<i32> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
-            return Err(StreamError::ReadFromWriteOnly);
+            return Err(ReadFromWriteOnly);
         }
         self.read_count += 1;
         if self.pos < self.len {
@@ -141,9 +131,9 @@ impl StreamOperations for ArrayBackedStream {
         Ok(-1)
     }
 
-    fn get_line(&mut self, buf: &mut GlkArray) -> StreamResult<u32> {
+    fn get_line(&mut self, buf: &mut GlkArray) -> GlkResult<u32> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
-            return Err(StreamError::ReadFromWriteOnly);
+            return Err(ReadFromWriteOnly);
         }
         let read_length: isize = min(buf.len() as isize - 1, (self.len - self.pos) as isize);
         if read_length < 0 {
@@ -168,9 +158,9 @@ impl StreamOperations for ArrayBackedStream {
         self.pos as u32
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> StreamResult<()> {
+    fn put_buffer(&mut self, buf: &GlkArray) -> GlkResult<()> {
         if let FileMode::Read = self.fmode {
-            return Err(StreamError::WriteToReadOnly);
+            return Err(WriteToReadOnly);
         }
         self.write_count += buf.len();
         if self.pos + buf.len() > self.len && self.expandable {
@@ -184,9 +174,9 @@ impl StreamOperations for ArrayBackedStream {
         Ok(())
     }
 
-    fn put_char(&mut self, ch: u32) -> StreamResult<()> {
+    fn put_char(&mut self, ch: u32) -> GlkResult<()> {
         if let FileMode::Read = self.fmode {
-            return Err(StreamError::WriteToReadOnly);
+            return Err(WriteToReadOnly);
         }
         self.write_count += 1;
         if self.pos == self.len && self.expandable {
@@ -236,22 +226,22 @@ impl FileStream {
 }
 
 impl StreamOperations for FileStream {
-    fn close(&self) -> StreamResult<StreamResultCounts> {
+    fn close(&self) -> GlkResult<StreamResultCounts> {
         Ok(StreamResultCounts {
             read_count: self.str.read_count as u32,
             write_count: self.str.write_count as u32,
         })
     }
 
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> StreamResult<u32> {
+    fn get_buffer(&mut self, buf: &mut GlkArray) -> GlkResult<u32> {
         self.str.get_buffer(buf)
     }
 
-    fn get_char(&mut self, uni: bool) -> StreamResult<i32> {
+    fn get_char(&mut self, uni: bool) -> GlkResult<i32> {
         self.str.get_char(uni)
     }
 
-    fn get_line(&mut self, buf: &mut GlkArray) -> StreamResult<u32> {
+    fn get_line(&mut self, buf: &mut GlkArray) -> GlkResult<u32> {
         self.str.get_line(buf)
     }
 
@@ -259,14 +249,14 @@ impl StreamOperations for FileStream {
         self.str.get_position()
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> StreamResult<()> {
+    fn put_buffer(&mut self, buf: &GlkArray) -> GlkResult<()> {
         if self.str.pos + buf.len() > self.str.len {
             self.expand(buf.len());
         }
         self.str.put_buffer(buf)
     }
 
-    fn put_char(&mut self, ch: u32) -> StreamResult<()> {
+    fn put_char(&mut self, ch: u32) -> GlkResult<()> {
         if self.str.pos == self.str.len {
             self.expand(1);
         }
@@ -292,22 +282,22 @@ impl NullStream {
 }
 
 impl StreamOperations for NullStream {
-    fn close(&self) -> StreamResult<StreamResultCounts> {
+    fn close(&self) -> GlkResult<StreamResultCounts> {
         Ok(StreamResultCounts {
             read_count: 0,
             write_count: self.write_count as u32,
         })
     }
 
-    fn get_buffer(&mut self, _: &mut GlkArray) -> StreamResult<u32> {
+    fn get_buffer(&mut self, _: &mut GlkArray) -> GlkResult<u32> {
         Ok(0)
     }
 
-    fn get_char(&mut self, _: bool) -> StreamResult<i32> {
+    fn get_char(&mut self, _: bool) -> GlkResult<i32> {
         Ok(-1)
     }
 
-    fn get_line(&mut self, _: &mut GlkArray) -> StreamResult<u32> {
+    fn get_line(&mut self, _: &mut GlkArray) -> GlkResult<u32> {
         Ok(0)
     }
 
@@ -315,12 +305,12 @@ impl StreamOperations for NullStream {
         0
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> StreamResult<()> {
+    fn put_buffer(&mut self, buf: &GlkArray) -> GlkResult<()> {
         self.write_count += buf.len();
         Ok(())
     }
 
-    fn put_char(&mut self, _: u32) -> StreamResult<()> {
+    fn put_char(&mut self, _: u32) -> GlkResult<()> {
         self.write_count += 1;
         Ok(())
     }
