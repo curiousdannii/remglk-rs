@@ -35,16 +35,16 @@ impl<T> GlkObjectStore<T> {
         }
     }
 
-    pub fn get(&self, id: u32) -> Option<&T> {
-        self.store.get(&id).map(|obj| &obj.obj)
+    pub fn get(&self, id: Option<u32>) -> Option<&T> {
+        self.store.get(&id?).map(|obj| &obj.obj)
     }
 
-    pub fn get_mut(&mut self, id: u32) -> Option<&mut T> {
-        self.store.get_mut(&id).map(|obj| &mut obj.obj)
+    pub fn get_mut(&mut self, id: Option<u32>) -> Option<&mut T> {
+        self.store.get_mut(&id?).map(|obj| &mut obj.obj)
     }
 
-    pub fn get_rock(&self, id: u32) -> Option<u32> {
-        self.store.get(&id).map(|obj| obj.rock)
+    pub fn get_rock(&self, id: Option<u32>) -> Option<u32> {
+        self.store.get(&id?).map(|obj| obj.rock)
     }
 
     pub fn iterate(&self, id: Option<u32>) -> Option<IterationResult> {
@@ -96,9 +96,9 @@ impl<T> GlkObjectStore<T> {
     }
 }
 
-/** A Glk object that will be returned to the main app */
-pub struct GlkObject<T> {
-    disprock: Option<u32>,
+/** Contains the private data we keep in each object store */
+struct GlkObject<T> {
+    _disprock: Option<u32>,
     next: Option<u32>,
     obj: T,
     prev: Option<u32>,
@@ -106,9 +106,9 @@ pub struct GlkObject<T> {
 }
 
 impl<T> GlkObject<T> {
-    pub fn new(obj: T, rock: u32) -> Self {
+    fn new(obj: T, rock: u32) -> Self {
         GlkObject {
-            disprock: None,
+            _disprock: None,
             next: None,
             obj,
             prev: None,

@@ -10,6 +10,8 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::cmp::min;
+
+use enum_dispatch::enum_dispatch;
 use thiserror::Error;
 
 use super::*;
@@ -19,14 +21,16 @@ use protocol::FileRef;
 
 const GLK_NULL: u32 = 0;
 
-pub enum Stream<'fref> {
-    Array(ArrayBackedStream),
-    File(FileStream<'fref>),
-    Null(NullStream),
+#[enum_dispatch]
+pub enum Stream {
+    ArrayBackedStream,
+    FileStream,
+    NullStream,
 }
 
+#[enum_dispatch(Stream)]
 pub trait StreamOperations {
-    fn close(&self) -> StreamResultCounts;
+    fn close(&self) -> StreamResult<StreamResultCounts>;
     fn get_buffer(&mut self, buf: &mut GlkArray) -> StreamResult<u32>;
     fn get_char(&mut self, uni: bool) -> StreamResult<i32>;
     fn get_line(&mut self, buf: &mut GlkArray) -> StreamResult<u32>;
@@ -38,6 +42,8 @@ pub trait StreamOperations {
 
 #[derive(Error, Debug)]
 pub enum StreamError {
+    #[error("cannot close window stream")]
+    CannotCloseWindowStream,
     #[error("cannot read from write-only stream")]
     ReadFromWriteOnly,
     #[error("cannot write to read-only stream")]
@@ -98,14 +104,14 @@ impl ArrayBackedStream {
 }
 
 impl StreamOperations for ArrayBackedStream {
-    fn close(&self) -> StreamResultCounts {
+    fn close(&self) -> StreamResult<StreamResultCounts> {
         if let Some(cb) = self.close_cb {
             cb();
         }
-        StreamResultCounts {
+        Ok(StreamResultCounts {
             read_count: self.read_count as u32,
             write_count: self.write_count as u32,
-        }
+        })
     }
 
     fn get_buffer(&mut self, buf: &mut GlkArray) -> StreamResult<u32> {
@@ -206,13 +212,13 @@ impl StreamOperations for ArrayBackedStream {
 /** Writable FileStreams are based on array backed streams, but can grow in length.
     Read-only file streams just use an ArrayBackedStream directly.
 */
-pub struct FileStream<'fref> {
-    fref: &'fref FileRef,
+pub struct FileStream {
+    fref: FileRef,
     str: ArrayBackedStream,
 }
 
-impl<'fref> FileStream<'fref> {
-    pub fn new(fref: &'fref FileRef, buf: GlkArray, fmode: FileMode) -> FileStream<'fref> {
+impl FileStream {
+    pub fn new(fref: FileRef, buf: GlkArray, fmode: FileMode) -> FileStream {
         assert!(fmode != FileMode::Read);
         FileStream {
             fref,
@@ -229,12 +235,12 @@ impl<'fref> FileStream<'fref> {
     }
 }
 
-impl StreamOperations for FileStream<'_> {
-    fn close(&self) -> StreamResultCounts {
-        StreamResultCounts {
+impl StreamOperations for FileStream {
+    fn close(&self) -> StreamResult<StreamResultCounts> {
+        Ok(StreamResultCounts {
             read_count: self.str.read_count as u32,
             write_count: self.str.write_count as u32,
-        }
+        })
     }
 
     fn get_buffer(&mut self, buf: &mut GlkArray) -> StreamResult<u32> {
@@ -286,11 +292,11 @@ impl NullStream {
 }
 
 impl StreamOperations for NullStream {
-    fn close(&self) -> StreamResultCounts {
-        StreamResultCounts {
+    fn close(&self) -> StreamResult<StreamResultCounts> {
+        Ok(StreamResultCounts {
             read_count: 0,
             write_count: self.write_count as u32,
-        }
+        })
     }
 
     fn get_buffer(&mut self, _: &mut GlkArray) -> StreamResult<u32> {
