@@ -41,12 +41,12 @@ impl GlkApi {
         }
     }
 
-    pub fn glk_get_buffer_stream(&mut self, str_id: Option<NonZeroU32>, buf: Vec<u8>) -> GlkResult<u32> {
-        stream_op!(self, str_id, |str: &mut Stream| str.get_buffer(&mut GlkArray::U8(buf)))
+    pub fn glk_get_buffer_stream(&mut self, str_id: Option<NonZeroU32>, buf: &mut [u8]) -> GlkResult<u32> {
+        stream_op!(self, str_id, |str: &mut Stream| str.get_buffer(&mut GlkBufferMut::U8(buf)))
     }
 
-    pub fn glk_get_buffer_stream_uni(&mut self, str_id: Option<NonZeroU32>, buf: Vec<u32>) -> GlkResult<u32> {
-        stream_op!(self, str_id, |str: &mut Stream| str.get_buffer(&mut GlkArray::U32(buf)))
+    pub fn glk_get_buffer_stream_uni(&mut self, str_id: Option<NonZeroU32>, buf: &mut [u32]) -> GlkResult<u32> {
+        stream_op!(self, str_id, |str: &mut Stream| str.get_buffer(&mut GlkBufferMut::U32(buf)))
     }
 
     pub fn glk_get_char_stream(&mut self, str_id: Option<NonZeroU32>) -> GlkResult<i32> {
@@ -57,28 +57,28 @@ impl GlkApi {
         stream_op!(self, str_id, |str: &mut Stream| str.get_char(true))
     }
 
-    pub fn glk_get_line_stream(&mut self, str_id: Option<NonZeroU32>, buf: Vec<u8>) -> GlkResult<u32> {
-        stream_op!(self, str_id, |str: &mut Stream| str.get_line(&mut GlkArray::U8(buf)))
+    pub fn glk_get_line_stream(&mut self, str_id: Option<NonZeroU32>, buf: &mut [u8]) -> GlkResult<u32> {
+        stream_op!(self, str_id, |str: &mut Stream| str.get_line(&mut GlkBufferMut::U8(buf)))
     }
 
-    pub fn glk_get_line_stream_uni(&mut self, str_id: Option<NonZeroU32>, buf: Vec<u32>) -> GlkResult<u32> {
-        stream_op!(self, str_id, |str: &mut Stream| str.get_line(&mut GlkArray::U32(buf)))
+    pub fn glk_get_line_stream_uni(&mut self, str_id: Option<NonZeroU32>, buf: &mut [u32]) -> GlkResult<u32> {
+        stream_op!(self, str_id, |str: &mut Stream| str.get_line(&mut GlkBufferMut::U32(buf)))
     }
 
-    pub fn glk_put_buffer(&mut self, buf: Vec<u8>) -> GlkResult<()> {
-        stream_op!(self, self.current_stream, |str: &mut Stream| str.put_buffer(&GlkArray::U8(buf)))
+    pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<()> {
+        stream_op!(self, self.current_stream, |str: &mut Stream| str.put_buffer(&GlkBuffer::U8(buf)))
     }
 
-    pub fn glk_put_buffer_stream(&mut self, str_id: Option<NonZeroU32>, buf: Vec<u8>) -> GlkResult<()> {
-        stream_op!(self, str_id, |str: &mut Stream| str.put_buffer(&GlkArray::U8(buf)))
+    pub fn glk_put_buffer_stream(&mut self, str_id: Option<NonZeroU32>, buf: &[u8]) -> GlkResult<()> {
+        stream_op!(self, str_id, |str: &mut Stream| str.put_buffer(&GlkBuffer::U8(buf)))
     }
 
-    pub fn glk_put_buffer_stream_uni(&mut self, str_id: Option<NonZeroU32>, buf: Vec<u32>) -> GlkResult<()> {
-        stream_op!(self, str_id, |str: &mut Stream| str.put_buffer(&GlkArray::U32(buf)))
+    pub fn glk_put_buffer_stream_uni(&mut self, str_id: Option<NonZeroU32>, buf: &[u32]) -> GlkResult<()> {
+        stream_op!(self, str_id, |str: &mut Stream| str.put_buffer(&GlkBuffer::U32(buf)))
     }
 
-    pub fn glk_put_buffer_uni(&mut self, buf: Vec<u32>) -> GlkResult<()> {
-        stream_op!(self, self.current_stream, |str: &mut Stream| str.put_buffer(&GlkArray::U32(buf)))
+    pub fn glk_put_buffer_uni(&mut self, buf: &[u32]) -> GlkResult<()> {
+        stream_op!(self, self.current_stream, |str: &mut Stream| str.put_buffer(&GlkBuffer::U32(buf)))
     }
 
     pub fn glk_put_char(&mut self, ch: u8) -> GlkResult<()> {
@@ -119,12 +119,12 @@ impl GlkApi {
         self.streams.iterate(str_id)
     }
 
-    pub fn glk_stream_open_memory(&mut self, buf: Vec<u8>, fmode: FileMode, rock: u32) -> GlkResult<NonZeroU32> {
-        self.create_memory_stream(GlkArray::U8(buf), fmode, rock)
+    pub fn glk_stream_open_memory(&mut self, buf: Box<[u8]>, fmode: FileMode, rock: u32) -> GlkResult<NonZeroU32> {
+        self.create_memory_stream(buf, fmode, rock)
     }
 
-    pub fn glk_stream_open_memory_uni(&mut self, buf: Vec<u32>, fmode: FileMode, rock: u32) -> GlkResult<NonZeroU32> {
-        self.create_memory_stream(GlkArray::U32(buf), fmode, rock)
+    pub fn glk_stream_open_memory_uni(&mut self, buf: Box<[u32]>, fmode: FileMode, rock: u32) -> GlkResult<NonZeroU32> {
+        self.create_memory_stream(buf, fmode, rock)
     }
 
     pub fn glk_stream_set_current(&mut self, str_id: Option<NonZeroU32>) {
@@ -137,7 +137,8 @@ impl GlkApi {
         Ok(str.set_position(mode, pos))
     }
 
-    fn create_memory_stream(&mut self, buf: GlkArray, fmode: FileMode, rock: u32) -> GlkResult<NonZeroU32> {
+    fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32) -> GlkResult<NonZeroU32>
+    where Stream: From<ArrayBackedStream<T>> {
         if fmode == FileMode::WriteAppend {
             return Err(IllegalFilemode);
         }
@@ -145,7 +146,7 @@ impl GlkApi {
             NullStream::new().into()
         }
         else {
-            ArrayBackedStream::new(buf, fmode, None).into()
+            ArrayBackedStream::<T>::new(buf, fmode, None).into()
         };
         Ok(self.streams.register(str, rock))
     }

@@ -11,11 +11,12 @@ https://github.com/curiousdannii/remglk-rs
 
 use core::slice;
 
-pub fn glk_buffer_to_vec<T>(buf: *mut T, buflen: u32) -> Vec<T>
-where T: Clone
-{
-    let buf: &[T] = unsafe {slice::from_raw_parts(buf, buflen as usize)};
-    let mut vec: Vec<T> = Vec::new();
-    vec.extend_from_slice(buf);
-    vec
+pub fn glk_buffer<'a, T>(buf: *mut T, buflen: u32) -> &'a [T]
+where T: Clone {
+    unsafe {slice::from_raw_parts(buf, buflen as usize)}
+}
+
+pub fn glk_buffer_mut<'a, T>(buf: *mut T, buflen: u32) -> &'a mut [T]
+where T: Clone {
+    unsafe {slice::from_raw_parts_mut(buf, buflen as usize)}
 }

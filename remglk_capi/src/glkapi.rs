@@ -28,12 +28,12 @@ fn glkapi() -> &'static Mutex<GlkApi> {
 
 #[no_mangle]
 pub extern "C" fn glk_get_buffer_stream(str_id: Option<NonZeroU32>, buf: *mut u8, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_get_buffer_stream(str_id, glk_buffer_to_vec(buf, len)).unwrap()
+    glkapi().lock().unwrap().glk_get_buffer_stream(str_id, glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_buffer_stream_uni(str_id: Option<NonZeroU32>, buf: *mut u32, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_get_buffer_stream_uni(str_id, glk_buffer_to_vec(buf, len)).unwrap()
+    glkapi().lock().unwrap().glk_get_buffer_stream_uni(str_id, glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
@@ -48,32 +48,32 @@ pub extern "C" fn glk_get_char_stream(str_id: Option<NonZeroU32>) -> i32 {
 
 #[no_mangle]
 pub extern "C" fn glk_get_line_stream(str_id: Option<NonZeroU32>, buf: *mut u8, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_get_line_stream(str_id, glk_buffer_to_vec(buf, len)).unwrap()
+    glkapi().lock().unwrap().glk_get_line_stream(str_id, glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_line_stream_uni(str_id: Option<NonZeroU32>, buf: *mut u32, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_get_line_stream_uni(str_id, glk_buffer_to_vec(buf, len)).unwrap()
+    glkapi().lock().unwrap().glk_get_line_stream_uni(str_id, glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_buffer(buf: *mut u8, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer(glk_buffer_to_vec(buf, len)).ok();
+    glkapi().lock().unwrap().glk_put_buffer(glk_buffer(buf, len)).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_buffer_stream(str_id: Option<NonZeroU32>, buf: *mut u8, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer_stream(str_id, glk_buffer_to_vec(buf, len)).ok();
+    glkapi().lock().unwrap().glk_put_buffer_stream(str_id, glk_buffer(buf, len)).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_buffer_stream_uni(str_id: Option<NonZeroU32>, buf: *mut u32, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer_stream_uni(str_id, glk_buffer_to_vec(buf, len)).ok();
+    glkapi().lock().unwrap().glk_put_buffer_stream_uni(str_id, glk_buffer(buf, len)).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_buffer_uni(buf: *mut u32, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer_uni(glk_buffer_to_vec(buf, len)).ok();
+    glkapi().lock().unwrap().glk_put_buffer_uni(glk_buffer(buf, len)).ok();
 }
 
 #[no_mangle]
@@ -136,13 +136,15 @@ pub extern "C" fn glk_stream_iterate(str_id: Option<NonZeroU32>, rock: &mut u32)
 
 #[no_mangle]
 pub extern "C" fn glk_stream_open_memory(buf: *mut u8, len: u32, fmode: FileMode, rock: u32) -> Option<NonZeroU32> {
-    let result = glkapi().lock().unwrap().glk_stream_open_memory(glk_buffer_to_vec(buf, len), fmode, rock);
+    let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
+    let result = glkapi().lock().unwrap().glk_stream_open_memory(buf, fmode, rock);
     result.ok()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_stream_open_memory_uni(buf: *mut u32, len: u32, fmode: FileMode, rock: u32) -> Option<NonZeroU32> {
-    let result = glkapi().lock().unwrap().glk_stream_open_memory_uni(glk_buffer_to_vec(buf, len), fmode, rock);
+    let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
+    let result = glkapi().lock().unwrap().glk_stream_open_memory_uni(buf, fmode, rock);
     result.ok()
 }
 

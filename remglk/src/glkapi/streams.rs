@@ -24,19 +24,20 @@ const GLK_NULL: u32 = 0;
 
 #[enum_dispatch]
 pub enum Stream {
-    ArrayBackedStream,
-    FileStream,
+    ArrayBackedStreamU8(ArrayBackedStream<u8>),
+    ArrayBackedStreamU32(ArrayBackedStream<u32>),
+    //FileStream,
     NullStream,
 }
 
 #[enum_dispatch(Stream)]
 pub trait StreamOperations {
     fn close(&self) -> GlkResult<StreamResultCounts>;
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> GlkResult<u32>;
+    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32>;
     fn get_char(&mut self, uni: bool) -> GlkResult<i32>;
-    fn get_line(&mut self, buf: &mut GlkArray) -> GlkResult<u32>;
+    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32>;
     fn get_position(&self) -> u32;
-    fn put_buffer(&mut self, buf: &GlkArray) -> GlkResult<()>;
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()>;
     fn put_char(&mut self, ch: u32) -> GlkResult<()>;
     fn set_position(&mut self, mode: SeekMode, pos: i32);
 }
@@ -48,11 +49,11 @@ pub struct StreamResultCounts {
     pub write_count: u32,
 }
 
-/** A fixed-length stream based on a buffer (slice).
+/** A fixed-length stream based on a buffer (a boxed slice).
     ArrayBackedStreams are used for memory and resource streams, and are the basis of file streams.
 */
-pub struct ArrayBackedStream {
-    buf: GlkArray,
+pub struct ArrayBackedStream<T> {
+    buf: Box<[T]>,
     close_cb: Option<fn()>,
     /** Whether we need to check if we should expand the active buffer region before writing */
     expandable: bool,
@@ -68,8 +69,8 @@ pub struct ArrayBackedStream {
     write_count: usize,
 }
 
-impl ArrayBackedStream {
-    pub fn new(buf: GlkArray, fmode: FileMode, close_cb: Option<fn()>) -> ArrayBackedStream {
+impl<T> ArrayBackedStream<T> {
+    pub fn new(buf: Box<[T]>, fmode: FileMode, close_cb: Option<fn()>) -> ArrayBackedStream<T> {
         let buf_len = buf.len();
         ArrayBackedStream {
             buf,
@@ -94,7 +95,8 @@ impl ArrayBackedStream {
     }
 }
 
-impl StreamOperations for ArrayBackedStream {
+impl<T> StreamOperations for ArrayBackedStream<T>
+where Box<[T]>: GlkArray {
     fn close(&self) -> GlkResult<StreamResultCounts> {
         if let Some(cb) = self.close_cb {
             cb();
@@ -105,7 +107,7 @@ impl StreamOperations for ArrayBackedStream {
         })
     }
 
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> GlkResult<u32> {
+    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
             return Err(ReadFromWriteOnly);
         }
@@ -113,7 +115,7 @@ impl StreamOperations for ArrayBackedStream {
         if read_length == 0 {
             return Ok(0);
         }
-        buf.set_buffer(0, &self.buf, self.pos, read_length);
+        self.buf.copy_to_buffer(self.pos, buf, 0, read_length);
         self.pos += read_length;
         self.read_count += read_length;
         Ok(read_length as u32)
@@ -132,7 +134,7 @@ impl StreamOperations for ArrayBackedStream {
         Ok(-1)
     }
 
-    fn get_line(&mut self, buf: &mut GlkArray) -> GlkResult<u32> {
+    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
             return Err(ReadFromWriteOnly);
         }
@@ -159,17 +161,18 @@ impl StreamOperations for ArrayBackedStream {
         self.pos as u32
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
         if let FileMode::Read = self.fmode {
             return Err(WriteToReadOnly);
         }
-        self.write_count += buf.len();
-        if self.pos + buf.len() > self.len && self.expandable {
-            self.expand(buf.len());
+        let buf_len = buf.len();
+        self.write_count += buf_len;
+        if self.pos + buf_len > self.len && self.expandable {
+            self.expand(buf_len);
         }
-        let write_length = min(buf.len(), self.len - self.pos);
+        let write_length = min(buf_len, self.len - self.pos);
         if write_length > 0 {
-            self.buf.set_buffer(self.pos, buf, 0, write_length);
+            self.buf.copy_from_buffer(self.pos, buf, 0, write_length);
             self.pos += write_length;
         }
         Ok(())
@@ -200,7 +203,7 @@ impl StreamOperations for ArrayBackedStream {
     }
 }
 
-/** Writable FileStreams are based on array backed streams, but can grow in length.
+/* /** Writable FileStreams are based on array backed streams, but can grow in length.
     Read-only file streams just use an ArrayBackedStream directly.
 */
 pub struct FileStream {
@@ -267,7 +270,7 @@ impl StreamOperations for FileStream {
     fn set_position(&mut self, mode: SeekMode, pos: i32) {
         self.str.set_position(mode, pos)
     }
-}
+} */
 
 /** A NullStream is only used for a memory stream with no buffer */
 pub struct NullStream {
@@ -290,7 +293,7 @@ impl StreamOperations for NullStream {
         })
     }
 
-    fn get_buffer(&mut self, _: &mut GlkArray) -> GlkResult<u32> {
+    fn get_buffer(&mut self, _: &mut GlkBufferMut) -> GlkResult<u32> {
         Ok(0)
     }
 
@@ -298,7 +301,7 @@ impl StreamOperations for NullStream {
         Ok(-1)
     }
 
-    fn get_line(&mut self, _: &mut GlkArray) -> GlkResult<u32> {
+    fn get_line(&mut self, _: &mut GlkBufferMut) -> GlkResult<u32> {
         Ok(0)
     }
 
@@ -306,7 +309,7 @@ impl StreamOperations for NullStream {
         0
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
         self.write_count += buf.len();
         Ok(())
     }
