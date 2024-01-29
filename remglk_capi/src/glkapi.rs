@@ -15,7 +15,6 @@ use std::sync::{Mutex, OnceLock};
 use remglk::glkapi;
 use glkapi::*;
 use glkapi::constants::*;
-use glkapi::streams::StreamResultCounts;
 
 use crate::common::*;
 

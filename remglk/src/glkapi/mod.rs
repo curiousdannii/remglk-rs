@@ -9,14 +9,14 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-pub mod arrays;
-pub mod common;
+mod arrays;
+mod common;
 pub mod constants;
-pub mod filerefs;
-pub mod macros;
-pub mod objects;
-pub mod protocol;
-pub mod streams;
+mod filerefs;
+mod macros;
+mod objects;
+mod protocol;
+mod streams;
 
 use std::num::NonZeroU32;
 
@@ -98,7 +98,9 @@ impl GlkApi {
     }
 
     pub fn glk_stream_close(&mut self, str_id: Option<NonZeroU32>) -> GlkResult<StreamResultCounts> {
-        stream_op!(self, str_id, |str: &mut Stream| str.close())
+        let res = stream_op!(self, str_id, |str: &mut Stream| str.close());
+        self.streams.unregister(str_id.unwrap());
+        res
     }
 
     pub fn glk_stream_get_current(&self) -> Option<NonZeroU32> {
@@ -150,4 +152,11 @@ impl GlkApi {
         };
         Ok(self.streams.register(str, rock))
     }
+}
+
+/** Final read/write character counts of a stream */
+#[repr(C)]
+pub struct StreamResultCounts {
+    pub read_count: u32,
+    pub write_count: u32,
 }

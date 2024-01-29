@@ -42,13 +42,6 @@ pub trait StreamOperations {
     fn set_position(&mut self, mode: SeekMode, pos: i32);
 }
 
-/** Final read/write character counts of a stream */
-#[repr(C)]
-pub struct StreamResultCounts {
-    pub read_count: u32,
-    pub write_count: u32,
-}
-
 /** A fixed-length stream based on a buffer (a boxed slice).
     ArrayBackedStreams are used for memory and resource streams, and are the basis of file streams.
 */
