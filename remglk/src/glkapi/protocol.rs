@@ -10,6 +10,9 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use super::*;
 
 /** The GlkOte protocol has two parts:
  * 1. GlkOte sends events to GlkApi/RemGlk
@@ -273,11 +276,12 @@ pub struct StateUpdate<A> {
 
 /** Content update */
 pub enum ContentUpdate {
-    BufferWindowContentUpdate,
-    GraphicsWindowContentUpdate,
-    GridWindowContentUpdate,
+    Buffer(BufferWindowContentUpdate),
+    Graphics(GraphicsWindowContentUpdate),
+    Grid(GridWindowContentUpdate),
 }
 
+#[derive(Default)]
 pub struct TextualWindowUpdate {
     /** Window ID */
     pub id: u32,
@@ -360,18 +364,20 @@ pub struct GridWindowContentUpdate {
     pub lines: Vec<GridWindowLine>,
 }
 pub struct GridWindowLine {
-    pub content: Option<Vec<LineData>>,
+    pub content: Vec<LineData>,
     pub line: u32,
 }
 
 /** Line data */
+#[derive(Clone)]
 pub enum LineData {
-    StylePair(String, String),
-    BufferWindowImage,
-    TextRun,
+    //StylePair(String, String),
+    Image(BufferWindowImage),
+    TextRun(TextRun),
 }
 
 /** Buffer window image */
+#[derive(Clone)]
 pub struct BufferWindowImage {
     /** Image alignment */
     pub alignment: Option<BufferWindowImageAlignment>,
@@ -388,15 +394,46 @@ pub struct BufferWindowImage {
 }
 
 /** Text run */
+#[derive(Clone, Default)]
 pub struct TextRun {
     /** Additional CSS styles */
-    pub css_styles: Option<CSSProperties>,
+    pub css_styles: Option<Arc<Mutex<CSSProperties>>>,
     /** Hyperlink value */
     pub hyperlink: Option<u32>,
     /** Run style */
-    pub style: String,
+    pub style: u32,
     /** Run content */
     pub text: String,
+}
+
+impl TextRun {
+    pub fn new(text: &str) -> Self {
+        TextRun {
+            text: text.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /** Clone a text run, sharing CSS */
+    pub fn clone(&self, text: String) -> Self {
+        TextRun {
+            css_styles: self.css_styles.as_ref().map(|rc| rc.clone()),
+            hyperlink: self.hyperlink,
+            style: self.style,
+            text,
+        }
+    }
+}
+
+// Two TextRuns are considered equal if everything except their text matches...
+impl PartialEq for TextRun {
+    fn eq(&self, other: &Self) -> bool {
+        self.hyperlink == other.hyperlink && self.style == other.style && match (&self.css_styles, &other.css_styles) {
+            (Some(self_styles), Some(other_styles)) => Arc::ptr_eq(&self_styles, &other_styles),
+            (None, None) => true,
+            _ => false,
+        }
+    }
 }
 
 /** Windows with active input */
@@ -417,11 +454,20 @@ pub struct InputUpdate {
     /** Line input terminators */
     pub terminators: Option<Vec<TerminatorCode>>,
     /** Textual input type */
-    pub type_: Option<TextInputType>,
+    pub text_input_type: Option<TextInputType>,
     /** Grid window coordinate X */
     pub xpos: Option<u32>,
     /** Grid window coordinate Y */
     pub ypos: Option<u32>,
+}
+
+impl InputUpdate {
+    pub fn new(id: u32) -> Self {
+        InputUpdate {
+            id,
+            ..Default::default()
+        }
+    }
 }
 
 pub struct SpecialInput {
@@ -434,6 +480,7 @@ pub struct SpecialInput {
 }
 
 /** Updates to window (new windows, or changes to their arrangements) */
+#[derive(Default)]
 pub struct WindowUpdate {
     /** Graphics height (pixels) */
     pub graphheight: Option<u32>,
@@ -455,7 +502,7 @@ pub struct WindowUpdate {
     /** Top position */
     pub top: f64,
     /** Type */
-    pub type_: WindowType,
+    pub wintype: WindowType,
     pub width: f64,
 }
 
@@ -467,6 +514,7 @@ pub struct WindowUpdate {
  *   Ex: `background-color: #FFF, color: #000, reverse: 1` will be displayed as white text on a black background
  */
 pub type CSSProperties = HashMap<String, CSSValue>;
+#[derive(Clone, PartialEq)]
 pub enum CSSValue {
     String(String),
     Number(f64),
@@ -478,10 +526,15 @@ pub enum CSSValue {
 */
 pub type WindowStyles = HashMap<String, CSSProperties>;
 
+#[derive(Copy, Clone, PartialEq)]
 pub enum BufferWindowImageAlignment {InlineCenter,InlineDown, InlineUp, MarginLeft, MarginRight}
+#[derive(Copy, Clone, PartialEq)]
 pub enum FileMode {Read, ReadWrite, Write, WriteAppend}
+#[derive(Copy, Clone, PartialEq)]
 pub enum FileType {Command, Data, Save, Transcript}
+#[derive(Copy, Clone, PartialEq)]
 pub enum SpecialKeyCode {Delete, Down, End, Escape, Func1, Func2, Func3, Func4, Func5, Func6, Func7, Func8, Func9, Func10, Func11, Func12, Home, Left, Pagedown, Pageup, Return, Right, Tab, Up}
+#[derive(Copy, Clone, PartialEq)]
 pub enum TerminatorCode {Escape, Func1, Func2, Func3, Func4, Func5, Func6, Func7, Func8, Func9, Func10, Func11, Func12}
+#[derive(Copy, Clone, PartialEq)]
 pub enum TextInputType {Char, Line}
-pub enum WindowType {Buffer, Graphics, Grid}

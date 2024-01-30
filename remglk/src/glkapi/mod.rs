@@ -17,6 +17,7 @@ mod macros;
 mod objects;
 mod protocol;
 mod streams;
+mod windows;
 
 use std::num::NonZeroU32;
 
@@ -27,10 +28,12 @@ use constants::*;
 use macros::*;
 use objects::*;
 use streams::*;
+use windows::*;
 
 pub struct GlkApi {
     streams: GlkObjectStore<Stream>,
     current_stream: Option<NonZeroU32>,
+    windows: GlkObjectStore<Window>,
 }
 
 impl GlkApi {
@@ -38,6 +41,7 @@ impl GlkApi {
         GlkApi {
             streams: GlkObjectStore::new(),
             current_stream: None,
+            windows: GlkObjectStore::new(),
         }
     }
 
@@ -97,6 +101,14 @@ impl GlkApi {
         stream_op!(self, self.current_stream, |str: &mut Stream| str.put_char(ch))
     }
 
+    pub fn glk_window_clear(&mut self, win_id: Option<NonZeroU32>) -> GlkResult<()> {
+        Ok(win_mut!(self, win_id).data.clear())
+    }
+
+    pub fn glk_window_get_type(&mut self, win_id: Option<NonZeroU32>) -> GlkResult<WindowType> {
+        Ok(win!(self, win_id).wintype)
+    }
+
     pub fn glk_stream_close(&mut self, str_id: Option<NonZeroU32>) -> GlkResult<StreamResultCounts> {
         let res = stream_op!(self, str_id, |str: &mut Stream| str.close());
         self.streams.unregister(str_id.unwrap());
@@ -108,9 +120,7 @@ impl GlkApi {
     }
 
     pub fn glk_stream_get_position(&self, str_id: Option<NonZeroU32>) -> GlkResult<u32> {
-        let str = self.streams.get(str_id)
-            .ok_or(InvalidReference)?;
-        Ok(str.get_position())
+        Ok(str!(self, str_id).get_position())
     }
 
     pub fn glk_stream_get_rock(&self, str_id: Option<NonZeroU32>) -> GlkResult<u32> {
@@ -134,9 +144,7 @@ impl GlkApi {
     }
 
     pub fn glk_stream_set_position(&mut self, str_id: Option<NonZeroU32>, mode: SeekMode, pos: i32) -> GlkResult<()> {
-        let str = self.streams.get_mut(str_id)
-            .ok_or(InvalidReference)?;
-        Ok(str.set_position(mode, pos))
+        Ok(str_mut!(self, str_id).set_position(mode, pos))
     }
 
     fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32) -> GlkResult<NonZeroU32>

@@ -19,6 +19,8 @@ pub enum GlkApiError {
     IllegalFilemode,
     #[error("invalid reference")]
     InvalidReference,
+    #[error("window has pending line input")]
+    PendingLineInput,
     #[error("cannot read from write-only stream")]
     ReadFromWriteOnly,
     #[error("cannot write to read-only stream")]

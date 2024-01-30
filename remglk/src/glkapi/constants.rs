@@ -98,6 +98,17 @@ pub const wintype_Blank: u32 = 2;
 pub const wintype_TextBuffer: u32 = 3;
 pub const wintype_TextGrid: u32 = 4;
 pub const wintype_Graphics: u32 = 5;
+#[derive(Copy, Clone, Default, PartialEq)]
+#[repr(C)]
+pub enum WindowType {
+    All = 0,
+    Pair = 1,
+    #[default]
+    Blank = 2,
+    Buffer = 3,
+    Graphics = 5,
+    Grid = 4,
+}
 
 pub const winmethod_Left : u32 = 0x00;
 pub const winmethod_Right: u32 = 0x01;
