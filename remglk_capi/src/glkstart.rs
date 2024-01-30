@@ -18,26 +18,21 @@ use std::str;
 
 use thiserror::Error;
 
-/** Processed arguments which we give to `glkunix_startup_code` */
-#[repr(C)]
-struct GlkUnixArguments {
-    count: c_int,
-    args: *const *const c_char,
-}
-
-extern "C" {
-    fn glkunix_startup_code(data: &GlkUnixArguments);
-}
-
 const glkunix_arg_End: i32 = 0;
 const glkunix_arg_ValueFollows: i32 = 1;
 const glkunix_arg_NoValue: i32 = 2;
 const glkunix_arg_ValueCanFollow: i32 = 3;
 const glkunix_arg_NumberValue: i32 = 4;
 
+pub enum ArgProcessingResults {
+    ErrorMsg(String),
+    Msg(String),
+    ProcessedArgs(Vec<CString>),
+}
+
 /** Process the command line arguments */
 // I didn't really want to reimplement the Zarf's logic, but none of the Rust argument parsing libraries really seem to do what we want.
-pub fn process_args() -> Option<Result<String, String>> {
+pub fn process_args() -> ArgProcessingResults {
     #[derive(Error, Debug)]
     pub enum ArgError {
         #[error("{0} must be followed by a value")]
@@ -52,11 +47,9 @@ pub fn process_args() -> Option<Result<String, String>> {
 
     enum InnerResult {
         Help,
-        NothingToDo,
+        ProcessedArgs(Vec<CString>),
         Version,
     }
-
-    let args: Vec<String> = env::args().collect();
 
     fn process_args_inner(args: &Vec<String>, app_arguments: &Vec<GlkUnixArgument>) -> Result<InnerResult, ArgError> {
         let mut processed_args: Vec<CString> = Vec::new();
@@ -120,12 +113,7 @@ pub fn process_args() -> Option<Result<String, String>> {
             return Err(ArgError::UnknownArg(arg.to_string()));
         }
 
-        unsafe{glkunix_startup_code(&GlkUnixArguments {
-            count: processed_args.len() as c_int,
-            args: processed_args.iter().map(|arg| arg.as_ptr()).collect::<Vec<*const c_char>>().as_ptr(),
-        })};
-
-        Ok(InnerResult::NothingToDo)
+        Ok(InnerResult::ProcessedArgs(processed_args))
     }
 
     fn print_usage(app_name: &String, app_arguments: &Vec<GlkUnixArgument>) -> String {
@@ -149,12 +137,13 @@ pub fn process_args() -> Option<Result<String, String>> {
         usage
     }
 
+    let args: Vec<String> = env::args().collect();
     let app_arguments = unsafe{glkunix_arguments()};
     match process_args_inner(&args, &app_arguments) {
-        Ok(InnerResult::Help) => Some(Ok(print_usage(&args[0], &app_arguments))),
-        Ok(InnerResult::NothingToDo) => None,
-        Ok(InnerResult::Version) => Some(Ok("RemGlk-rs, library version ".to_owned() + env!("CARGO_PKG_VERSION"))),
-        Err(err) => Some(Err(err.to_string() + "\n" + &print_usage(&args[0], &app_arguments))),
+        Ok(InnerResult::Help) => ArgProcessingResults::Msg(print_usage(&args[0], &app_arguments)),
+        Ok(InnerResult::ProcessedArgs(args)) => ArgProcessingResults::ProcessedArgs(args),
+        Ok(InnerResult::Version) => ArgProcessingResults::Msg("RemGlk-rs, library version ".to_owned() + env!("CARGO_PKG_VERSION")),
+        Err(err) => ArgProcessingResults::ErrorMsg(err.to_string() + "\n" + &print_usage(&args[0], &app_arguments)),
     }
 }
 
