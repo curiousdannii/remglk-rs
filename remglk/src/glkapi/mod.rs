@@ -145,7 +145,7 @@ impl GlkApi {
             return Err(IllegalFilemode);
         }
         let str: Stream = if buf.len() == 0 {
-            NullStream::new().into()
+            NullStream::default().into()
         }
         else {
             ArrayBackedStream::<T>::new(buf, fmode, None).into()

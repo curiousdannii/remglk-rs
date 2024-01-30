@@ -126,9 +126,10 @@ pub const filemode_Write: u32 = 0x01;
 pub const filemode_Read: u32 = 0x02;
 pub const filemode_ReadWrite: u32 = 0x03;
 pub const filemode_WriteAppend: u32 = 0x05;
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Default, PartialEq)]
 #[repr(C)]
 pub enum FileMode {
+    #[default]
     Read = 0x02,
     ReadWrite = 0x03,
     Write = 0x01,

@@ -28,18 +28,25 @@ pub enum Stream {
     ArrayBackedStreamU32(ArrayBackedStream<u32>),
     //FileStream,
     NullStream,
+    WindowStream,
 }
 
 #[enum_dispatch(Stream)]
 pub trait StreamOperations {
-    fn close(&self) -> GlkResult<StreamResultCounts>;
-    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32>;
-    fn get_char(&mut self, uni: bool) -> GlkResult<i32>;
-    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32>;
-    fn get_position(&self) -> u32;
+    fn close(&self) -> GlkResult<StreamResultCounts> {
+        Ok(StreamResultCounts {
+            read_count: 0,
+            write_count: self.write_count() as u32,
+        })
+    }
+    fn get_buffer(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<u32> {Ok(0)}
+    fn get_char(&mut self, _uni: bool) -> GlkResult<i32> {Ok(-1)}
+    fn get_line(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<u32> {Ok(0)}
+    fn get_position(&self) -> u32 {0}
     fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()>;
     fn put_char(&mut self, ch: u32) -> GlkResult<()>;
-    fn set_position(&mut self, mode: SeekMode, pos: i32);
+    fn set_position(&mut self, _mode: SeekMode, _pos: i32) {}
+    fn write_count(&self) -> usize;
 }
 
 /** A fixed-length stream based on a buffer (a boxed slice).
@@ -194,6 +201,10 @@ where Box<[T]>: GlkArray {
         };
         self.pos = new_pos.clamp(0, self.len as i32) as usize;
     }
+
+    fn write_count(&self) -> usize {
+        self.write_count
+    }
 }
 
 /* /** Writable FileStreams are based on array backed streams, but can grow in length.
@@ -266,42 +277,12 @@ impl StreamOperations for FileStream {
 } */
 
 /** A NullStream is only used for a memory stream with no buffer */
+#[derive(Default)]
 pub struct NullStream {
     write_count: usize,
 }
 
-impl NullStream {
-    pub fn new() -> NullStream {
-        NullStream {
-            write_count: 0,
-        }
-    }
-}
-
 impl StreamOperations for NullStream {
-    fn close(&self) -> GlkResult<StreamResultCounts> {
-        Ok(StreamResultCounts {
-            read_count: 0,
-            write_count: self.write_count as u32,
-        })
-    }
-
-    fn get_buffer(&mut self, _: &mut GlkBufferMut) -> GlkResult<u32> {
-        Ok(0)
-    }
-
-    fn get_char(&mut self, _: bool) -> GlkResult<i32> {
-        Ok(-1)
-    }
-
-    fn get_line(&mut self, _: &mut GlkBufferMut) -> GlkResult<u32> {
-        Ok(0)
-    }
-
-    fn get_position(&self) -> u32 {
-        0
-    }
-
     fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
         self.write_count += buf.len();
         Ok(())
@@ -312,5 +293,29 @@ impl StreamOperations for NullStream {
         Ok(())
     }
 
-    fn set_position(&mut self, _: SeekMode, _: i32) {}
+    fn write_count(&self) -> usize {
+        self.write_count
+    }
+}
+
+/** A window stream */
+#[derive(Default)]
+pub struct WindowStream {
+    write_count: usize,
+}
+
+impl StreamOperations for WindowStream {
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+        self.write_count += buf.len();
+        Ok(())
+    }
+
+    fn put_char(&mut self, _: u32) -> GlkResult<()> {
+        self.write_count += 1;
+        Ok(())
+    }
+
+    fn write_count(&self) -> usize {
+        self.write_count
+    }
 }

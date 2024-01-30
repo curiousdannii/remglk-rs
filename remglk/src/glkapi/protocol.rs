@@ -400,6 +400,7 @@ pub struct TextRun {
 }
 
 /** Windows with active input */
+#[derive(Default)]
 pub struct InputUpdate {
     /** Generation number, for when the textual input was first requested */
     pub gen: Option<u32>,
