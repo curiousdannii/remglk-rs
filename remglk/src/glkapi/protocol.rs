@@ -415,12 +415,12 @@ impl TextRun {
     }
 
     /** Clone a text run, sharing CSS */
-    pub fn clone(&self, text: String) -> Self {
+    pub fn clone(&self, text: &str) -> Self {
         TextRun {
-            css_styles: self.css_styles.as_ref().map(|rc| rc.clone()),
+            css_styles: self.css_styles.as_ref().cloned(),
             hyperlink: self.hyperlink,
             style: self.style,
-            text,
+            text: text.to_string(),
         }
     }
 }
@@ -429,7 +429,7 @@ impl TextRun {
 impl PartialEq for TextRun {
     fn eq(&self, other: &Self) -> bool {
         self.hyperlink == other.hyperlink && self.style == other.style && match (&self.css_styles, &other.css_styles) {
-            (Some(self_styles), Some(other_styles)) => Arc::ptr_eq(&self_styles, &other_styles),
+            (Some(self_styles), Some(other_styles)) => Arc::ptr_eq(self_styles, other_styles),
             (None, None) => true,
             _ => false,
         }

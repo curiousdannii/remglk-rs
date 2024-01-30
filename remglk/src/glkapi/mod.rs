@@ -102,7 +102,8 @@ impl GlkApi {
     }
 
     pub fn glk_window_clear(&mut self, win_id: Option<NonZeroU32>) -> GlkResult<()> {
-        Ok(win_mut!(self, win_id).data.clear())
+        win_mut!(self, win_id).data.clear();
+        Ok(())
     }
 
     pub fn glk_window_get_type(&mut self, win_id: Option<NonZeroU32>) -> GlkResult<WindowType> {
@@ -144,7 +145,8 @@ impl GlkApi {
     }
 
     pub fn glk_stream_set_position(&mut self, str_id: Option<NonZeroU32>, mode: SeekMode, pos: i32) -> GlkResult<()> {
-        Ok(str_mut!(self, str_id).set_position(mode, pos))
+        str_mut!(self, str_id).set_position(mode, pos);
+        Ok(())
     }
 
     fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32) -> GlkResult<NonZeroU32>

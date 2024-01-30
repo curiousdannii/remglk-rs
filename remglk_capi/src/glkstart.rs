@@ -51,7 +51,7 @@ pub fn process_args() -> ArgProcessingResults {
         Version,
     }
 
-    fn process_args_inner(args: &Vec<String>, app_arguments: &Vec<GlkUnixArgument>) -> Result<InnerResult, ArgError> {
+    fn process_args_inner(args: &[String], app_arguments: &Vec<GlkUnixArgument>) -> Result<InnerResult, ArgError> {
         let mut processed_args: Vec<CString> = Vec::new();
         let mut push_arg = |arg: &String| {
             processed_args.push(CString::new(arg.as_str()).unwrap());
@@ -118,7 +118,7 @@ pub fn process_args() -> ArgProcessingResults {
 
     fn print_usage(app_name: &String, app_arguments: &Vec<GlkUnixArgument>) -> String {
         let mut usage = format!("usage: {} [ options ... ]\n", app_name);
-        if app_arguments.len() > 0 {
+        if !app_arguments.is_empty() {
             usage.push_str("app options:\n");
             for app_arg in app_arguments {
                 usage.push_str(&if app_arg.name.is_empty() {

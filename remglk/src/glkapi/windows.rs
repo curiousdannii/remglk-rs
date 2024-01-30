@@ -160,7 +160,7 @@ where T: Default + WindowOperations {
 
     fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
         // TODO: don't resend stylehints when only metrics have changed?
-        if self.stylehints.len() > 0 {
+        if !self.stylehints.is_empty() {
             update.size.as_mut().unwrap().styles = Some(self.stylehints.clone());
         }
 
@@ -179,9 +179,152 @@ where T: Default + WindowOperations {
 #[derive(Default)]
 pub struct BufferWindow {
     cleared: bool,
+    content: Vec<Paragraph>,
+    pub echo_line_input: bool,
 }
 
-impl WindowOperations for BufferWindow {}
+impl BufferWindow {
+    fn new() -> Self {
+        BufferWindow {
+            cleared: true,
+            content: vec![Paragraph::new(TextRun::default())],
+            echo_line_input: true,
+        }
+    }
+
+    fn clear_content(&mut self, new: Option<&TextRun>) {
+        let new = new.unwrap_or(self.last_textrun()).clone("");
+        self.content = vec![Paragraph {
+            append: true,
+            content: vec![LineData::TextRun(new)],
+            flowbreak: false,
+        }];
+    }
+
+    /** If the last textrun isn't empty, then add a new one, ready for its styles to be modified */
+    fn clone_last_textrun(&mut self) {
+        let last_textrun = self.last_textrun();
+        if !last_textrun.text.is_empty() {
+            let new = last_textrun.clone("");
+            self.content.last_mut().unwrap().content.push(LineData::TextRun(new));
+        }
+    }
+
+    /** Return the last textrun, which must exist, and actually be a textrun not an image */
+    fn last_textrun(&mut self) -> &mut TextRun {
+        match self.content.last_mut().unwrap().content.last_mut().unwrap() {
+            LineData::TextRun(textrun) => textrun,
+            _ => unreachable!()
+        }
+    }
+
+    fn set_flow_break(&mut self) {
+        self.content.last_mut().unwrap().flowbreak = true;
+    }
+}
+
+impl WindowOperations for BufferWindow {
+    fn clear(&mut self) {
+        self.cleared = true;
+        self.clear_content(None);
+    }
+
+    fn put_string(&mut self, str: &str, style: Option<u32>) {
+        let old_style = self.last_textrun().style;
+        if let Some(val) = style {
+            self.set_style(val);
+        }
+        for (i, line) in str.lines().enumerate() {
+            if i > 0 {
+                let textrun = self.last_textrun().clone("");
+                self.content.push(Paragraph::new(textrun));
+            }
+            self.last_textrun().text.push_str(line);
+        }
+        if style.is_some() {
+            self.set_style(old_style);
+        }
+    }
+
+    fn set_css(&mut self, name: &str, val: Option<CSSValue>) {
+        if let Some(css_styles) = &self.last_textrun().css_styles {
+            if css_styles.lock().unwrap().get(name) != val.as_ref() {
+                self.clone_last_textrun();
+                set_css(&mut self.last_textrun().css_styles, name, val);
+            }
+        }
+    }
+
+    fn set_hyperlink(&mut self, val: u32) {
+        let val = if val > 0 {Some(val)} else {None};
+        if self.last_textrun().hyperlink != val {
+            self.clone_last_textrun();
+            self.last_textrun().hyperlink = val;
+        }
+    }
+
+    fn set_style(&mut self, val: u32) {
+        if self.last_textrun().style != val {
+            self.clone_last_textrun();
+            self.last_textrun().style = val;
+        }
+    }
+
+    fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
+        // Clone the textrun now because the css_style could get deleted in cleanup_paragraph_styles
+        let last_textrun = self.last_textrun().clone("");
+
+        // Exclude empty text runs
+        for par in self.content.iter_mut() {
+            par.content = cleanup_paragraph_styles(par.content.drain(..).filter(|line| match line {
+                LineData::Image(_) => true,
+                LineData::TextRun(textrun) => !textrun.text.is_empty(),
+            }).collect());
+        }
+        // Only send an update if there is new content or the window has been cleared
+        if self.cleared || self.content.len() > 1 || !self.content[0].content.is_empty() {
+            let mut content_update = BufferWindowContentUpdate {
+                base: TextualWindowUpdate::default(),
+                text: Some(self.content.drain(..).map(|par| par.into()).collect()),
+            };
+            if self.cleared {
+                content_update.base.clear = Some(true);
+                self.cleared = false;
+            }
+            update.content = Some(ContentUpdate::Buffer(content_update));
+        }
+
+        self.clear_content(Some(&last_textrun));
+        update
+    }
+}
+
+/** A modified version of BufferWindowParagraphUpdate that always has content */
+#[derive(Default)]
+struct Paragraph {
+    append: bool,
+    content: Vec<LineData>,
+    flowbreak: bool,
+}
+
+impl Paragraph {
+    fn new(textrun: TextRun) -> Self {
+        Paragraph {
+            content: vec![LineData::TextRun(textrun)],
+            ..Default::default()
+        }
+    }
+}
+
+impl From<Paragraph> for BufferWindowParagraphUpdate {
+    fn from(par: Paragraph) -> Self {
+        BufferWindowParagraphUpdate {
+            append: if par.append {Some(true)} else {None},
+            content: if !par.content.is_empty() {Some(par.content)} else {None},
+            flowbreak: if par.flowbreak {Some(true)} else {None},
+        }
+    }
+}
 
 pub struct GraphicsWindow {
     draw: Vec<GraphicsWindowOperation>,
@@ -216,9 +359,9 @@ impl GridWindow {
             self.y += 1;
         }
         if self.y >= self.height {
-            return true
+            return true;
         }
-        return false
+        false
     }
 
     fn update_size(&mut self, height: usize, width: usize) {
@@ -262,7 +405,7 @@ impl WindowOperations for GridWindow {
             else {
                 let line = &mut self.lines[self.x];
                 line.changed = true;
-                line.content[self.y] = self.current_styles.clone(char.to_string());
+                line.content[self.y] = self.current_styles.clone(&char.to_string());
             }
         }
         if style.is_some() {
@@ -296,8 +439,8 @@ impl WindowOperations for GridWindow {
                     line.changed = false;
                     // Merge grid characters with the same styles together
                     let content = line.content.iter().fold(vec![], |mut acc, cur| {
-                        if acc.len() == 0 {
-                            return vec![cur.clone(cur.text.to_string())];
+                        if acc.is_empty() {
+                            return vec![cur.clone(&cur.text)];
                         }
                         else {
                             let last = acc.last_mut().unwrap();
@@ -305,7 +448,7 @@ impl WindowOperations for GridWindow {
                                 last.text.push_str(&cur.text);
                             }
                             else {
-                                let new = last.clone(cur.text.clone());
+                                let new = last.clone(&cur.text);
                                 acc.push(new);
                             }
                         }
@@ -381,7 +524,7 @@ fn cleanup_paragraph_styles(par: Vec<LineData>) -> Vec<LineData> {
         match content {
             LineData::TextRun(mut tr) => {
                 if let Some(ref styles) = tr.css_styles {
-                    if styles.lock().unwrap().len() == 0 {
+                    if styles.lock().unwrap().is_empty() {
                         tr.css_styles = None;
                     }
                 }
@@ -393,6 +536,12 @@ fn cleanup_paragraph_styles(par: Vec<LineData>) -> Vec<LineData> {
 }
 
 fn set_css(css_styles: &mut Option<Arc<Mutex<CSSProperties>>>, name: &str, val: Option<CSSValue>) {
+    // Don't do anything if this style is already set
+    if let Some(css_styles) = css_styles {
+        if css_styles.lock().unwrap().get(name) == val.as_ref() {
+            return;
+        }
+    }
     // We need to either clone the existing styles, or insert an empty one
     let mut styles = css_styles.take().map_or(HashMap::new(), |old| old.lock().unwrap().clone());
     match val {
