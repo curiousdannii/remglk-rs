@@ -37,6 +37,13 @@ impl GlkBuffer<'_> {
             GlkBuffer::U32(buf) => buf.len(),
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            GlkBuffer::U8(buf) => buf.iter().map(|&c| c as char).collect(),
+            GlkBuffer::U32(buf) => buf.iter().map(|&c| char::from_u32(c).unwrap()).collect(),
+        }
+    }
 }
 
 impl GlkBufferMut<'_> {
@@ -51,6 +58,15 @@ impl GlkBufferMut<'_> {
         match self {
             GlkBufferMut::U8(buf) => buf[index] = if val > MAX_LATIN1 {QUESTION_MARK} else {val} as u8,
             GlkBufferMut::U32(buf) => buf[index] = val,
+        }
+    }
+}
+
+impl GlkOwnedBuffer {
+    pub fn len(&self) -> usize {
+        match self {
+            GlkOwnedBuffer::U8(buf) => buf.len(),
+            GlkOwnedBuffer::U32(buf) => buf.len(),
         }
     }
 }
@@ -70,15 +86,6 @@ fn set_buffer(src: &GlkBuffer, src_offset: usize, dest: &mut GlkBufferMut, dest_
             }
         },
         (GlkBuffer::U32(src), GlkBufferMut::U32(dest)) => dest[dest_offset..(dest_offset + len)].copy_from_slice(&src[src_offset..(src_offset + len)]),
-    }
-}
-
-impl GlkOwnedBuffer {
-    pub fn len(&self) -> usize {
-        match self {
-            GlkOwnedBuffer::U8(buf) => buf.len(),
-            GlkOwnedBuffer::U32(buf) => buf.len(),
-        }
     }
 }
 

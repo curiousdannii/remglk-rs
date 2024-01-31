@@ -14,16 +14,12 @@ use std::cmp::min;
 use enum_dispatch::enum_dispatch;
 
 use super::*;
-use arrays::*;
-use common::*;
-use GlkApiError::*;
-use constants::*;
-use protocol::FileRef;
 
 const GLK_NULL: u32 = 0;
 
 /** A `Stream` wrapped in an GlkObject (`Arc<Mutex>>`) */
 pub type GlkStream = GlkObject<Stream>;
+pub type GlkWindowStream = GlkObjectWeak<Stream>;
 
 #[enum_dispatch]
 pub enum Stream {
@@ -52,9 +48,12 @@ pub trait StreamOperations {
     fn get_char(&mut self, _uni: bool) -> GlkResult<i32> {Ok(-1)}
     fn get_line(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<u32> {Ok(0)}
     fn get_position(&self) -> u32 {0}
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()>;
+    fn put_buffer(&mut self, buf: &GlkBuffer, style: Option<u32>) -> GlkResult<()>;
     fn put_char(&mut self, ch: u32) -> GlkResult<()>;
+    fn set_css(&self, _name: &str, _val: Option<&CSSValue>) {}
+    fn set_hyperlink(&self, _val: u32) {}
     fn set_position(&mut self, _mode: SeekMode, _pos: i32) {}
+    fn set_style(&self, _style: u32) {}
     fn write_count(&self) -> usize;
 }
 
@@ -171,7 +170,7 @@ where Box<[T]>: GlkArray {
         self.pos as u32
     }
 
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer, _style: Option<u32>) -> GlkResult<()> {
         if let FileMode::Read = self.fmode {
             return Err(WriteToReadOnly);
         }
@@ -293,7 +292,7 @@ pub struct NullStream {
 }
 
 impl StreamOperations for NullStream {
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer, _style: Option<u32>) -> GlkResult<()> {
         self.write_count += buf.len();
         Ok(())
     }
@@ -311,18 +310,82 @@ impl StreamOperations for NullStream {
 /** A window stream */
 #[derive(Default)]
 pub struct WindowStream {
+    win: GlkWindowWeak,
     write_count: usize,
 }
 
+impl WindowStream {
+    pub fn new(win: &GlkWindow) -> Self {
+        WindowStream {
+            win: win.downgrade(),
+            ..Default::default()
+        }
+    }
+}
+
 impl StreamOperations for WindowStream {
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+    fn close(&self) -> GlkResult<StreamResultCounts> {
+        Err(CannotCloseWindowStream)
+    }
+
+    fn put_buffer(&mut self, buf: &GlkBuffer, style: Option<u32>) -> GlkResult<()> {
+        let win: GlkWindow = (&self.win).into();
+        let mut win = win.lock().unwrap();
+        if let Some(TextInputType::Line) = win.input.text_input_type {
+            return Err(PendingLineInput);
+        }
         self.write_count += buf.len();
+        win.put_string(&buf.to_string(), style);
+        if let Some(str) = &win.echostr {
+            let str: GlkStream = str.into();
+            str.lock().unwrap().put_buffer(buf, style)?;
+        }
         Ok(())
     }
 
-    fn put_char(&mut self, _: u32) -> GlkResult<()> {
+    fn put_char(&mut self, ch: u32) -> GlkResult<()> {
+        let win: GlkWindow = (&self.win).into();
+        let mut win = win.lock().unwrap();
+        if let Some(TextInputType::Line) = win.input.text_input_type {
+            return Err(PendingLineInput);
+        }
         self.write_count += 1;
+        win.put_string(&char::from_u32(ch).unwrap().to_string(), None);
+        if let Some(str) = &win.echostr {
+            let str: GlkStream = str.into();
+            str.lock().unwrap().put_char(ch)?;
+        }
         Ok(())
+    }
+
+    fn set_css(&self, name: &str, val: Option<&CSSValue>) {
+        let win: GlkWindow = (&self.win).into();
+        let mut win = win.lock().unwrap();
+        win.set_css(name, val);
+        if let Some(str) = &win.echostr {
+            let str: GlkStream = str.into();
+            str.lock().unwrap().set_css(name, val);
+        }
+    }
+
+    fn set_hyperlink(&self, val: u32) {
+        let win: GlkWindow = (&self.win).into();
+        let mut win = win.lock().unwrap();
+        win.set_hyperlink(val);
+        if let Some(str) = &win.echostr {
+            let str: GlkStream = str.into();
+            str.lock().unwrap().set_hyperlink(val);
+        }
+    }
+
+    fn set_style(&self, val: u32) {
+        let win: GlkWindow = (&self.win).into();
+        let mut win = win.lock().unwrap();
+        win.set_style(val);
+        if let Some(str) = &win.echostr {
+            let str: GlkStream = str.into();
+            str.lock().unwrap().set_style(val);
+        }
     }
 
     fn write_count(&self) -> usize {

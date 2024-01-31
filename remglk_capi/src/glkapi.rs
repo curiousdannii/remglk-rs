@@ -98,6 +98,26 @@ pub extern "C" fn glk_put_char_uni(ch: u32) {
 }
 
 #[no_mangle]
+pub extern "C" fn glk_set_hyperlink(val: u32) {
+    glkapi().lock().unwrap().glk_set_hyperlink(val).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_set_hyperlink_stream(str: StreamPtr, val: u32) {
+    GlkApi::glk_set_hyperlink_stream(&from_ptr(str), val);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_set_style(val: u32) {
+    glkapi().lock().unwrap().glk_set_style(val).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_set_style_stream(str: StreamPtr, val: u32) {
+    GlkApi::glk_set_style_stream(&from_ptr(str), val);
+}
+
+#[no_mangle]
 pub extern "C" fn glk_stream_close(str: StreamPtr, result: &mut Option<StreamResultCounts>) {
     let res = glkapi().lock().unwrap().glk_stream_close(reclaim(str)).unwrap();
     if let Some(result) = result {
@@ -137,21 +157,21 @@ pub extern "C" fn glk_stream_iterate(str: StreamPtr, rock: &mut u32) -> StreamPt
             None
         }
     };
-    borrow(res)
+    borrow(res.as_ref())
 }
 
 #[no_mangle]
 pub extern "C" fn glk_stream_open_memory(buf: *mut u8, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
     let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
     let result = glkapi().lock().unwrap().glk_stream_open_memory(buf, fmode, rock);
-    result.unwrap().to_owned()
+    to_owned(result.unwrap())
 }
 
 #[no_mangle]
 pub extern "C" fn glk_stream_open_memory_uni(buf: *mut u32, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
     let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
     let result = glkapi().lock().unwrap().glk_stream_open_memory_uni(buf, fmode, rock);
-    result.unwrap().to_owned()
+    to_owned(result.unwrap())
 }
 
 #[no_mangle]
@@ -167,7 +187,7 @@ pub extern "C" fn glk_stream_set_position(str: StreamPtr, mode: SeekMode, pos: i
 /*#[no_mangle]
 pub extern "C" fn glk_window_get_parent(win: &GlkWindow) -> GlkWindow {
     let result = glkapi().lock().unwrap().glk_window_get_parent(win).unwrap();
-    result.unwrap().to_owned()
+    to_owned(result.unwrap())
 }*/
 
 #[no_mangle]
@@ -201,11 +221,11 @@ pub extern "C" fn glk_window_iterate(win: WindowPtr, rock: &mut u32) -> WindowPt
             None
         }
     };
-    borrow(res)
+    borrow(res.as_ref())
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_open(splitwin: WindowPtr, method: u32, size: u32, wintype: WindowType, rock: u32) -> WindowPtr {
     let result = glkapi().lock().unwrap().glk_window_open(from_ptr_opt(splitwin).as_ref(), method, size, wintype, rock);
-    result.unwrap().to_owned()
+    to_owned(result.unwrap())
 }

@@ -15,13 +15,10 @@ use std::sync::{Arc, Mutex};
 
 use remglk::glkapi::GlkObject;
 
-// Functions for doing our Glk objects across the FFI barrier
+// Functions for sharing our Glk objects across the FFI barrier
 pub fn borrow<T>(obj: Option<&GlkObject<T>>) -> *const Mutex<T> {
     if let Some(obj) = obj {
-        let copy = obj.clone();
-        let ptr = Arc::into_raw(copy.obj);
-        unsafe{Arc::decrement_strong_count(ptr);}
-        ptr
+        Arc::as_ptr(obj)
     }
     else {
         ptr::null()
@@ -54,6 +51,10 @@ pub fn reclaim<T>(ptr: *const Mutex<T>) -> GlkObject<T> {
             }
         }
     }
+}
+
+pub fn to_owned<T>(obj: GlkObject<T>) -> *const Mutex<T> {
+    Arc::into_raw(obj.obj)
 }
 
 // Buffer helpers

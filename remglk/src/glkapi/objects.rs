@@ -12,7 +12,7 @@ https://github.com/curiousdannii/remglk-rs
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 /** Wraps a Glk object in an `Arc<Mutex>`, and ensures they can be used in a HashMap */
 #[derive(Default)]
@@ -27,10 +27,13 @@ impl<T> GlkObject<T> {
         }
     }
 
-    pub fn to_owned(self) -> *const Mutex<T> {
-        Arc::into_raw(self.obj)
+    pub fn downgrade(&self) -> GlkObjectWeak<T> {
+        Arc::downgrade(&self.obj)
     }
 }
+
+/** References between objects should use a `Weak` to prevent cycles */
+pub type GlkObjectWeak<T> = Weak<Mutex<T>>;
 
 impl<T> Clone for GlkObject<T> {
     fn clone(&self) -> Self {
@@ -44,6 +47,14 @@ impl<T> Deref for GlkObject<T> {
     type Target = Arc<Mutex<T>>;
     fn deref(&self) -> &Self::Target {
         &self.obj
+    }
+}
+
+impl<T> From<&GlkObjectWeak<T>> for GlkObject<T> {
+    fn from(weak: &GlkObjectWeak<T>) -> Self {
+        GlkObject {
+            obj: weak.upgrade().unwrap(),
+        }
     }
 }
 
@@ -64,12 +75,12 @@ impl<T> Eq for GlkObject<T> {}
 
 /** A metadata store for Glk objects of a particular type. */
 pub struct GlkObjectStore<T> {
-    first: Option<GlkObject<T>>,
+    first: Option<GlkObjectWeak<T>>,
     store: HashMap<GlkObject<T>, GlkObjectMetadata<T>>,
 }
 
-pub struct IterationResult<'a, T> {
-    pub obj: &'a GlkObject<T>,
+pub struct IterationResult<T> {
+    pub obj: GlkObject<T>,
     pub rock: u32,
 }
 
@@ -88,12 +99,15 @@ where T: Default, GlkObject<T>: Eq {
 
     pub fn iterate(&self, obj: Option<&GlkObject<T>>) -> Option<IterationResult<T>> {
         match obj {
-            None => self.first.as_ref(),
-            Some(obj) => self.store.get(obj).unwrap().next.as_ref(),
+            None => self.first.as_ref().map(|weak| weak.into()),
+            Some(obj) => self.store.get(obj).unwrap().next(),
         }
-        .map(|obj| IterationResult {
-            obj,
-            rock: self.store.get(obj).unwrap().rock,
+        .map(|obj| {
+            let rock = self.store.get(&obj).unwrap().rock;
+            IterationResult {
+                obj,
+                rock,
+            }
         })
     }
 
@@ -101,13 +115,14 @@ where T: Default, GlkObject<T>: Eq {
         let mut glk_object = GlkObjectMetadata::new(rock);
         match self.first.as_ref() {
             None => {
-                self.first = Some(obj.clone());
+                self.first = Some(obj.downgrade());
                 self.store.insert(obj.clone(), glk_object);
             },
             Some(old_first) => {
-                self.store.get_mut(old_first).unwrap().prev = Some(obj.clone());
                 glk_object.next = Some(old_first.clone());
-                self.first = Some(obj.clone());
+                let old_first_upgraded = &old_first.into();
+                self.store.get_mut(old_first_upgraded).unwrap().prev = Some(obj.downgrade());
+                self.first = Some(obj.downgrade());
                 self.store.insert(obj.clone(), glk_object);
             }
         };
@@ -116,16 +131,17 @@ where T: Default, GlkObject<T>: Eq {
     /** Remove an object from the store */
     pub fn unregister(&mut self, obj: GlkObject<T>) {
         let glk_obj = self.store.get(&obj).unwrap();
-        let prev = glk_obj.prev.as_ref().cloned();
-        let next = glk_obj.next.as_ref().cloned();
+        let prev = glk_obj.prev();
+        let next = glk_obj.next();
         if let Some(prev) = &prev {
-            self.store.get_mut(prev).unwrap().next = next.as_ref().cloned();
+            self.store.get_mut(prev).unwrap().next = next.as_ref().map(|obj| obj.downgrade());
         }
         if let Some(next) = &next {
-            self.store.get_mut(next).unwrap().prev = prev.as_ref().cloned();
+            self.store.get_mut(next).unwrap().prev = prev.as_ref().map(|obj| obj.downgrade());
         }
         if let Some(first) = &self.first {
-            if first == &obj {
+            let first_upgraded: GlkObject<T> = first.into();
+            if first_upgraded == obj {
                 self.first = None;
             }
         }
@@ -144,8 +160,8 @@ where T: Default, GlkObject<T>: Eq {
 #[derive(Default)]
 struct GlkObjectMetadata<T> {
     disprock: Option<u32>,
-    next: Option<GlkObject<T>>,
-    prev: Option<GlkObject<T>>,
+    next: Option<GlkObjectWeak<T>>,
+    prev: Option<GlkObjectWeak<T>>,
     rock: u32,
 }
 
@@ -156,5 +172,13 @@ where T: Default {
             rock,
             ..Default::default()
         }
+    }
+
+    fn next(&self) -> Option<GlkObject<T>> {
+        self.next.as_ref().map(|weak| weak.into())
+    }
+
+    fn prev(&self) -> Option<GlkObject<T>> {
+        self.prev.as_ref().map(|weak| weak.into())
     }
 }

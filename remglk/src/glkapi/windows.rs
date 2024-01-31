@@ -10,24 +10,24 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
 use enum_dispatch::enum_dispatch;
 
 use super::*;
-use constants::*;
-use protocol::*;
 
 /** A `Window` wrapped in an `Arc<Mutex>>` */
 pub type GlkWindow = GlkObject<Window>;
+pub type GlkWindowWeak = GlkObjectWeak<Window>;
 
 #[derive(Default)]
 pub struct Window {
     pub data: WindowData,
-    pub echostr: Option<Stream>,
+    pub echostr: Option<GlkWindowStream>,
     pub input: InputUpdate,
     pub parent: Option<GlkWindow>,
-    pub str: WindowStream,
+    pub str: GlkWindowStream,
     pub wbox: WindowBox,
     pub wintype: WindowType,
 }
@@ -49,12 +49,15 @@ pub struct WindowUpdate {
 }
 
 impl Window {
-    pub fn new(data: WindowData, wintype: WindowType) -> GlkWindow {
-        GlkObject::new(Window {
+    pub fn new(data: WindowData, wintype: WindowType) -> (GlkWindow, GlkStream) {
+        let win = GlkObject::new(Window {
             data,
             wintype,
             ..Default::default()
-        })
+        });
+        let str = GlkObject::new(WindowStream::new(&win).into());
+        win.lock().unwrap().str = str.downgrade();
+        (win, str)
     }
 
     pub fn update(&mut self) -> WindowUpdate {
@@ -93,6 +96,19 @@ impl Window {
     }
 }
 
+impl Deref for Window {
+    type Target = WindowData;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl DerefMut for Window {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
 impl Default for WindowData {
     fn default() -> Self {
         WindowData::Blank(BlankWindow::default())
@@ -103,7 +119,7 @@ impl Default for WindowData {
 pub trait WindowOperations {
     fn clear(&mut self) {}
     fn put_string(&mut self, _str: &str, _style: Option<u32>) {}
-    fn set_css(&mut self, _name: &str, _val: Option<CSSValue>) {}
+    fn set_css(&mut self, _name: &str, _val: Option<&CSSValue>) {}
     fn set_hyperlink(&mut self, _val: u32) {}
     fn set_style(&mut self, _val: u32) {}
     fn update(&mut self, update: WindowUpdate) -> WindowUpdate {update}
@@ -153,7 +169,7 @@ where T: Default + WindowOperations {
         self.data.put_string(str, style);
     }
 
-    fn set_css(&mut self, name: &str, val: Option<CSSValue>) {
+    fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
         self.data.set_css(name, val);
     }
 
@@ -253,9 +269,9 @@ impl WindowOperations for BufferWindow {
         }
     }
 
-    fn set_css(&mut self, name: &str, val: Option<CSSValue>) {
+    fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
         if let Some(css_styles) = &self.last_textrun().css_styles {
-            if css_styles.lock().unwrap().get(name) != val.as_ref() {
+            if css_styles.lock().unwrap().get(name) != val {
                 self.clone_last_textrun();
                 set_css(&mut self.last_textrun().css_styles, name, val);
             }
@@ -421,7 +437,7 @@ impl WindowOperations for GridWindow {
         }
     }
 
-    fn set_css(&mut self, name: &str, val: Option<CSSValue>) {
+    fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
         set_css(&mut self.current_styles.css_styles, name, val);
     }
 
@@ -543,10 +559,10 @@ fn cleanup_paragraph_styles(par: Vec<LineData>) -> Vec<LineData> {
     }).collect()
 }
 
-fn set_css(css_styles: &mut Option<Arc<Mutex<CSSProperties>>>, name: &str, val: Option<CSSValue>) {
+fn set_css(css_styles: &mut Option<Arc<Mutex<CSSProperties>>>, name: &str, val: Option<&CSSValue>) {
     // Don't do anything if this style is already set
     if let Some(css_styles) = css_styles {
-        if css_styles.lock().unwrap().get(name) == val.as_ref() {
+        if css_styles.lock().unwrap().get(name) == val {
             return;
         }
     }
@@ -557,7 +573,7 @@ fn set_css(css_styles: &mut Option<Arc<Mutex<CSSProperties>>>, name: &str, val: 
             styles.remove(name);
         },
         Some(style) => {
-            styles.insert(name.to_string(), style);
+            styles.insert(name.to_string(), style.clone());
         }
     };
     *css_styles = Some(Arc::new(Mutex::new(styles)));

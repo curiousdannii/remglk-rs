@@ -24,7 +24,9 @@ use arrays::*;
 use common::*;
 use GlkApiError::*;
 use constants::*;
+use constants::FileMode;
 use objects::*;
+use protocol::*;
 use streams::*;
 use windows::*;
 
@@ -71,19 +73,19 @@ impl GlkApi {
     }
 
     pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<()> {
-        current_stream!(self).put_buffer(&GlkBuffer::U8(buf))
+        current_stream!(self).put_buffer(&GlkBuffer::U8(buf), None)
     }
 
     pub fn glk_put_buffer_stream(&mut self, str: &GlkStream, buf: &[u8]) -> GlkResult<()> {
-        lock!(str).put_buffer(&GlkBuffer::U8(buf))
+        lock!(str).put_buffer(&GlkBuffer::U8(buf), None)
     }
 
     pub fn glk_put_buffer_stream_uni(&mut self, str: &GlkStream, buf: &[u32]) -> GlkResult<()> {
-        lock!(str).put_buffer(&GlkBuffer::U32(buf))
+        lock!(str).put_buffer(&GlkBuffer::U32(buf), None)
     }
 
     pub fn glk_put_buffer_uni(&mut self, buf: &[u32]) -> GlkResult<()> {
-        current_stream!(self).put_buffer(&GlkBuffer::U32(buf))
+        current_stream!(self).put_buffer(&GlkBuffer::U32(buf), None)
     }
 
     pub fn glk_put_char(&mut self, ch: u8) -> GlkResult<()> {
@@ -100,6 +102,22 @@ impl GlkApi {
 
     pub fn glk_put_char_uni(&mut self, ch: u32) -> GlkResult<()> {
         current_stream!(self).put_char(ch)
+    }
+
+    pub fn glk_set_hyperlink(&self, val: u32) -> GlkResult<()> {
+        Ok(current_stream!(self).set_hyperlink(val))
+    }
+
+    pub fn glk_set_hyperlink_stream(str: &GlkStream, val: u32) {
+        lock!(str).set_hyperlink(val);
+    }
+
+    pub fn glk_set_style(&self, val: u32) -> GlkResult<()> {
+        Ok(current_stream!(self).set_style(val))
+    }
+
+    pub fn glk_set_style_stream(str: &GlkStream, val: u32) {
+        lock!(str).set_style(val);
     }
 
     pub fn glk_stream_close(&mut self, str: GlkStream) -> GlkResult<StreamResultCounts> {
@@ -187,9 +205,9 @@ impl GlkApi {
             WindowType::Grid => TextWindow::<GridWindow>::new(&self.stylehints_grid).into(),
             _ => {return Err(InvalidWindowType);}
         };
-        let win = Window::new(windata, wintype);
+        let (win, str) = Window::new(windata, wintype);
         self.windows.register(&win, rock);
-        // TODO: Window stream!
+        self.streams.register(&str, 0);
 
         // Rearrange the windows for the new window
         if let Some(splitwin) = splitwin {
@@ -199,8 +217,9 @@ impl GlkApi {
             pairwindata.child2 = win.clone();
 
             // Now the pairwin object can be created and registered
-            let pairwin = Window::new(PairWindow::default().into(), WindowType::Pair);
+            let (pairwin, pairwinstr) = Window::new(PairWindow::default().into(), WindowType::Pair);
             self.windows.register(&pairwin, 0);
+            self.streams.register(&pairwinstr, 0);
 
             // Set up the rest of the relations
             let mut splitwin_inner = lock!(splitwin);
