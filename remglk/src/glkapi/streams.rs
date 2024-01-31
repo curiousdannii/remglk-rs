@@ -22,13 +22,22 @@ use protocol::FileRef;
 
 const GLK_NULL: u32 = 0;
 
+/** A `Stream` wrapped in an GlkObject (`Arc<Mutex>>`) */
+pub type GlkStream = GlkObject<Stream>;
+
 #[enum_dispatch]
 pub enum Stream {
-    ArrayBackedStreamU8(ArrayBackedStream<u8>),
-    ArrayBackedStreamU32(ArrayBackedStream<u32>),
+    ArrayBackedU8(ArrayBackedStream<u8>),
+    ArrayBackedU32(ArrayBackedStream<u32>),
     //FileStream,
-    NullStream,
-    WindowStream,
+    Null(NullStream),
+    Window(WindowStream),
+}
+
+impl Default for Stream {
+    fn default() -> Self {
+        Stream::Null(NullStream::default())
+    }
 }
 
 #[enum_dispatch(Stream)]
@@ -52,6 +61,7 @@ pub trait StreamOperations {
 /** A fixed-length stream based on a buffer (a boxed slice).
     ArrayBackedStreams are used for memory and resource streams, and are the basis of file streams.
 */
+#[derive(Default)]
 pub struct ArrayBackedStream<T> {
     buf: Box<[T]>,
     close_cb: Option<fn()>,

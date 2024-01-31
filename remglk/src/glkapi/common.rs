@@ -29,6 +29,8 @@ pub enum GlkApiError {
     InvalidWindowDivisionBlank,
     #[error("invalid wintype")]
     InvalidWindowType,
+    #[error("no current stream")]
+    NoCurrentStream,
     #[error("window has pending line input")]
     PendingLineInput,
     #[error("cannot read from write-only stream")]
@@ -39,3 +41,17 @@ pub enum GlkApiError {
     WriteToReadOnly,
 }
 pub type GlkResult<'a, T> = Result<T, GlkApiError>;
+
+macro_rules! current_stream {
+    ($str: expr) => {
+        lock!($str.current_stream.as_ref().ok_or(NoCurrentStream)?)
+    };
+}
+pub(crate) use current_stream;
+
+macro_rules! lock {
+    ($str: expr) => {
+        $str.lock().unwrap()
+    }
+}
+pub(crate) use lock;

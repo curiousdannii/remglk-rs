@@ -18,12 +18,15 @@ use super::*;
 use constants::*;
 use protocol::*;
 
+/** A `Window` wrapped in an `Arc<Mutex>>` */
+pub type GlkWindow = GlkObject<Window>;
+
 #[derive(Default)]
 pub struct Window {
     pub data: WindowData,
     pub echostr: Option<Stream>,
     pub input: InputUpdate,
-    pub parent: Option<NonZeroU32>,
+    pub parent: Option<GlkWindow>,
     pub str: WindowStream,
     pub wbox: WindowBox,
     pub wintype: WindowType,
@@ -46,12 +49,12 @@ pub struct WindowUpdate {
 }
 
 impl Window {
-    pub fn new(data: WindowData, wintype: WindowType) -> Self {
-        Window {
+    pub fn new(data: WindowData, wintype: WindowType) -> GlkWindow {
+        GlkObject::new(Window {
             data,
             wintype,
             ..Default::default()
-        }
+        })
     }
 
     pub fn update(&mut self) -> WindowUpdate {
@@ -458,7 +461,7 @@ impl WindowOperations for GridWindow {
                             }
                         }
                         acc
-                    }).into_iter().map(|tr| LineData::TextRun(tr)).collect();
+                    }).into_iter().map(LineData::TextRun).collect();
                     Some(GridWindowLine {
                         content: cleanup_paragraph_styles(content),
                         line: i as u32,
@@ -496,27 +499,24 @@ impl WindowOperations for GridWindow {
 pub struct PairWindow {
     pub backward: bool,
     pub border: bool,
-    pub child1: Option<NonZeroU32>,
-    pub child2: Option<NonZeroU32>,
+    pub child1: GlkWindow,
+    pub child2: GlkWindow,
     pub dir: u32,
     pub fixed: bool,
-    pub key: Option<NonZeroU32>,
-    // Store key.wintype just to prevent double borrowing issues
-    pub key_wintype: WindowType,
+    pub key: GlkWindow,
     pub size: u32,
     pub vertical: bool,
 }
 
 impl PairWindow {
-    pub fn new(keywin: Option<NonZeroU32>, key_wintype: WindowType, method: u32, size: u32) -> Self {
+    pub fn new(keywin: &GlkWindow, method: u32, size: u32) -> Self {
         let dir = method & winmethod_DirMask;
         PairWindow {
             backward: dir == winmethod_Left || dir == winmethod_Above,
             border: (method & winmethod_BorderMask) == winmethod_BorderMask,
             dir,
             fixed: (method & winmethod_DivisionMask) == winmethod_Fixed,
-            key: keywin,
-            key_wintype,
+            key: keywin.clone(),
             size,
             vertical: dir == winmethod_Left || dir == winmethod_Right,
             ..Default::default()

@@ -126,13 +126,13 @@ pub const winmethod_Border: u32 = 0x000;
 pub const winmethod_NoBorder: u32 = 0x100;
 pub const winmethod_BorderMask: u32 = 0x100;
 
-pub fn validate_winmethod(method: u32, splitwin: &Window) -> GlkResult<'static, (u32, u32, u32)> {
+pub fn validate_winmethod(method: u32, wintype: WindowType) -> GlkResult<'static, (u32, u32, u32)> {
     let division = method & winmethod_DivisionMask;
     let direction = method & winmethod_DirMask;
     if direction != winmethod_Fixed && direction != winmethod_Proportional {
         return Err(InvalidWindowDivision)
     }
-    if division == winmethod_Fixed && splitwin.wintype == WindowType::Blank {
+    if division == winmethod_Fixed && wintype == WindowType::Blank {
         return Err(InvalidWindowDivisionBlank)
     }
     if let winmethod_Above | winmethod_Below | winmethod_Left | winmethod_Right = direction {}
@@ -155,7 +155,7 @@ pub const filemode_Write: u32 = 0x01;
 pub const filemode_Read: u32 = 0x02;
 pub const filemode_ReadWrite: u32 = 0x03;
 pub const filemode_WriteAppend: u32 = 0x05;
-#[derive(Copy, Clone, Default, PartialEq)]
+#[derive(Copy, Clone, Default, Eq, Hash, PartialEq)]
 #[repr(C)]
 pub enum FileMode {
     #[default]
