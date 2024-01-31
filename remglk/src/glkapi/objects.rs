@@ -97,6 +97,12 @@ impl<T> GlkObjectStore<T> {
     }
 }
 
+impl<T> Default for GlkObjectStore<T> {
+    fn default() -> Self {
+        GlkObjectStore::new()
+    }
+}
+
 /** Contains the private data we keep in each object store */
 struct GlkObject<T> {
     _disprock: Option<u32>,

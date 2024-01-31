@@ -20,7 +20,7 @@ use crate::common::*;
 
 fn glkapi() -> &'static Mutex<GlkApi> {
     static GLKAPI: OnceLock<Mutex<GlkApi>> = OnceLock::new();
-    GLKAPI.get_or_init(|| Mutex::new(GlkApi::new()))
+    GLKAPI.get_or_init(|| Mutex::new(GlkApi::default()))
 }
 
 // TODO: error handling!
@@ -155,4 +155,44 @@ pub extern "C" fn glk_stream_set_current(str_id: Option<NonZeroU32>) {
 #[no_mangle]
 pub extern "C" fn glk_stream_set_position(str_id: Option<NonZeroU32>, mode: SeekMode, pos: i32) {
     glkapi().lock().unwrap().glk_stream_set_position(str_id, mode, pos).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_get_parent(win_id: Option<NonZeroU32>) -> Option<NonZeroU32> {
+    glkapi().lock().unwrap().glk_window_get_parent(win_id).unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_get_rock(win_id: Option<NonZeroU32>) -> u32 {
+    glkapi().lock().unwrap().glk_window_get_rock(win_id).unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_get_root() -> Option<NonZeroU32> {
+    glkapi().lock().unwrap().glk_window_get_root()
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_get_type(win_id: Option<NonZeroU32>) -> WindowType {
+    glkapi().lock().unwrap().glk_window_get_type(win_id).unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_iterate(win_id: Option<NonZeroU32>, rock: &mut u32) -> Option<NonZeroU32> {
+    let res = glkapi().lock().unwrap().glk_window_iterate(win_id);
+    match res {
+        Some(res) => {
+            *rock = res.rock;
+            Some(res.id)
+        },
+        None => {
+            *rock = 0;
+            None
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_open(split_id: Option<NonZeroU32>, method: u32, size: u32, wintype: WindowType, rock: u32) -> Option<NonZeroU32> {
+    glkapi().lock().unwrap().glk_window_open(split_id,method, size, wintype, rock).ok()
 }

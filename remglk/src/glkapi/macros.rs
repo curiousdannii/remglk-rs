@@ -47,3 +47,14 @@ macro_rules! win_mut {
     }
 }
 pub(crate) use win_mut;
+
+macro_rules! window_op {
+    ($self: tt, $win_id: expr, $func: expr) => {
+        {
+            let win = $self.windows.get_mut($win_id)
+                .ok_or(InvalidReference)?;
+            $func(win)
+        }
+    }
+}
+pub(crate) use window_op;

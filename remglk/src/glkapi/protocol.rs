@@ -197,6 +197,7 @@ pub struct Metrics {
 }
 
 /** Normalised screen and font metrics */
+#[derive(Default)]
 pub struct NormalisedMetrics {
     /** Buffer character height */
     pub buffercharheight: f64,

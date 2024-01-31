@@ -24,6 +24,12 @@ pub enum GlkBufferMut<'a> {
     U32(&'a mut [u32]),
 }
 
+/** An owned buffer that won't be known when the owning object is created, such as window text input buffers */
+pub enum GlkOwnedBuffer {
+    U8(Box<[u8]>),
+    U32(Box<[u32]>),
+}
+
 impl GlkBuffer<'_> {
     pub fn len(&self) -> usize {
         match self {
@@ -64,6 +70,15 @@ fn set_buffer(src: &GlkBuffer, src_offset: usize, dest: &mut GlkBufferMut, dest_
             }
         },
         (GlkBuffer::U32(src), GlkBufferMut::U32(dest)) => dest[dest_offset..(dest_offset + len)].copy_from_slice(&src[src_offset..(src_offset + len)]),
+    }
+}
+
+impl GlkOwnedBuffer {
+    pub fn len(&self) -> usize {
+        match self {
+            GlkOwnedBuffer::U8(buf) => buf.len(),
+            GlkOwnedBuffer::U32(buf) => buf.len(),
+        }
     }
 }
 

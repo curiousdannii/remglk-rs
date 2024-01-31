@@ -11,6 +11,8 @@ https://github.com/curiousdannii/remglk-rs
 
 #![allow(non_upper_case_globals)]
 
+use super::*;
+
 pub const gestalt_Version: u32 = 0;
 pub const gestalt_CharInput: u32 = 1;
 pub const gestalt_LineInput: u32 = 2;
@@ -123,6 +125,22 @@ pub const winmethod_DivisionMask: u32 = 0xf0;
 pub const winmethod_Border: u32 = 0x000;
 pub const winmethod_NoBorder: u32 = 0x100;
 pub const winmethod_BorderMask: u32 = 0x100;
+
+pub fn validate_winmethod(method: u32, splitwin: &Window) -> GlkResult<'static, (u32, u32, u32)> {
+    let division = method & winmethod_DivisionMask;
+    let direction = method & winmethod_DirMask;
+    if direction != winmethod_Fixed && direction != winmethod_Proportional {
+        return Err(InvalidWindowDivision)
+    }
+    if division == winmethod_Fixed && splitwin.wintype == WindowType::Blank {
+        return Err(InvalidWindowDivisionBlank)
+    }
+    if let winmethod_Above | winmethod_Below | winmethod_Left | winmethod_Right = direction {}
+    else {
+        return Err(InvalidWindowDirection)
+    }
+    Ok((division, direction, method & winmethod_BorderMask))
+}
 
 pub const fileusage_Data: u32 = 0x00;
 pub const fileusage_SavedGame: u32 = 0x01;

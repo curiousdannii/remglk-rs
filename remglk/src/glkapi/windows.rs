@@ -21,25 +21,21 @@ use protocol::*;
 #[derive(Default)]
 pub struct Window {
     pub data: WindowData,
-    echostr: Option<Stream>,
-    input: InputUpdate,
-    next: Option<NonZeroU32>,
-    parent: Option<NonZeroU32>,
-    prev: Option<NonZeroU32>,
-    str: WindowStream,
-    wbox: WindowBox,
+    pub echostr: Option<Stream>,
+    pub input: InputUpdate,
+    pub parent: Option<NonZeroU32>,
+    pub str: WindowStream,
+    pub wbox: WindowBox,
     pub wintype: WindowType,
 }
 
 #[enum_dispatch]
 pub enum WindowData {
-    BlankWindow,
-    BufferWindowU8(TextWindow<BufferWindow, u8>),
-    BufferWindowU32(TextWindow<BufferWindow, u32>),
-    GraphicsWindow,
-    GridWindowU8(TextWindow<GridWindow, u8>),
-    GridWindowU32(TextWindow<GridWindow, u32>),
-    PairWindow,
+    Blank(BlankWindow),
+    Buffer(TextWindow<BufferWindow>),
+    Graphics(GraphicsWindow),
+    Grid(TextWindow<GridWindow>),
+    Pair(PairWindow),
 }
 
 #[derive(Default)]
@@ -50,8 +46,16 @@ pub struct WindowUpdate {
 }
 
 impl Window {
+    pub fn new(data: WindowData, wintype: WindowType) -> Self {
+        Window {
+            data,
+            wintype,
+            ..Default::default()
+        }
+    }
+
     pub fn update(&mut self) -> WindowUpdate {
-        if let WindowData::BlankWindow(_) | WindowData::PairWindow(_) = self.data {
+        if let WindowData::Blank(_) | WindowData::Pair(_) = self.data {
             Default::default()
         }
 
@@ -88,7 +92,7 @@ impl Window {
 
 impl Default for WindowData {
     fn default() -> Self {
-        WindowData::BlankWindow(BlankWindow::default())
+        WindowData::Blank(BlankWindow::default())
     }
 }
 
@@ -102,12 +106,12 @@ pub trait WindowOperations {
     fn update(&mut self, update: WindowUpdate) -> WindowUpdate {update}
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub struct WindowBox {
-    bottom: f64,
-    left: f64,
-    right: f64,
-    top: f64,
+    pub bottom: f64,
+    pub left: f64,
+    pub right: f64,
+    pub top: f64,
 }
 
 #[derive(Default)]
@@ -116,27 +120,27 @@ pub struct BlankWindow {}
 impl WindowOperations for BlankWindow {}
 
 #[derive(Default)]
-pub struct TextWindow<T, B>
+pub struct TextWindow<T>
 where T: Default + WindowOperations {
-    data: T,
-    line_input_buffer: Option<Box<[B]>>,
-    request_echo_line_input: bool,
+    pub data: T,
+    line_input_buffer: Option<GlkOwnedBuffer>,
+    pub request_echo_line_input: bool,
     stylehints: WindowStyles,
-    uni_input: bool,
+    pub uni_input: bool,
 }
 
-impl<T, B> TextWindow<T, B>
-where T: Default + WindowOperations, B: Default {
-    fn new(stylehints: WindowStyles) -> Self {
-        TextWindow::<T, B> {
+impl<T> TextWindow<T>
+where T: Default + WindowOperations {
+    pub fn new(stylehints: &WindowStyles) -> Self {
+        TextWindow::<T> {
             request_echo_line_input: true,
-            stylehints,
+            stylehints: stylehints.clone(),
             ..Default::default()
         }
     }
 }
 
-impl<T, B> WindowOperations for TextWindow<T, B>
+impl<T> WindowOperations for TextWindow<T>
 where T: Default + WindowOperations {
     fn clear(&mut self) {
         self.data.clear();
@@ -184,7 +188,7 @@ pub struct BufferWindow {
 }
 
 impl BufferWindow {
-    fn new() -> Self {
+    pub fn new() -> Self {
         BufferWindow {
             cleared: true,
             content: vec![Paragraph::new(TextRun::default())],
@@ -326,11 +330,12 @@ impl From<Paragraph> for BufferWindowParagraphUpdate {
     }
 }
 
+#[derive(Default)]
 pub struct GraphicsWindow {
-    draw: Vec<GraphicsWindowOperation>,
-    height: u32,
-    uni_input: bool,
-    width: u32,
+    pub draw: Vec<GraphicsWindowOperation>,
+    pub height: usize,
+    pub uni_input: bool,
+    pub width: usize,
 }
 
 impl WindowOperations for GraphicsWindow {}
@@ -339,9 +344,9 @@ impl WindowOperations for GraphicsWindow {}
 pub struct GridWindow {
     cleared: bool,
     current_styles: TextRun,
-    height: usize,
+    pub height: usize,
     lines: Vec<GridLine>,
-    width: usize,
+    pub width: usize,
     x: usize,
     y: usize,
 }
@@ -364,7 +369,7 @@ impl GridWindow {
         false
     }
 
-    fn update_size(&mut self, height: usize, width: usize) {
+    pub fn update_size(&mut self, height: usize, width: usize) {
         self.height = height;
         self.width = width;
 
@@ -496,12 +501,14 @@ pub struct PairWindow {
     pub dir: u32,
     pub fixed: bool,
     pub key: Option<NonZeroU32>,
+    // Store key.wintype just to prevent double borrowing issues
+    pub key_wintype: WindowType,
     pub size: u32,
     pub vertical: bool,
 }
 
 impl PairWindow {
-    fn new(keywin: Option<NonZeroU32>, method: u32, size: u32) -> Self {
+    pub fn new(keywin: Option<NonZeroU32>, key_wintype: WindowType, method: u32, size: u32) -> Self {
         let dir = method & winmethod_DirMask;
         PairWindow {
             backward: dir == winmethod_Left || dir == winmethod_Above,
@@ -509,6 +516,7 @@ impl PairWindow {
             dir,
             fixed: (method & winmethod_DivisionMask) == winmethod_Fixed,
             key: keywin,
+            key_wintype,
             size,
             vertical: dir == winmethod_Left || dir == winmethod_Right,
             ..Default::default()
