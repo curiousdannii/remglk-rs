@@ -38,11 +38,11 @@ pub use windows::Window;
 
 #[derive(Default)]
 pub struct GlkApi {
-    current_stream: Option<GlkStream>,
+    current_stream: Option<GlkStreamWeak>,
     gen: u32,
     metrics: NormalisedMetrics,
     partial_inputs: PartialInputs,
-    root_window: Option<GlkWindow>,
+    root_window: Option<GlkWindowWeak>,
     streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
     stylehints_grid: WindowStyles,
@@ -194,14 +194,18 @@ impl GlkApi {
         lock!(str).set_style(val);
     }
 
+    pub fn glk_set_window(&mut self, win: Option<&GlkWindow>) {
+        self.current_stream = win.map(|win| lock!(win).str.clone())
+    }
+
     pub fn glk_stream_close(&mut self, str: GlkStream) -> GlkResult<StreamResultCounts> {
         let res = lock!(str).close();
         self.streams.unregister(str);
         res
     }
 
-    pub fn glk_stream_get_current(&self) -> Option<&GlkStream> {
-        self.current_stream.as_ref()
+    pub fn glk_stream_get_current(&self) -> Option<GlkStream> {
+        self.current_stream.as_ref().map(|str| Into::<GlkStream>::into(str))
     }
 
     pub fn glk_stream_get_position(str: &GlkStream) -> u32 {
@@ -225,7 +229,7 @@ impl GlkApi {
     }
 
     pub fn glk_stream_set_current(&mut self, str: Option<&GlkStream>) {
-        self.current_stream = str.cloned();
+        self.current_stream = str.map(|str| str.downgrade());
     }
 
     pub fn glk_stream_set_position(str: &GlkStream, mode: SeekMode, pos: i32) {
@@ -236,16 +240,58 @@ impl GlkApi {
         lock!(win).data.clear();
     }
 
-    /*pub fn glk_window_get_parent<'a>(&'a mut self, win: &'a GlkWindow) -> GlkResult<Option<&'a GlkWindow>> {
-        Ok(lock!(win).parent.as_ref())
-    }*/
+    pub fn glk_window_get_echo_stream(win: &GlkWindow) -> Option<GlkStream> {
+        lock!(win).echostr.as_ref().map(|str| Into::<GlkStream>::into(str))
+    }
+
+    pub fn glk_window_get_parent(win: &GlkWindow) -> Option<GlkWindow> {
+        lock!(win).parent.as_ref().map(|win| Into::<GlkWindow>::into(win))
+    }
 
     pub fn glk_window_get_rock(&self, win: &GlkWindow) -> GlkResult<u32> {
         self.windows.get_rock(win).ok_or(InvalidReference)
     }
 
-    pub fn glk_window_get_root(&self) -> Option<&GlkWindow> {
-        self.root_window.as_ref()
+    pub fn glk_window_get_root(&self) -> Option<GlkWindow> {
+        self.root_window.as_ref().map(|win| Into::<GlkWindow>::into(win))
+    }
+
+    pub fn glk_window_get_sibling(win: &GlkWindow) -> GlkResult<Option<GlkWindow>> {
+        let win_ptr = win.as_ptr();
+        let win = lock!(win);
+        if let Some(parent) = &win.parent {
+            let parent = Into::<GlkWindow>::into(parent);
+            let parent = parent.lock().unwrap();
+            match &parent.data {
+                WindowData::Pair(data) => {
+                    if data.child1.as_ptr() == win_ptr {
+                        return Ok(Some(Into::<GlkWindow>::into(&data.child2)));
+                    }
+                    Ok(Some(Into::<GlkWindow>::into(&data.child1)))
+                },
+                _ => Err(NotPairWindow),
+            }
+        }
+        else {
+            Ok(None)
+        }
+    }
+
+    pub fn glk_window_get_size(&self, win: &GlkWindow) -> (usize, usize) {
+        let win = lock!(win);
+        match &win.data {
+            WindowData::Buffer(_) => (
+                normalise_window_dimension((win.wbox.bottom - win.wbox.top - self.metrics.buffermarginy) / self.metrics.buffercharheight),
+                normalise_window_dimension((win.wbox.right - win.wbox.left - self.metrics.buffermarginx) / self.metrics.buffercharwidth),
+            ),
+            WindowData::Graphics(data) => (data.height, data.width),
+            WindowData::Grid(data) => (data.data.height, data.data.width),
+            _ => (0, 0),
+        }
+    }
+
+    pub fn glk_window_get_stream(win: &GlkWindow) -> GlkStream {
+        (&lock!(win).str).into()
     }
 
     pub fn glk_window_get_type(win: &GlkWindow) -> WindowType {
@@ -254,6 +300,18 @@ impl GlkApi {
 
     pub fn glk_window_iterate(&self, win: Option<&GlkWindow>) -> Option<IterationResult<Window>> {
         self.windows.iterate(win)
+    }
+
+    pub fn glk_window_move_cursor(win: &GlkWindow, xpos: usize, ypos: usize) -> GlkResult<()> {
+        let mut win = lock!(win);
+        match &mut win.data {
+            WindowData::Grid(data) => {
+                data.data.x = xpos;
+                data.data.y = ypos;
+                Ok(())
+            },
+            _ => Err(NotGridWindow),
+        }
     }
 
     pub fn glk_window_open(&mut self, splitwin: Option<&GlkWindow>, method: u32, size: u32, wintype: WindowType, rock: u32) -> GlkResult<GlkWindow> {
@@ -285,8 +343,8 @@ impl GlkApi {
         if let Some(splitwin) = splitwin {
             // Set up the pairwindata before turning it into a full window
             let mut pairwindata = PairWindow::new(&win, method, size);
-            pairwindata.child1 = splitwin.clone();
-            pairwindata.child2 = win.clone();
+            pairwindata.child1 = splitwin.downgrade();
+            pairwindata.child2 = win.downgrade();
 
             // Now the pairwin object can be created and registered
             let (pairwin, pairwinstr) = Window::new(PairWindow::default().into(), WindowType::Pair);
@@ -295,33 +353,33 @@ impl GlkApi {
 
             // Set up the rest of the relations
             let mut splitwin_inner = lock!(splitwin);
-            let old_parent = splitwin_inner.parent.as_ref().cloned();
-            lock!(pairwin).parent = old_parent.clone();
-            splitwin_inner.parent = Some(pairwin.clone());
-            lock!(win).parent = Some(pairwin.clone());
+            let old_parent = splitwin_inner.parent.as_ref().map(|win| Into::<GlkWindow>::into(win));
+            lock!(pairwin).parent = old_parent.as_ref().map(|win| win.downgrade());
+            splitwin_inner.parent = Some(pairwin.downgrade());
+            lock!(win).parent = Some(pairwin.downgrade());
 
             if let Some(old_parent) = old_parent {
                 let mut old_parent_inner = lock!(old_parent);
                 match &mut old_parent_inner.data {
                     WindowData::Pair(old_parent_inner) => {
-                        if &old_parent_inner.child1 == splitwin {
-                            old_parent_inner.child1 = pairwin.clone();
+                        if old_parent_inner.child1.as_ptr() == splitwin.as_ptr() {
+                            old_parent_inner.child1 = pairwin.downgrade();
                         }
                         else {
-                            old_parent_inner.child2 = pairwin.clone();
+                            old_parent_inner.child2 = pairwin.downgrade();
                         }
                     },
                     _ => unreachable!(),
                 };
             }
             else {
-                self.root_window = Some(pairwin.clone());
+                self.root_window = Some(pairwin.downgrade());
             }
             let wbox = splitwin_inner.wbox;
             self.rearrange_window(&pairwin, wbox)?;
         }
         else {
-            self.root_window = Some(win.clone());
+            self.root_window = Some(win.downgrade());
             self.rearrange_window(&win, WindowBox {
                 bottom: self.metrics.height,
                 right: self.metrics.width,
@@ -330,6 +388,10 @@ impl GlkApi {
         }
 
         Ok(win)
+    }
+
+    pub fn glk_window_set_echo_stream(win: &GlkWindow, str: Option<&GlkStream>) {
+        lock!(win).echostr = str.map(|str| str.downgrade());
     }
 
     // Internal functions
@@ -472,8 +534,8 @@ impl GlkApi {
                 if win.backward {
                     mem::swap(&mut box1, &mut box2);
                 }
-                self.rearrange_window(&win.child1, box1)?;
-                self.rearrange_window(&win.child2, box2)?;
+                self.rearrange_window(&Into::<GlkWindow>::into(&win.child1), box1)?;
+                self.rearrange_window(&Into::<GlkWindow>::into(&win.child2), box2)?;
             },
             _ => {},
         };

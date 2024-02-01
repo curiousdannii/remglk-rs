@@ -1,3 +1,5 @@
 *.lock
 
 target
+tests/glulxe
+tests/regtest.py

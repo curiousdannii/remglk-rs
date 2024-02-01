@@ -31,6 +31,10 @@ pub enum GlkApiError {
     InvalidWindowType,
     #[error("no current stream")]
     NoCurrentStream,
+    #[error("invalid window: not a grid window")]
+    NotGridWindow,
+    #[error("invalid window: not a pair window")]
+    NotPairWindow,
     #[error("window already has keyboard request")]
     PendingKeyboardRequest,
     #[error("window has pending line input")]
@@ -48,7 +52,7 @@ pub type GlkResult<'a, T> = Result<T, GlkApiError>;
 
 macro_rules! current_stream {
     ($str: expr) => {
-        lock!($str.current_stream.as_ref().ok_or(NoCurrentStream)?)
+        lock!($str.current_stream.as_ref().map(|str| Into::<GlkStream>::into(str)).as_ref().ok_or(NoCurrentStream)?)
     };
 }
 pub(crate) use current_stream;

@@ -27,6 +27,10 @@ impl<T> GlkObject<T> {
         }
     }
 
+    pub fn as_ptr(&self) -> *const Mutex<T> {
+        Arc::as_ptr(self)
+    }
+
     pub fn downgrade(&self) -> GlkObjectWeak<T> {
         Arc::downgrade(&self.obj)
     }

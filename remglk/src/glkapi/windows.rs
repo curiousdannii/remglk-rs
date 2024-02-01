@@ -26,7 +26,7 @@ pub struct Window {
     pub data: WindowData,
     pub echostr: Option<GlkStreamWeak>,
     pub input: InputUpdate,
-    pub parent: Option<GlkWindow>,
+    pub parent: Option<GlkWindowWeak>,
     pub str: GlkStreamWeak,
     pub wbox: WindowBox,
     pub wintype: WindowType,
@@ -366,8 +366,8 @@ pub struct GridWindow {
     pub height: usize,
     lines: Vec<GridLine>,
     pub width: usize,
-    x: usize,
-    y: usize,
+    pub x: usize,
+    pub y: usize,
 }
 
 #[derive(Clone, Default)]
@@ -515,8 +515,8 @@ impl WindowOperations for GridWindow {
 pub struct PairWindow {
     pub backward: bool,
     pub border: bool,
-    pub child1: GlkWindow,
-    pub child2: GlkWindow,
+    pub child1: GlkWindowWeak,
+    pub child2: GlkWindowWeak,
     pub dir: u32,
     pub fixed: bool,
     pub key: GlkWindow,
