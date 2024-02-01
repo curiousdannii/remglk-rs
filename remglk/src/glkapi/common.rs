@@ -13,6 +13,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum GlkApiError {
+    #[error("cannot change window split direction")]
+    CannotChangeWindowSplitDirection,
     #[error("cannot close window stream")]
     CannotCloseWindowStream,
     #[error("illegal filemode")]
@@ -29,6 +31,10 @@ pub enum GlkApiError {
     InvalidWindowDivisionBlank,
     #[error("invalid wintype")]
     InvalidWindowType,
+    #[error("invalid keywin: can't be a pair window")]
+    KeywinCantBePair,
+    #[error("keywin must be a descendant")]
+    KeywinMustBeDescendant,
     #[error("no current stream")]
     NoCurrentStream,
     #[error("invalid window: not a grid window")]

@@ -252,6 +252,67 @@ impl GlkApi {
         lock!(str).set_position(mode, pos);
     }
 
+    pub fn glk_stylehint_clear(&mut self, wintype: WindowType, style: u32, hint: u32) {
+        let selector = format!("{}.Style_{}", if hint == stylehint_Justification {"div"} else {"span"}, style_name(style));
+        let remove_styles = |stylehints: &mut WindowStyles| {
+            if stylehints.contains_key(&selector) {
+                let props = stylehints.get_mut(&selector).unwrap();
+                props.remove(stylehint_name(hint));
+                if props.is_empty() {
+                    stylehints.remove(&selector);
+                }
+            }
+        };
+
+        if wintype == WindowType::All || wintype == WindowType::Buffer {
+            remove_styles(&mut self.stylehints_buffer);
+        }
+        if wintype == WindowType::All || wintype == WindowType::Grid {
+            remove_styles(&mut self.stylehints_grid);
+        }
+    }
+
+    pub fn glk_stylehint_set(&mut self, wintype: WindowType, style: u32, hint: u32, value: i32) {
+        if style >= style_NUMSTYLES || hint >= stylehint_NUMHINTS {
+            return;
+        }
+
+        match wintype {
+            WindowType::All => {
+                self.glk_stylehint_set(WindowType::Buffer, style, hint, value);
+                self.glk_stylehint_set(WindowType::Grid, style, hint, value);
+                return;
+            },
+            WindowType::Blank | WindowType::Graphics | WindowType::Pair => {
+                return;
+            },
+            _ => {},
+        };
+
+        let stylehints = if wintype == WindowType::Buffer {&mut self.stylehints_buffer} else {&mut self.stylehints_grid};
+        let selector = format!("{}.Style_{}", if hint == stylehint_Justification {"div"} else {"span"}, style_name(style));
+
+        #[allow(non_upper_case_globals)]
+        let css_value = match hint {
+            stylehint_Indentation | stylehint_ParaIndentation => CSSValue::String(format!("{}em", value)),
+            stylehint_Justification => CSSValue::String(justification(value).to_string()),
+            stylehint_Size => CSSValue::String(format!("{}em", 1.0 + (value as f64) * 0.1)),
+            stylehint_Weight => CSSValue::String(font_weight(value).to_string()),
+            stylehint_Oblique => CSSValue::String((if value == 0 {"normal"} else {"italic"}).to_string()),
+            stylehint_Proportional => CSSValue::Number(value as f64),
+            stylehint_TextColor | stylehint_BackColor => CSSValue::String(colour_code_to_css(value as u32)),
+            stylehint_ReverseColor => CSSValue::Number(value as f64),
+            _ => unreachable!(),
+        };
+
+        if !stylehints.contains_key(&selector) {
+            stylehints.insert(selector.clone(), CSSProperties::default());
+        }
+
+        let props = stylehints.get_mut(&selector).unwrap();
+        props.insert(stylehint_name(hint).to_string(), css_value);
+    }
+
     pub fn glk_window_clear(win: &GlkWindow) {
         lock!(win).data.clear();
     }
@@ -275,32 +336,33 @@ impl GlkApi {
             let parent_win_ptr = parent_win_glkobj.as_ptr();
             let parent_win = lock!(parent_win_glkobj);
             let grandparent_win = parent_win.parent.as_ref().map(|win| Into::<GlkWindow>::into(win));
-            match &parent_win.data {
-                WindowData::Pair(data) => {
-                    let sibling_win = if data.child1.as_ptr() == win_ptr {&data.child2} else {&data.child1};
-                    let sibling_win = Into::<GlkWindow>::into(sibling_win);
-                    if let Some(grandparent_win) = grandparent_win {
-                        let mut grandparent_win = lock!(grandparent_win);
-                        match grandparent_win.data {
-                            WindowData::Pair(ref mut data) => {
-                                if data.child1.as_ptr() == parent_win_ptr {
-                                    data.child1 = sibling_win.downgrade();
-                                }
-                                else {
-                                    data.child2 = sibling_win.downgrade();
-                                }
-                            },
-                            _ => unreachable!(),
-                        };
+            if let WindowData::Pair(data) = &parent_win.data {
+                let sibling_win = if data.child1.as_ptr() == win_ptr {&data.child2} else {&data.child1};
+                let sibling_win = Into::<GlkWindow>::into(sibling_win);
+                if let Some(grandparent_win) = grandparent_win {
+                    let mut grandparent_win = lock!(grandparent_win);
+                    if let WindowData::Pair(ref mut data) = grandparent_win.data {
+                        if data.child1.as_ptr() == parent_win_ptr {
+                            data.child1 = sibling_win.downgrade();
+                        }
+                        else {
+                            data.child2 = sibling_win.downgrade();
+                        }
                     }
                     else {
-                        self.root_window = Some(sibling_win.downgrade());
-                        lock!(sibling_win).parent = None;
+                        unreachable!();
                     }
-                    self.rearrange_window(&sibling_win, parent_win.wbox)?;
-                },
-                _ => unreachable!(),
-            };
+                }
+                else {
+                    self.root_window = Some(sibling_win.downgrade());
+                    lock!(sibling_win).parent = None;
+                }
+                self.rearrange_window(&sibling_win, parent_win.wbox)?;
+
+            }
+            else {
+                unreachable!();
+            }
 
             drop(parent_win);
             drop(win);
@@ -309,6 +371,18 @@ impl GlkApi {
         }
 
         res
+    }
+
+    pub fn glk_window_get_arrangement(win: &GlkWindow) -> GlkResult<(u32, u32, GlkWindow)> {
+        let win = lock!(win);
+        if let WindowData::Pair(data) = &win.data {
+            let keywin = Into::<GlkWindow>::into(&data.key);
+            let method = data.dir | (if data.fixed {winmethod_Fixed} else {winmethod_Proportional}) | (if data.border {winmethod_Border} else {winmethod_NoBorder});
+            Ok((method, data.size, keywin))
+        }
+        else {
+            Err(NotPairWindow)
+        }
     }
 
     pub fn glk_window_get_echo_stream(win: &GlkWindow) -> Option<GlkStream> {
@@ -333,14 +407,14 @@ impl GlkApi {
         if let Some(parent) = &win.parent {
             let parent = Into::<GlkWindow>::into(parent);
             let parent = lock!(parent);
-            match &parent.data {
-                WindowData::Pair(data) => {
-                    if data.child1.as_ptr() == win_ptr {
-                        return Ok(Some(Into::<GlkWindow>::into(&data.child2)));
-                    }
-                    Ok(Some(Into::<GlkWindow>::into(&data.child1)))
-                },
-                _ => Err(NotPairWindow),
+            if let WindowData::Pair(data) = &parent.data {
+                if data.child1.as_ptr() == win_ptr {
+                    return Ok(Some(Into::<GlkWindow>::into(&data.child2)));
+                }
+                Ok(Some(Into::<GlkWindow>::into(&data.child1)))
+            }
+            else {
+                Err(NotPairWindow)
             }
         }
         else {
@@ -375,13 +449,13 @@ impl GlkApi {
 
     pub fn glk_window_move_cursor(win: &GlkWindow, xpos: usize, ypos: usize) -> GlkResult<()> {
         let mut win = lock!(win);
-        match &mut win.data {
-            WindowData::Grid(data) => {
-                data.data.x = xpos;
-                data.data.y = ypos;
-                Ok(())
-            },
-            _ => Err(NotGridWindow),
+        if let WindowData::Grid(data) = &mut win.data {
+            data.data.x = xpos;
+            data.data.y = ypos;
+            Ok(())
+        }
+        else {
+            Err(NotGridWindow)
         }
     }
 
@@ -431,17 +505,17 @@ impl GlkApi {
 
             if let Some(old_parent) = old_parent {
                 let mut old_parent_inner = lock!(old_parent);
-                match &mut old_parent_inner.data {
-                    WindowData::Pair(old_parent_inner) => {
-                        if old_parent_inner.child1.as_ptr() == splitwin.as_ptr() {
-                            old_parent_inner.child1 = pairwin.downgrade();
-                        }
-                        else {
-                            old_parent_inner.child2 = pairwin.downgrade();
-                        }
-                    },
-                    _ => unreachable!(),
-                };
+                if let WindowData::Pair(old_parent_inner) = &mut old_parent_inner.data {
+                    if old_parent_inner.child1.as_ptr() == splitwin.as_ptr() {
+                        old_parent_inner.child1 = pairwin.downgrade();
+                    }
+                    else {
+                        old_parent_inner.child2 = pairwin.downgrade();
+                    }
+                }
+                else {
+                    unreachable!();
+                }
             }
             else {
                 self.root_window = Some(pairwin.downgrade());
@@ -459,6 +533,69 @@ impl GlkApi {
         }
 
         Ok(win)
+    }
+
+    pub fn glk_window_set_arrangement(&mut self, win_glkobj: &GlkWindow, method: u32, size: u32, keywin: Option<&GlkWindow>) -> GlkResult<()> {
+        let win_ptr = win_glkobj.as_ptr();
+        let mut win = lock!(win_glkobj);
+        if let WindowData::Pair(data) = &mut win.data {
+            // Check the keywin is valid
+            if let Some(keywin_glkobj) = keywin {
+                let keywin = lock!(keywin_glkobj);
+                if keywin.wintype == WindowType::Pair {
+                    return Err(KeywinCantBePair);
+                }
+                let mut win_parent = keywin_glkobj.downgrade();
+                loop {
+                    if win_parent.as_ptr() == win_ptr {
+                        break;
+                    }
+                    let parent = Into::<GlkWindow>::into(&win_parent);
+                    let parent = lock!(parent);
+                    let parent = &parent.parent;
+                    if let Some(parent) = parent {
+                        win_parent = parent.clone();
+                    }
+                    else {
+                        return Err(KeywinMustBeDescendant);
+                    }
+                }
+            }
+
+            let new_dir = method & winmethod_DirMask;
+            let new_fixed = (method & winmethod_DivisionMask) == winmethod_Fixed;
+            let new_vertical = new_dir == winmethod_Left || new_dir == winmethod_Right;
+            let win_keywin = Into::<GlkWindow>::into(&data.key);
+            let keywin = keywin.unwrap_or(&win_keywin);
+            let keywin = lock!(keywin);
+            if new_vertical && !data.vertical {
+                return Err(CannotChangeWindowSplitDirection);
+            }
+            if new_fixed && keywin.wintype == WindowType::Blank {
+                return Err(InvalidWindowDivisionBlank);
+            }
+
+            let new_backward = new_dir == winmethod_Left || new_dir == winmethod_Above;
+            if new_backward != data.backward {
+                // Switch the children
+                mem::swap(&mut data.child1, &mut data.child2);
+            }
+
+            // Update the window
+            data.backward = new_backward;
+            data.border = (method & winmethod_BorderMask) == winmethod_BorderMask;
+            data.dir = new_dir;
+            data.fixed = new_fixed;
+            data.key = win_keywin.downgrade();
+            data.size = size;
+
+            self.rearrange_window(win_glkobj, win.wbox)?;
+
+            Ok(())
+        }
+        else {
+            Err(NotPairWindow)
+        }
     }
 
     pub fn glk_window_set_echo_stream(win: &GlkWindow, str: Option<&GlkStream>) {
@@ -623,14 +760,11 @@ impl GlkApi {
         // TODO: unretain array
 
         let win = lock!(win_glkobj);
-        match &win.data {
-            WindowData::Pair(data) => {
-                if recurse {
-                    self.remove_window(Into::<GlkWindow>::into(&data.child1), true);
-                    self.remove_window(Into::<GlkWindow>::into(&data.child2), true);
-                }
-            },
-            _ => {},
+        if let WindowData::Pair(data) = &win.data {
+            if recurse {
+                self.remove_window(Into::<GlkWindow>::into(&data.child1), true);
+                self.remove_window(Into::<GlkWindow>::into(&data.child2), true);
+            }
         }
 
         let str = Into::<GlkStream>::into(&win.str);
@@ -710,6 +844,11 @@ struct TimerData {
     interval: u32,
     last_interval: u32,
     started: Option<SystemTime>,
+}
+
+fn colour_code_to_css(colour: u32) -> String {
+    // Uppercase colours are required by RegTest
+    format!("#{:6X}", colour & 0xFFFFFF)
 }
 
 fn normalise_window_dimension(val: f64) -> usize {

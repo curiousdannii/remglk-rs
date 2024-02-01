@@ -125,6 +125,22 @@ pub const style_Input: u32 = 8;
 pub const style_User1: u32 = 9;
 pub const style_User2: u32 = 10;
 pub const style_NUMSTYLES: u32 = 11;
+pub fn style_name(style: u32) -> &'static str {
+    match style {
+        style_Normal => "normal",
+        style_Emphasized => "emphasized",
+        style_Preformatted => "preformatted",
+        style_Header => "header",
+        style_Subheader => "subheader",
+        style_Alert => "alert",
+        style_Note => "note",
+        style_BlockQuote => "blockquote",
+        style_Input => "input",
+        style_User1 => "user1",
+        style_User2 => "user2",
+        _ => "normal",
+    }
+}
 
 pub const wintype_AllTypes: u32 = 0;
 pub const wintype_Pair: u32 = 1;
@@ -219,11 +235,44 @@ pub const stylehint_TextColor: u32 = 7;
 pub const stylehint_BackColor: u32 = 8;
 pub const stylehint_ReverseColor: u32 = 9;
 pub const stylehint_NUMHINTS: u32 = 10;
+pub fn stylehint_name(style: u32) -> &'static str {
+    match style {
+        stylehint_Indentation => "margin-left",
+        stylehint_ParaIndentation => "text-indent",
+        stylehint_Justification => "text-align",
+        stylehint_Size => "font-size",
+        stylehint_Weight => "font-weight",
+        stylehint_Oblique => "font-style",
+        stylehint_Proportional => "monospace",
+        stylehint_TextColor => "color",
+        stylehint_BackColor => "background-color",
+        stylehint_ReverseColor => "reverse",
+        _ => unreachable!(),
+    }
+}
 
 pub const stylehint_just_LeftFlush: u32 = 0;
 pub const stylehint_just_LeftRight: u32 = 1;
 pub const stylehint_just_Centered: u32 = 2;
 pub const stylehint_just_RightFlush: u32 = 3;
+pub fn justification(val: i32) -> &'static str {
+    match val {
+        0 => "left",
+        1 => "justify",
+        2 => "center",
+        3 => "right",
+        _ => "left",
+    }
+}
+
+pub fn font_weight(val: i32) -> &'static str {
+    match val {
+        -1 => "lighter",
+        0 => "normal",
+        1 => "bold",
+        _ => "normal",
+    }
+}
 
 pub const imagealign_InlineUp: u32 = 1;
 pub const imagealign_InlineDown: u32 = 2;

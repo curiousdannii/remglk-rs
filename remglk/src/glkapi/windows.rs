@@ -568,13 +568,11 @@ fn set_css(css_styles: &mut Option<Arc<Mutex<CSSProperties>>>, name: &str, val: 
     }
     // We need to either clone the existing styles, or insert an empty one
     let mut styles = css_styles.take().map_or(HashMap::new(), |old| old.lock().unwrap().clone());
-    match val {
-        None => {
-            styles.remove(name);
-        },
-        Some(style) => {
-            styles.insert(name.to_string(), style.clone());
-        }
-    };
+    if let Some(style) = val {
+        styles.insert(name.to_string(), style.clone());
+    }
+    else {
+        styles.remove(name);
+    }
     *css_styles = Some(Arc::new(Mutex::new(styles)));
 }
