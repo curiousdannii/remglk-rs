@@ -39,8 +39,10 @@ pub struct EventBase {
     /** Generation number */
     pub gen: u32,
     /** Partial line input values */
-    pub partial: Option<HashMap<u32, String>>,
+    pub partial: PartialInputs,
 }
+
+pub type PartialInputs = Option<HashMap<u32, String>>;
 
 pub struct ArrangeEvent {
     pub base: EventBase,
@@ -530,12 +532,8 @@ pub type WindowStyles = HashMap<String, CSSProperties>;
 #[derive(Copy, Clone, PartialEq)]
 pub enum BufferWindowImageAlignment {InlineCenter,InlineDown, InlineUp, MarginLeft, MarginRight}
 #[derive(Copy, Clone, PartialEq)]
-pub enum FileMode {Read, ReadWrite, Write, WriteAppend}
-#[derive(Copy, Clone, PartialEq)]
 pub enum FileType {Command, Data, Save, Transcript}
 #[derive(Copy, Clone, PartialEq)]
 pub enum SpecialKeyCode {Delete, Down, End, Escape, Func1, Func2, Func3, Func4, Func5, Func6, Func7, Func8, Func9, Func10, Func11, Func12, Home, Left, Pagedown, Pageup, Return, Right, Tab, Up}
-#[derive(Copy, Clone, PartialEq)]
-pub enum TerminatorCode {Escape, Func1, Func2, Func3, Func4, Func5, Func6, Func7, Func8, Func9, Func10, Func11, Func12}
 #[derive(Copy, Clone, PartialEq)]
 pub enum TextInputType {Char, Line}

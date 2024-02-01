@@ -47,11 +47,9 @@ pub fn reclaim<T>(ptr: *const Mutex<T>) -> GlkObject<T> {
         panic!("Invalid (null) reference!")
     }
     else {
-        unsafe{
-            let obj = Arc::from_raw(ptr);
-            GlkObject {
-                obj,
-            }
+        let obj = unsafe {Arc::from_raw(ptr)};
+        GlkObject {
+            obj,
         }
     }
 }
@@ -76,5 +74,5 @@ pub fn cstring_u8<'a>(buf: *const i8) -> &'a [u8] {
 }
 
 pub fn cstring_u32<'a>(buf: *const u32) -> &'a [u32] {
-    unsafe{U32CStr::from_ptr_str(buf).as_slice()}
+    unsafe {U32CStr::from_ptr_str(buf).as_slice()}
 }

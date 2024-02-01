@@ -31,12 +31,16 @@ pub enum GlkApiError {
     InvalidWindowType,
     #[error("no current stream")]
     NoCurrentStream,
+    #[error("window already has keyboard request")]
+    PendingKeyboardRequest,
     #[error("window has pending line input")]
     PendingLineInput,
     #[error("cannot read from write-only stream")]
     ReadFromWriteOnly,
     #[error("splitwin must be null for first window")]
     SplitMustBeNull,
+    #[error("window doesn't support character input")]
+    WindowDoesntSupportCharInput,
     #[error("cannot write to read-only stream")]
     WriteToReadOnly,
 }

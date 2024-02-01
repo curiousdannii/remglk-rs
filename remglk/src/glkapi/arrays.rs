@@ -9,6 +9,8 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use widestring::Utf32String;
+
 pub const MAX_LATIN1: u32 = 0xFF;
 pub const QUESTION_MARK: u32 = '?' as u32;
 
@@ -71,8 +73,33 @@ impl GlkOwnedBuffer {
     }
 }
 
+impl From<&str> for GlkOwnedBuffer {
+    fn from(value: &str) -> Self {
+        let str = Utf32String::from_str(value);
+        GlkOwnedBuffer::U32(str.into_vec().into_boxed_slice())
+    }
+}
+
+impl<'a> From<&'a GlkOwnedBuffer> for GlkBuffer<'a> {
+    fn from(value: &'a  GlkOwnedBuffer) -> Self {
+        match value {
+            GlkOwnedBuffer::U8(ref buf) => GlkBuffer::U8(buf.as_ref()),
+            GlkOwnedBuffer::U32(ref buf) => GlkBuffer::U32(buf.as_ref()),
+        }
+    }
+}
+
+impl<'a> From<&'a mut GlkOwnedBuffer> for GlkBufferMut<'a> {
+    fn from(value: &'a mut GlkOwnedBuffer) -> Self {
+        match value {
+            GlkOwnedBuffer::U8(ref mut buf) => GlkBufferMut::U8(buf.as_mut()),
+            GlkOwnedBuffer::U32(ref mut buf) => GlkBufferMut::U32(buf.as_mut()),
+        }
+    }
+}
+
 /** Copy a slice into this slice, both must be long enough, starting from their respective indices, to contain the length of the slice */
-fn set_buffer(src: &GlkBuffer, src_offset: usize, dest: &mut GlkBufferMut, dest_offset: usize, len: usize) {
+pub fn set_buffer(src: &GlkBuffer, src_offset: usize, dest: &mut GlkBufferMut, dest_offset: usize, len: usize) {
     match (src, dest) {
         (GlkBuffer::U8(src), GlkBufferMut::U8(dest)) => dest[dest_offset..(dest_offset + len)].copy_from_slice(&src[src_offset..(src_offset + len)]),
         (GlkBuffer::U8(src), GlkBufferMut::U32(dest)) => {

@@ -34,6 +34,27 @@ fn glkapi() -> &'static Mutex<GlkApi> {
 // TODO: error handling!
 
 #[no_mangle]
+pub extern "C" fn glk_cancel_char_event(win: WindowPtr) {
+    GlkApi::glk_cancel_char_event(&from_ptr(win));
+}
+
+#[no_mangle]
+pub extern "C" fn glk_cancel_hyperlink_event(win: WindowPtr) {
+    GlkApi::glk_cancel_hyperlink_event(&from_ptr(win));
+}
+
+#[no_mangle]
+pub extern "C" fn glk_cancel_line_event(win: WindowPtr, ev: &mut GlkEvent) {
+    let res: GlkEvent = glkapi().lock().unwrap().glk_cancel_line_event(&from_ptr(win)).unwrap().into();
+    *ev = res;
+}
+
+#[no_mangle]
+pub extern "C" fn glk_cancel_mouse_event(win: WindowPtr) {
+    GlkApi::glk_cancel_mouse_event(&from_ptr(win));
+}
+
+#[no_mangle]
 pub extern "C" fn glk_get_buffer_stream(str: StreamPtr, buf: BufferMutU8, len: u32) -> u32 {
     GlkApi::glk_get_buffer_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
@@ -124,6 +145,43 @@ pub extern "C" fn glk_put_string_uni(cstr: CStringU32) {
 }
 
 #[no_mangle]
+pub extern "C" fn glk_request_char_event(win: WindowPtr) {
+    glkapi().lock().unwrap().glk_request_char_event(&from_ptr(win)).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_request_char_event_uni(win: WindowPtr) {
+    glkapi().lock().unwrap().glk_request_char_event_uni(&from_ptr(win)).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_request_hyperlink_event(win: WindowPtr) {
+    GlkApi::glk_request_hyperlink_event(&from_ptr(win));
+}
+
+#[no_mangle]
+pub extern "C" fn glk_request_line_event(win: WindowPtr, buf: BufferMutU8, len: u32, initlen: u32) {
+    let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
+    glkapi().lock().unwrap().glk_request_line_event(&from_ptr(win), buf, initlen).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_request_line_event_uni(win: WindowPtr, buf: BufferMutU32, len: u32, initlen: u32) {
+    let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
+    glkapi().lock().unwrap().glk_request_line_event_uni(&from_ptr(win), buf, initlen).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_request_mouse_event(win: WindowPtr) {
+    GlkApi::glk_request_mouse_event(&from_ptr(win));
+}
+
+#[no_mangle]
+pub extern "C" fn glk_request_timer_events(msecs: u32) {
+    glkapi().lock().unwrap().glk_request_timer_events(msecs);
+}
+
+#[no_mangle]
 pub extern "C" fn glk_set_hyperlink(val: u32) {
     glkapi().lock().unwrap().glk_set_hyperlink(val).ok();
 }
@@ -160,7 +218,7 @@ pub extern "C" fn glk_stream_get_current() -> StreamPtr {
 
 #[no_mangle]
 pub extern "C" fn glk_stream_get_position(str: StreamPtr) -> u32 {
-    GlkApi::glk_stream_get_position(&from_ptr(str)).unwrap()
+    GlkApi::glk_stream_get_position(&from_ptr(str))
 }
 
 #[no_mangle]
@@ -207,7 +265,12 @@ pub extern "C" fn glk_stream_set_current(str: StreamPtr) {
 
 #[no_mangle]
 pub extern "C" fn glk_stream_set_position(str: StreamPtr, mode: SeekMode, pos: i32) {
-    GlkApi::glk_stream_set_position(&from_ptr(str), mode, pos).ok();
+    GlkApi::glk_stream_set_position(&from_ptr(str), mode, pos);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_clear(win: WindowPtr) {
+    GlkApi::glk_window_clear(&from_ptr(win));
 }
 
 /*#[no_mangle]
@@ -230,7 +293,7 @@ pub extern "C" fn glk_window_get_root() -> WindowPtr {
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_type(win: WindowPtr) -> WindowType {
-    GlkApi::glk_window_get_type(&from_ptr(win)).unwrap()
+    GlkApi::glk_window_get_type(&from_ptr(win))
 }
 
 #[no_mangle]
@@ -254,4 +317,25 @@ pub extern "C" fn glk_window_iterate(win: WindowPtr, rock: &mut u32) -> WindowPt
 pub extern "C" fn glk_window_open(splitwin: WindowPtr, method: u32, size: u32, wintype: WindowType, rock: u32) -> WindowPtr {
     let result = glkapi().lock().unwrap().glk_window_open(from_ptr_opt(splitwin).as_ref(), method, size, wintype, rock);
     to_owned(result.unwrap())
+}
+
+/** A Glk event */
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct GlkEvent {
+    pub evtype: GlkEventType,
+    pub win: WindowPtr,
+    pub val1: u32,
+    pub val2: u32,
+}
+
+impl From<glkapi::GlkEvent> for GlkEvent {
+    fn from(ev: glkapi::GlkEvent) -> Self {
+        GlkEvent {
+            evtype: ev.evtype,
+            win: borrow(ev.win.as_ref()),
+            val1: ev.val1,
+            val2: ev.val2,
+        }
+    }
 }

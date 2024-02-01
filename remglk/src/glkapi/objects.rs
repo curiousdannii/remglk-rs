@@ -75,6 +75,7 @@ impl<T> Eq for GlkObject<T> {}
 
 /** A metadata store for Glk objects of a particular type. */
 pub struct GlkObjectStore<T> {
+    counter: u32,
     first: Option<GlkObjectWeak<T>>,
     store: HashMap<GlkObject<T>, GlkObjectMetadata<T>>,
 }
@@ -88,9 +89,14 @@ impl<T> GlkObjectStore<T>
 where T: Default, GlkObject<T>: Eq {
     pub fn new() -> Self {
         GlkObjectStore {
+            counter: 1,
             first: None,
             store: HashMap::new(),
         }
+    }
+
+    pub fn get_disprock(&self, obj: &GlkObject<T>) -> Option<u32> {
+        self.store.get(obj).map(|obj| obj.disprock)
     }
 
     pub fn get_rock(&self, obj: &GlkObject<T>) -> Option<u32> {
@@ -112,7 +118,8 @@ where T: Default, GlkObject<T>: Eq {
     }
 
     pub fn register(&mut self, obj: &GlkObject<T>, rock: u32) {
-        let mut glk_object = GlkObjectMetadata::new(rock);
+        let mut glk_object = GlkObjectMetadata::new(rock, self.counter);
+        self.counter += 1;
         match self.first.as_ref() {
             None => {
                 self.first = Some(obj.downgrade());
@@ -159,7 +166,7 @@ where T: Default, GlkObject<T>: Eq {
 /** Contains the private metadata we keep in each object store */
 #[derive(Default)]
 struct GlkObjectMetadata<T> {
-    disprock: Option<u32>,
+    disprock: u32,
     next: Option<GlkObjectWeak<T>>,
     prev: Option<GlkObjectWeak<T>>,
     rock: u32,
@@ -167,8 +174,9 @@ struct GlkObjectMetadata<T> {
 
 impl<T> GlkObjectMetadata<T>
 where T: Default {
-    fn new(rock: u32) -> Self {
+    fn new(rock: u32, disprock: u32) -> Self {
         GlkObjectMetadata {
+            disprock,
             rock,
             ..Default::default()
         }

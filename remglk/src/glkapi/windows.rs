@@ -24,12 +24,13 @@ pub type GlkWindowWeak = GlkObjectWeak<Window>;
 #[derive(Default)]
 pub struct Window {
     pub data: WindowData,
-    pub echostr: Option<GlkWindowStream>,
+    pub echostr: Option<GlkStreamWeak>,
     pub input: InputUpdate,
     pub parent: Option<GlkWindow>,
-    pub str: GlkWindowStream,
+    pub str: GlkStreamWeak,
     pub wbox: WindowBox,
     pub wintype: WindowType,
+    pub uni_char_input: bool,
 }
 
 #[enum_dispatch]
@@ -142,10 +143,9 @@ impl WindowOperations for BlankWindow {}
 pub struct TextWindow<T>
 where T: Default + WindowOperations {
     pub data: T,
-    line_input_buffer: Option<GlkOwnedBuffer>,
+    pub line_input_buffer: Option<GlkOwnedBuffer>,
     pub request_echo_line_input: bool,
     stylehints: WindowStyles,
-    pub uni_input: bool,
 }
 
 impl<T> TextWindow<T>

@@ -18,13 +18,14 @@ mod protocol;
 mod streams;
 mod windows;
 
+use std::cmp::min;
 use std::mem;
+use std::time::SystemTime;
 
 use arrays::*;
 use common::*;
 use GlkApiError::*;
 use constants::*;
-use constants::FileMode;
 use objects::*;
 use protocol::*;
 use streams::*;
@@ -37,17 +38,55 @@ pub use windows::Window;
 
 #[derive(Default)]
 pub struct GlkApi {
-    streams: GlkObjectStore<Stream>,
     current_stream: Option<GlkStream>,
-    metrics: protocol::NormalisedMetrics,
+    gen: u32,
+    metrics: NormalisedMetrics,
+    partial_inputs: PartialInputs,
     root_window: Option<GlkWindow>,
-    stylehints_buffer: protocol::WindowStyles,
-    stylehints_grid: protocol::WindowStyles,
+    streams: GlkObjectStore<Stream>,
+    stylehints_buffer: WindowStyles,
+    stylehints_grid: WindowStyles,
+    timer: TimerData,
     windows: GlkObjectStore<Window>,
     windows_changed: bool,
 }
 
 impl GlkApi {
+    // The Glk API
+
+    pub fn glk_cancel_char_event(win: &GlkWindow) {
+        lock!(win).input.text_input_type = None;
+    }
+
+    pub fn glk_cancel_hyperlink_event(win: &GlkWindow) {
+        lock!(win).input.hyperlink = None;
+    }
+
+    pub fn glk_cancel_line_event(&mut self, win: &GlkWindow) -> GlkResult<GlkEvent> {
+        let disprock = self.windows.get_disprock(win).unwrap();
+        let mut win_locked = lock!(win);
+        if let Some(TextInputType::Line) = win_locked.input.text_input_type {
+            let partial = self.partial_inputs.as_mut().map(|partials| partials.remove(&disprock)).flatten().unwrap_or("".to_string());
+            // Steal the data temporarily so that we're not double borrowing the window
+            let mut data = mem::take(&mut win_locked.data);
+            let mut res = match &mut data {
+                WindowData::Buffer(data) => self.handle_line_input(&mut win_locked, data, &partial, None)?,
+                WindowData::Grid(data) => self.handle_line_input(&mut win_locked, data, &partial, None)?,
+                _ => unreachable!(),
+            };
+            win_locked.data = data;
+            res.win = Some(win.clone());
+            Ok(res)
+        }
+        else {
+            Ok(GlkEvent::default())
+        }
+    }
+
+    pub fn glk_cancel_mouse_event(win: &GlkWindow) {
+        lock!(win).input.mouse = None;
+    }
+
     pub fn glk_get_buffer_stream<'a>(str: &GlkStream, buf: &mut [u8]) -> GlkResult<'a, u32> {
         lock!(str).get_buffer(&mut GlkBufferMut::U8(buf))
     }
@@ -73,19 +112,19 @@ impl GlkApi {
     }
 
     pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<()> {
-        current_stream!(self).put_buffer(&GlkBuffer::U8(buf), None)
+        current_stream!(self).put_buffer(&GlkBuffer::U8(buf))
     }
 
     pub fn glk_put_buffer_stream<'a>(str: &GlkStream, buf: &[u8]) -> GlkResult<'a, ()> {
-        lock!(str).put_buffer(&GlkBuffer::U8(buf), None)
+        lock!(str).put_buffer(&GlkBuffer::U8(buf))
     }
 
     pub fn glk_put_buffer_stream_uni<'a>(str: &GlkStream, buf: &[u32]) -> GlkResult<'a, ()> {
-        lock!(str).put_buffer(&GlkBuffer::U32(buf), None)
+        lock!(str).put_buffer(&GlkBuffer::U32(buf))
     }
 
     pub fn glk_put_buffer_uni(&mut self, buf: &[u32]) -> GlkResult<()> {
-        current_stream!(self).put_buffer(&GlkBuffer::U32(buf), None)
+        current_stream!(self).put_buffer(&GlkBuffer::U32(buf))
     }
 
     pub fn glk_put_char(&mut self, ch: u8) -> GlkResult<()> {
@@ -102,6 +141,41 @@ impl GlkApi {
 
     pub fn glk_put_char_uni(&mut self, ch: u32) -> GlkResult<()> {
         current_stream!(self).put_char(ch)
+    }
+
+    pub fn glk_request_char_event(&self, win: &GlkWindow) -> GlkResult<()> {
+        self.request_char_event(win, false)
+    }
+
+    pub fn glk_request_char_event_uni(&self, win: &GlkWindow) -> GlkResult<()> {
+        self.request_char_event(win, true)
+    }
+
+    pub fn glk_request_hyperlink_event(win: &GlkWindow) {
+        let mut win = lock!(win);
+        if let WindowType::Buffer | WindowType::Grid = win.wintype {
+            win.input.hyperlink = Some(true);
+        }
+    }
+
+    pub fn glk_request_line_event(&self, win: &GlkWindow, buf: Box<[u8]>, initlen: u32) -> GlkResult<()> {
+        self.request_line_event(win, GlkOwnedBuffer::U8(buf), initlen)
+    }
+
+    pub fn glk_request_line_event_uni(&self, win: &GlkWindow, buf: Box<[u32]>, initlen: u32) -> GlkResult<()> {
+        self.request_line_event(win, GlkOwnedBuffer::U32(buf), initlen)
+    }
+
+    pub fn glk_request_mouse_event(win: &GlkWindow) {
+        let mut win = lock!(win);
+        if let WindowType::Graphics | WindowType::Grid = win.wintype {
+            win.input.mouse = Some(true);
+        }
+    }
+
+    pub fn glk_request_timer_events(&mut self, msecs: u32) {
+        self.timer.interval = msecs;
+        self.timer.started = if msecs > 0 {Some(SystemTime::now())} else {None}
     }
 
     pub fn glk_set_hyperlink(&self, val: u32) -> GlkResult<()> {
@@ -130,8 +204,8 @@ impl GlkApi {
         self.current_stream.as_ref()
     }
 
-    pub fn glk_stream_get_position(str: &GlkStream) -> GlkResult<u32> {
-        Ok(lock!(str).get_position())
+    pub fn glk_stream_get_position(str: &GlkStream) -> u32 {
+        lock!(str).get_position()
     }
 
     pub fn glk_stream_get_rock(&self, str: &GlkStream) -> GlkResult<u32> {
@@ -154,14 +228,12 @@ impl GlkApi {
         self.current_stream = str.cloned();
     }
 
-    pub fn glk_stream_set_position(str: &GlkStream, mode: SeekMode, pos: i32) -> GlkResult<()> {
+    pub fn glk_stream_set_position(str: &GlkStream, mode: SeekMode, pos: i32) {
         lock!(str).set_position(mode, pos);
-        Ok(())
     }
 
-    pub fn glk_window_clear(win: &GlkWindow) -> GlkResult<()> {
+    pub fn glk_window_clear(win: &GlkWindow) {
         lock!(win).data.clear();
-        Ok(())
     }
 
     /*pub fn glk_window_get_parent<'a>(&'a mut self, win: &'a GlkWindow) -> GlkResult<Option<&'a GlkWindow>> {
@@ -176,8 +248,8 @@ impl GlkApi {
         self.root_window.as_ref()
     }
 
-    pub fn glk_window_get_type(win: &GlkWindow) -> GlkResult<WindowType> {
-        Ok(lock!(win).wintype)
+    pub fn glk_window_get_type(win: &GlkWindow) -> WindowType {
+        lock!(win).wintype
     }
 
     pub fn glk_window_iterate(&self, win: Option<&GlkWindow>) -> Option<IterationResult<Window>> {
@@ -260,6 +332,8 @@ impl GlkApi {
         Ok(win)
     }
 
+    // Internal functions
+
     fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream>
     where Stream: From<ArrayBackedStream<T>> {
         if fmode == FileMode::WriteAppend {
@@ -273,6 +347,41 @@ impl GlkApi {
         });
         self.streams.register(&str, rock);
         Ok(str)
+    }
+
+    fn handle_line_input<T>(&self, win: &mut Window, win_data: &mut TextWindow<T>, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent>
+    where T: Default + WindowOperations {
+        // The Glk spec is a bit ambiguous here
+        // I'm going to echo first
+        if win_data.request_echo_line_input {
+            let mut input_linebreak = input.to_string();
+            input_linebreak.push_str("\n");
+            win.put_string(&input_linebreak, Some(style_Input));
+            if let Some(str) = &win.echostr {
+                let str: GlkStream = str.into();
+                str.lock().unwrap().put_string(&input_linebreak, Some(style_Input))?;
+            }
+        }
+
+        // Convert the input to a buffer and copy into the window's buffer
+        let src: GlkOwnedBuffer = input.into();
+        let dest = win_data.line_input_buffer.as_mut().unwrap();
+        let len = min(src.len(), dest.len());
+        let src_unowned: GlkBuffer = (&src).into();
+        let mut dest_unowned: GlkBufferMut = (dest).into();
+        set_buffer(&src_unowned, 0, &mut dest_unowned, 0, len);
+
+        // TODO: Unretain
+
+        win.input.text_input_type = None;
+        win_data.line_input_buffer = None;
+
+        Ok(GlkEvent {
+            evtype: GlkEventType::Line,
+            val1: src.len() as u32,
+            val2: termkey.map_or(0, |termkey| termkey as u32),
+            ..Default::default()
+        })
     }
 
     fn rearrange_window(&mut self, win: &GlkWindow, wbox: WindowBox) -> GlkResult<()> {
@@ -371,13 +480,78 @@ impl GlkApi {
 
         Ok(())
     }
+
+    fn request_char_event(&self, win: &GlkWindow, uni: bool) -> GlkResult<()> {
+        let mut win = lock!(win);
+        if win.input.text_input_type.is_some() {
+            return Err(PendingKeyboardRequest);
+        }
+        if let WindowType::Blank | WindowType::Pair = win.wintype {
+            return Err(WindowDoesntSupportCharInput);
+        }
+
+        win.input.gen = Some(self.gen);
+        win.input.text_input_type = Some(TextInputType::Char);
+        win.uni_char_input = uni;
+
+        Ok(())
+    }
+
+    fn request_line_event(&self, win: &GlkWindow, buf: GlkOwnedBuffer, initlen: u32) -> GlkResult<()> {
+        let mut win = lock!(win);
+
+        if win.input.text_input_type.is_some() {
+            return Err(PendingKeyboardRequest);
+        }
+        if let WindowType::Buffer | WindowType::Grid = win.wintype {}
+        else {
+            return Err(WindowDoesntSupportCharInput);
+        }
+
+        win.input.gen = Some(self.gen);
+        if initlen > 0 {
+            //win.input.initial
+        }
+        win.input.text_input_type = Some(TextInputType::Line);
+        match win.data {
+            WindowData::Buffer(ref mut data) => {
+                data.line_input_buffer = Some(buf);
+                data.request_echo_line_input = data.data.echo_line_input;
+            },
+            WindowData::Grid(ref mut data) => {
+                data.line_input_buffer = Some(buf);
+            },
+            _ => unreachable!(),
+        };
+
+        // TODO: retain array
+
+        Ok(())
+    }
+}
+
+/** A Glk event */
+#[derive(Default)]
+pub struct GlkEvent {
+    pub evtype: GlkEventType,
+    pub win: Option<GlkWindow>,
+    pub val1: u32,
+    pub val2: u32,
 }
 
 /** Final read/write character counts of a stream */
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct StreamResultCounts {
     pub read_count: u32,
     pub write_count: u32,
+}
+
+#[derive(Default)]
+struct TimerData {
+    interval: u32,
+    last_interval: u32,
+    started: Option<SystemTime>,
 }
 
 fn normalise_window_dimension(val: f64) -> usize {

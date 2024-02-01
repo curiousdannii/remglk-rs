@@ -69,6 +69,23 @@ pub const keycode_Func11: u32 = 0xffffffe5;
 pub const keycode_Func12: u32 = 0xffffffe4;
 // The last keycode is always (0x100000000 - keycode_MAXVAL)
 pub const keycode_MAXVAL: u32 = 28;
+#[derive(Copy, Clone, PartialEq)]
+#[repr(C)]
+pub enum TerminatorCode {
+    Escape = 0xfffffff8,
+    Func1 = 0xffffffef,
+    Func2 = 0xffffffee,
+    Func3 = 0xffffffed,
+    Func4 = 0xffffffec,
+    Func5 = 0xffffffeb,
+    Func6 = 0xffffffea,
+    Func7 = 0xffffffe9,
+    Func8 = 0xffffffe8,
+    Func9 = 0xffffffe7,
+    Func10 = 0xffffffe6,
+    Func11 = 0xffffffe5,
+    Func12 = 0xffffffe4,
+}
 
 pub const evtype_None: u32 = 0;
 pub const evtype_Timer: u32 = 1;
@@ -80,6 +97,21 @@ pub const evtype_Redraw: u32 = 6;
 pub const evtype_SoundNotify: u32 = 7;
 pub const evtype_Hyperlink: u32 = 8;
 pub const evtype_VolumeNotify: u32 = 9;
+#[derive(Copy, Clone, Default, PartialEq)]
+#[repr(C)]
+pub enum GlkEventType {
+    #[default]
+    None = 0,
+    Timer,
+    Char,
+    Line,
+    Mouse,
+    Arrange,
+    Redraw,
+    SoundNotify,
+    Hyperlink,
+    VolumeNotify,
+}
 
 pub const style_Normal: u32 = 0;
 pub const style_Emphasized: u32 = 1;
