@@ -17,6 +17,12 @@ use glkapi::constants::*;
 
 use crate::common::*;
 
+type BufferU8 = *const u8;
+type BufferU32 = *const u32;
+type BufferMutU8 = *mut u8;
+type BufferMutU32 = *mut u32;
+type CStringU8 = *const i8;
+type CStringU32 = *const u32;
 type StreamPtr = *const Mutex<Stream>;
 type WindowPtr = *const Mutex<Window>;
 
@@ -28,52 +34,52 @@ fn glkapi() -> &'static Mutex<GlkApi> {
 // TODO: error handling!
 
 #[no_mangle]
-pub extern "C" fn glk_get_buffer_stream(str: StreamPtr, buf: *mut u8, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_get_buffer_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
+pub extern "C" fn glk_get_buffer_stream(str: StreamPtr, buf: BufferMutU8, len: u32) -> u32 {
+    GlkApi::glk_get_buffer_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_buffer_stream_uni(str: StreamPtr, buf: *mut u32, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_get_buffer_stream_uni(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
+pub extern "C" fn glk_get_buffer_stream_uni(str: StreamPtr, buf: BufferMutU32, len: u32) -> u32 {
+    GlkApi::glk_get_buffer_stream_uni(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_char_stream_uni(str: StreamPtr) -> i32 {
-    glkapi().lock().unwrap().glk_get_char_stream_uni(&from_ptr(str)).unwrap()
+    GlkApi::glk_get_char_stream_uni(&from_ptr(str)).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_char_stream(str: StreamPtr) -> i32 {
-    glkapi().lock().unwrap().glk_get_char_stream(&from_ptr(str)).unwrap()
+    GlkApi::glk_get_char_stream(&from_ptr(str)).unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_line_stream(str: StreamPtr, buf: *mut u8, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_get_line_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
+pub extern "C" fn glk_get_line_stream(str: StreamPtr, buf: BufferMutU8, len: u32) -> u32 {
+    GlkApi::glk_get_line_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_line_stream_uni(str: StreamPtr, buf: *mut u32, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_get_line_stream_uni(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
+pub extern "C" fn glk_get_line_stream_uni(str: StreamPtr, buf: BufferMutU32, len: u32) -> u32 {
+    GlkApi::glk_get_line_stream_uni(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_buffer(buf: *mut u8, len: u32) {
+pub extern "C" fn glk_put_buffer(buf: BufferU8, len: u32) {
     glkapi().lock().unwrap().glk_put_buffer(glk_buffer(buf, len)).ok();
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_buffer_stream(str: StreamPtr, buf: *mut u8, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer_stream(&from_ptr(str), glk_buffer(buf, len)).ok();
+pub extern "C" fn glk_put_buffer_stream(str: StreamPtr, buf: BufferU8, len: u32) {
+    GlkApi::glk_put_buffer_stream(&from_ptr(str), glk_buffer(buf, len)).ok();
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_buffer_stream_uni(str: StreamPtr, buf: *mut u32, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer_stream_uni(&from_ptr(str), glk_buffer(buf, len)).ok();
+pub extern "C" fn glk_put_buffer_stream_uni(str: StreamPtr, buf: BufferU32, len: u32) {
+    GlkApi::glk_put_buffer_stream_uni(&from_ptr(str), glk_buffer(buf, len)).ok();
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_buffer_uni(buf: *mut u32, len: u32) {
+pub extern "C" fn glk_put_buffer_uni(buf: BufferU32, len: u32) {
     glkapi().lock().unwrap().glk_put_buffer_uni(glk_buffer(buf, len)).ok();
 }
 
@@ -84,17 +90,37 @@ pub extern "C" fn glk_put_char(ch: u8) {
 
 #[no_mangle]
 pub extern "C" fn glk_put_char_stream(str: StreamPtr, ch: u8) {
-    glkapi().lock().unwrap().glk_put_char_stream(&from_ptr(str), ch).ok();
+    GlkApi::glk_put_char_stream(&from_ptr(str), ch).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_char_stream_uni(str: StreamPtr, ch: u32) {
-    glkapi().lock().unwrap().glk_put_char_stream_uni(&from_ptr(str), ch).ok();
+    GlkApi::glk_put_char_stream_uni(&from_ptr(str), ch).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_char_uni(ch: u32) {
     glkapi().lock().unwrap().glk_put_char_uni(ch).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_put_string(cstr: CStringU8) {
+    glkapi().lock().unwrap().glk_put_buffer(cstring_u8(cstr)).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_put_string_stream(str: StreamPtr, cstr: CStringU8) {
+    GlkApi::glk_put_buffer_stream(&from_ptr(str), cstring_u8(cstr)).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_put_string_stream_uni(str: StreamPtr, cstr: CStringU32) {
+    GlkApi::glk_put_buffer_stream_uni(&from_ptr(str), cstring_u32(cstr)).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_put_string_uni(cstr: CStringU32) {
+    glkapi().lock().unwrap().glk_put_buffer_uni(cstring_u32(cstr)).ok();
 }
 
 #[no_mangle]
@@ -134,7 +160,7 @@ pub extern "C" fn glk_stream_get_current() -> StreamPtr {
 
 #[no_mangle]
 pub extern "C" fn glk_stream_get_position(str: StreamPtr) -> u32 {
-    glkapi().lock().unwrap().glk_stream_get_position(&from_ptr(str)).unwrap()
+    GlkApi::glk_stream_get_position(&from_ptr(str)).unwrap()
 }
 
 #[no_mangle]
@@ -161,14 +187,14 @@ pub extern "C" fn glk_stream_iterate(str: StreamPtr, rock: &mut u32) -> StreamPt
 }
 
 #[no_mangle]
-pub extern "C" fn glk_stream_open_memory(buf: *mut u8, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
+pub extern "C" fn glk_stream_open_memory(buf: BufferMutU8, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
     let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
     let result = glkapi().lock().unwrap().glk_stream_open_memory(buf, fmode, rock);
     to_owned(result.unwrap())
 }
 
 #[no_mangle]
-pub extern "C" fn glk_stream_open_memory_uni(buf: *mut u32, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
+pub extern "C" fn glk_stream_open_memory_uni(buf: BufferMutU32, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
     let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
     let result = glkapi().lock().unwrap().glk_stream_open_memory_uni(buf, fmode, rock);
     to_owned(result.unwrap())
@@ -181,7 +207,7 @@ pub extern "C" fn glk_stream_set_current(str: StreamPtr) {
 
 #[no_mangle]
 pub extern "C" fn glk_stream_set_position(str: StreamPtr, mode: SeekMode, pos: i32) {
-    glkapi().lock().unwrap().glk_stream_set_position(&from_ptr(str), mode, pos).ok();
+    GlkApi::glk_stream_set_position(&from_ptr(str), mode, pos).ok();
 }
 
 /*#[no_mangle]
@@ -204,7 +230,7 @@ pub extern "C" fn glk_window_get_root() -> WindowPtr {
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_type(win: WindowPtr) -> WindowType {
-    glkapi().lock().unwrap().glk_window_get_type(&from_ptr(win)).unwrap()
+    GlkApi::glk_window_get_type(&from_ptr(win)).unwrap()
 }
 
 #[no_mangle]

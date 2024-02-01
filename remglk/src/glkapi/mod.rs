@@ -48,27 +48,27 @@ pub struct GlkApi {
 }
 
 impl GlkApi {
-    pub fn glk_get_buffer_stream(&mut self, str: &GlkStream, buf: &mut [u8]) -> GlkResult<u32> {
+    pub fn glk_get_buffer_stream<'a>(str: &GlkStream, buf: &mut [u8]) -> GlkResult<'a, u32> {
         lock!(str).get_buffer(&mut GlkBufferMut::U8(buf))
     }
 
-    pub fn glk_get_buffer_stream_uni(&mut self, str: &GlkStream, buf: &mut [u32]) -> GlkResult<u32> {
+    pub fn glk_get_buffer_stream_uni<'a>(str: &GlkStream, buf: &mut [u32]) -> GlkResult<'a, u32> {
         lock!(str).get_buffer(&mut GlkBufferMut::U32(buf))
     }
 
-    pub fn glk_get_char_stream(&mut self, str: &GlkStream) -> GlkResult<i32> {
+    pub fn glk_get_char_stream(str: &GlkStream) -> GlkResult<i32> {
         lock!(str).get_char(false)
     }
 
-    pub fn glk_get_char_stream_uni(&mut self, str: &GlkStream) -> GlkResult<i32> {
+    pub fn glk_get_char_stream_uni(str: &GlkStream) -> GlkResult<i32> {
         lock!(str).get_char(true)
     }
 
-    pub fn glk_get_line_stream(&mut self, str: &GlkStream, buf: &mut [u8]) -> GlkResult<u32> {
+    pub fn glk_get_line_stream<'a>(str: &GlkStream, buf: &mut [u8]) -> GlkResult<'a, u32> {
         lock!(str).get_line(&mut GlkBufferMut::U8(buf))
     }
 
-    pub fn glk_get_line_stream_uni(&mut self, str: &GlkStream, buf: &mut [u32]) -> GlkResult<u32> {
+    pub fn glk_get_line_stream_uni<'a>(str: &GlkStream, buf: &mut [u32]) -> GlkResult<'a, u32> {
         lock!(str).get_line(&mut GlkBufferMut::U32(buf))
     }
 
@@ -76,11 +76,11 @@ impl GlkApi {
         current_stream!(self).put_buffer(&GlkBuffer::U8(buf), None)
     }
 
-    pub fn glk_put_buffer_stream(&mut self, str: &GlkStream, buf: &[u8]) -> GlkResult<()> {
+    pub fn glk_put_buffer_stream<'a>(str: &GlkStream, buf: &[u8]) -> GlkResult<'a, ()> {
         lock!(str).put_buffer(&GlkBuffer::U8(buf), None)
     }
 
-    pub fn glk_put_buffer_stream_uni(&mut self, str: &GlkStream, buf: &[u32]) -> GlkResult<()> {
+    pub fn glk_put_buffer_stream_uni<'a>(str: &GlkStream, buf: &[u32]) -> GlkResult<'a, ()> {
         lock!(str).put_buffer(&GlkBuffer::U32(buf), None)
     }
 
@@ -92,11 +92,11 @@ impl GlkApi {
         current_stream!(self).put_char(ch as u32)
     }
 
-    pub fn glk_put_char_stream(&mut self, str: &GlkStream, ch: u8) -> GlkResult<()> {
+    pub fn glk_put_char_stream(str: &GlkStream, ch: u8) -> GlkResult<()> {
         lock!(str).put_char(ch as u32)
     }
 
-    pub fn glk_put_char_stream_uni(&mut self, str: &GlkStream, ch: u32) -> GlkResult<()> {
+    pub fn glk_put_char_stream_uni(str: &GlkStream, ch: u32) -> GlkResult<()> {
         lock!(str).put_char(ch)
     }
 
@@ -130,7 +130,7 @@ impl GlkApi {
         self.current_stream.as_ref()
     }
 
-    pub fn glk_stream_get_position(&self, str: &GlkStream) -> GlkResult<u32> {
+    pub fn glk_stream_get_position(str: &GlkStream) -> GlkResult<u32> {
         Ok(lock!(str).get_position())
     }
 
@@ -154,12 +154,12 @@ impl GlkApi {
         self.current_stream = str.cloned();
     }
 
-    pub fn glk_stream_set_position(&mut self, str: &GlkStream, mode: SeekMode, pos: i32) -> GlkResult<()> {
+    pub fn glk_stream_set_position(str: &GlkStream, mode: SeekMode, pos: i32) -> GlkResult<()> {
         lock!(str).set_position(mode, pos);
         Ok(())
     }
 
-    pub fn glk_window_clear(&mut self, win: &GlkWindow) -> GlkResult<()> {
+    pub fn glk_window_clear(win: &GlkWindow) -> GlkResult<()> {
         lock!(win).data.clear();
         Ok(())
     }
@@ -176,7 +176,7 @@ impl GlkApi {
         self.root_window.as_ref()
     }
 
-    pub fn glk_window_get_type(&mut self, win: &GlkWindow) -> GlkResult<WindowType> {
+    pub fn glk_window_get_type(win: &GlkWindow) -> GlkResult<WindowType> {
         Ok(lock!(win).wintype)
     }
 

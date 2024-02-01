@@ -10,8 +10,11 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use core::slice;
+use std::ffi::CStr;
 use std::ptr;
 use std::sync::{Arc, Mutex};
+
+use widestring::U32CStr;
 
 use remglk::glkapi::GlkObject;
 
@@ -57,8 +60,8 @@ pub fn to_owned<T>(obj: GlkObject<T>) -> *const Mutex<T> {
     Arc::into_raw(obj.obj)
 }
 
-// Buffer helpers
-pub fn glk_buffer<'a, T>(buf: *mut T, buflen: u32) -> &'a [T]
+// Buffer and C string helpers
+pub fn glk_buffer<'a, T>(buf: *const T, buflen: u32) -> &'a [T]
 where T: Clone {
     unsafe {slice::from_raw_parts(buf, buflen as usize)}
 }
@@ -66,4 +69,12 @@ where T: Clone {
 pub fn glk_buffer_mut<'a, T>(buf: *mut T, buflen: u32) -> &'a mut [T]
 where T: Clone {
     unsafe {slice::from_raw_parts_mut(buf, buflen as usize)}
+}
+
+pub fn cstring_u8<'a>(buf: *const i8) -> &'a [u8] {
+    unsafe {CStr::from_ptr(buf).to_bytes()}
+}
+
+pub fn cstring_u32<'a>(buf: *const u32) -> &'a [u32] {
+    unsafe{U32CStr::from_ptr_str(buf).as_slice()}
 }
