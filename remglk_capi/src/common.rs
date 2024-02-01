@@ -58,6 +58,13 @@ pub fn to_owned<T>(obj: GlkObject<T>) -> *const Mutex<T> {
     Arc::into_raw(obj.obj)
 }
 
+pub fn write_ptr<T>(ptr: *mut T, val: T) {
+    if ptr.is_null() {}
+    else {
+        unsafe {ptr::write(ptr, val);}
+    }
+}
+
 // Buffer and C string helpers
 pub fn glk_buffer<'a, T>(buf: *const T, buflen: u32) -> &'a [T]
 where T: Clone {

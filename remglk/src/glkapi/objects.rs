@@ -157,6 +157,7 @@ where T: Default, GlkObject<T>: Eq {
             }
         }
         self.store.remove(&obj);
+        assert_eq!(Arc::strong_count(&obj), 1, "Dangling strong reference to obj after it was unregistered");
     }
 }
 

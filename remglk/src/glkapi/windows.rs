@@ -519,7 +519,7 @@ pub struct PairWindow {
     pub child2: GlkWindowWeak,
     pub dir: u32,
     pub fixed: bool,
-    pub key: GlkWindow,
+    pub key: GlkWindowWeak,
     pub size: u32,
     pub vertical: bool,
 }
@@ -532,7 +532,7 @@ impl PairWindow {
             border: (method & winmethod_BorderMask) == winmethod_BorderMask,
             dir,
             fixed: (method & winmethod_DivisionMask) == winmethod_Fixed,
-            key: keywin.clone(),
+            key: keywin.downgrade(),
             size,
             vertical: dir == winmethod_Left || dir == winmethod_Right,
             ..Default::default()

@@ -87,6 +87,22 @@ impl GlkApi {
         lock!(win).input.mouse = None;
     }
 
+    pub fn glk_char_to_lower(val: u32) -> u32 {
+        match val {
+            0x41..=0x5A => val + 0x20,
+            0xC0..=0xD6 | 0xD8..=0xDE => val + 0x20,
+            _ => val,
+        }
+    }
+
+    pub fn glk_char_to_upper(val: u32) -> u32 {
+        match val {
+            0x61..=0x7A => val - 0x20,
+            0xE0..=0xE6 | 0xF8..=0xFE => val - 0x20,
+            _ => val,
+        }
+    }
+
     pub fn glk_get_buffer_stream<'a>(str: &GlkStream, buf: &mut [u8]) -> GlkResult<'a, u32> {
         lock!(str).get_buffer(&mut GlkBufferMut::U8(buf))
     }
@@ -240,6 +256,61 @@ impl GlkApi {
         lock!(win).data.clear();
     }
 
+    pub fn glk_window_close(&mut self, win_glkobj: GlkWindow) -> GlkResult<StreamResultCounts> {
+        let win_ptr = win_glkobj.as_ptr();
+        let win = lock!(win_glkobj);
+
+        let str = Into::<GlkStream>::into(&win.str);
+        let res = lock!(str).close();
+
+        let root_win = self.root_window.as_ref().unwrap();
+        if root_win.as_ptr() == win_ptr {
+            // Close the root window, which means all windows
+            let root_win = Into::<GlkWindow>::into(root_win);
+            self.root_window = None;
+            self.remove_window(root_win, true);
+        }
+        else {
+            let parent_win_glkobj = Into::<GlkWindow>::into(win.parent.as_ref().unwrap());
+            let parent_win_ptr = parent_win_glkobj.as_ptr();
+            let parent_win = lock!(parent_win_glkobj);
+            let grandparent_win = parent_win.parent.as_ref().map(|win| Into::<GlkWindow>::into(win));
+            match &parent_win.data {
+                WindowData::Pair(data) => {
+                    let sibling_win = if data.child1.as_ptr() == win_ptr {&data.child2} else {&data.child1};
+                    let sibling_win = Into::<GlkWindow>::into(sibling_win);
+                    if let Some(grandparent_win) = grandparent_win {
+                        let mut grandparent_win = lock!(grandparent_win);
+                        match grandparent_win.data {
+                            WindowData::Pair(ref mut data) => {
+                                if data.child1.as_ptr() == parent_win_ptr {
+                                    data.child1 = sibling_win.downgrade();
+                                }
+                                else {
+                                    data.child2 = sibling_win.downgrade();
+                                }
+                            },
+                            _ => unreachable!(),
+                        };
+                    }
+                    else {
+                        self.root_window = Some(sibling_win.downgrade());
+                        lock!(sibling_win).parent = None;
+                    }
+                    self.rearrange_window(&sibling_win, parent_win.wbox)?;
+                },
+                _ => unreachable!(),
+            };
+
+            drop(parent_win);
+            drop(win);
+            self.remove_window(win_glkobj, true);
+            self.remove_window(parent_win_glkobj, false);
+        }
+
+        res
+    }
+
     pub fn glk_window_get_echo_stream(win: &GlkWindow) -> Option<GlkStream> {
         lock!(win).echostr.as_ref().map(|str| Into::<GlkStream>::into(str))
     }
@@ -261,7 +332,7 @@ impl GlkApi {
         let win = lock!(win);
         if let Some(parent) = &win.parent {
             let parent = Into::<GlkWindow>::into(parent);
-            let parent = parent.lock().unwrap();
+            let parent = lock!(parent);
             match &parent.data {
                 WindowData::Pair(data) => {
                     if data.child1.as_ptr() == win_ptr {
@@ -421,7 +492,7 @@ impl GlkApi {
             win.put_string(&input_linebreak, Some(style_Input));
             if let Some(str) = &win.echostr {
                 let str: GlkStream = str.into();
-                str.lock().unwrap().put_string(&input_linebreak, Some(style_Input))?;
+                lock!(str).put_string(&input_linebreak, Some(style_Input))?;
             }
         }
 
@@ -448,12 +519,13 @@ impl GlkApi {
 
     fn rearrange_window(&mut self, win: &GlkWindow, wbox: WindowBox) -> GlkResult<()> {
         self.windows_changed = true;
-        win.lock().unwrap().wbox = wbox;
+        let mut win = lock!(win);
+        win.wbox = wbox;
         let boxheight = wbox.bottom - wbox.top;
         let boxwidth = wbox.right - wbox.left;
 
         // Adjust anything that needs adjusting
-        match &mut win.lock().unwrap().data {
+        match &mut win.data {
             WindowData::Graphics(win) => {
                 win.height = normalise_window_dimension(boxheight - self.metrics.graphicsmarginy);
                 win.width = normalise_window_dimension(boxwidth - self.metrics.graphicsmarginx);
@@ -477,7 +549,9 @@ impl GlkApi {
 
                 // Calculate the split size
                 let mut split = if win.fixed {
-                    match win.key.lock().unwrap().wintype {
+                    let keywin = Into::<GlkWindow>::into(&win.key);
+                    let keywin = lock!(keywin);
+                    match keywin.wintype {
                         WindowType::Buffer => if win.vertical {
                                 win.size as f64 * self.metrics.buffercharwidth + self.metrics.buffermarginx
                             }
@@ -541,6 +615,28 @@ impl GlkApi {
         };
 
         Ok(())
+    }
+
+    fn remove_window(&mut self, win_glkobj: GlkWindow, recurse: bool) {
+        self.windows_changed = true;
+
+        // TODO: unretain array
+
+        let win = lock!(win_glkobj);
+        match &win.data {
+            WindowData::Pair(data) => {
+                if recurse {
+                    self.remove_window(Into::<GlkWindow>::into(&data.child1), true);
+                    self.remove_window(Into::<GlkWindow>::into(&data.child2), true);
+                }
+            },
+            _ => {},
+        }
+
+        let str = Into::<GlkStream>::into(&win.str);
+        self.streams.unregister(str);
+        drop(win);
+        self.windows.unregister(win_glkobj);
     }
 
     fn request_char_event(&self, win: &GlkWindow, uni: bool) -> GlkResult<()> {
