@@ -27,3 +27,9 @@ impl FileRef {
         }
     }
 }
+
+impl GlkObjectClass for FileRef {
+    fn get_object_class_id() -> u32 {
+        2
+    }
+}

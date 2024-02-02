@@ -37,6 +37,12 @@ impl Default for Stream {
     }
 }
 
+impl GlkObjectClass for Stream {
+    fn get_object_class_id() -> u32 {
+        1
+    }
+}
+
 #[enum_dispatch(Stream)]
 pub trait StreamOperations {
     fn close(&self) -> GlkResult<StreamResultCounts> {

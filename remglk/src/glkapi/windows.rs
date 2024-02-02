@@ -116,6 +116,12 @@ impl Default for WindowData {
     }
 }
 
+impl GlkObjectClass for Window {
+    fn get_object_class_id() -> u32 {
+        0
+    }
+}
+
 #[enum_dispatch(WindowData)]
 pub trait WindowOperations {
     fn clear(&mut self) {}

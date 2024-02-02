@@ -81,7 +81,7 @@ pub(crate) use lock;
 
 macro_rules! write_stream {
     ($self: expr, $str: expr) => {
-        match $str.deref() {
+        match $str.deref().deref() {
             Stream::FileStreamU8(str) => $self.system.fileref_write(&str.fileref, GlkBuffer::U8(str.get_buf()))?,
             Stream::FileStreamU32(str) => $self.system.fileref_write(&str.fileref, GlkBuffer::U32(str.get_buf()))?,
             _ => {},

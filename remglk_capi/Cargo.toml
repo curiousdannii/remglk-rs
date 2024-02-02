@@ -16,6 +16,7 @@ repository = "https://github.com/curiousdannii/remglk-rs"
 crate-type=["staticlib"]
 
 [dependencies]
+libc = "0.2.153"
 remglk = {path = "../remglk", version = "0.1.0"}
 thiserror = "1.0.40"
 widestring = "1.0.2"

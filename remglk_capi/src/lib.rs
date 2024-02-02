@@ -11,6 +11,7 @@ https://github.com/curiousdannii/remglk-rs
 
 
 mod common;
+mod dispatch;
 mod glkapi;
 mod glkstart;
 

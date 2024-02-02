@@ -13,7 +13,7 @@ mod arrays;
 mod common;
 pub mod constants;
 mod filerefs;
-mod objects;
+pub mod objects;
 pub mod protocol;
 mod streams;
 mod windows;
@@ -37,7 +37,7 @@ use windows::*;
 
 // Expose for so they can be turned into pointers
 pub use filerefs::FileRef;
-pub use objects::GlkObject;
+pub use objects::{GlkObject, GlkObjectMetadata};
 pub use streams::Stream;
 pub use windows::Window;
 
@@ -46,18 +46,18 @@ pub struct GlkApi<S>
 where S: Default + GlkSystem {
     current_stream: Option<GlkStreamWeak>,
     exited: bool,
-    filerefs: GlkObjectStore<FileRef>,
+    pub filerefs: GlkObjectStore<FileRef>,
     gen: u32,
     metrics: NormalisedMetrics,
     partial_inputs: PartialInputs,
     root_window: Option<GlkWindowWeak>,
-    streams: GlkObjectStore<Stream>,
+    pub streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
     stylehints_grid: WindowStyles,
     support: SupportedFeatures,
     system: S,
     timer: TimerData,
-    windows: GlkObjectStore<Window>,
+    pub windows: GlkObjectStore<Window>,
     windows_changed: bool,
 }
 
@@ -111,10 +111,9 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_cancel_line_event(&mut self, win: &GlkWindow) -> GlkResult<GlkEvent> {
-        let disprock = self.windows.get_disprock(win).unwrap();
         let mut win_locked = lock!(win);
         if let Some(TextInputType::Line) = win_locked.input.text_input_type {
-            let partial = self.partial_inputs.as_mut().map(|partials| partials.remove(&disprock)).flatten().unwrap_or("".to_string());
+            let partial = self.partial_inputs.as_mut().map(|partials| partials.remove(&win_locked.id)).flatten().unwrap_or("".to_string());
             // Steal the data temporarily so that we're not double borrowing the window
             let mut data = mem::take(&mut win_locked.data);
             let mut res = match &mut data {
@@ -202,11 +201,11 @@ where S: Default + GlkSystem {
         S::fileref_exists(&fileref.system_fileref)
     }
 
-    pub fn glk_fileref_get_rock(&self, fileref: &GlkFileRef) -> GlkResult<u32> {
-        self.filerefs.get_rock(fileref).ok_or(InvalidReference)
+    pub fn glk_fileref_get_rock(fileref: &GlkFileRef) -> GlkResult<u32> {
+        Ok(lock!(fileref).rock)
     }
 
-    pub fn glk_fileref_iterate(&self, fileref: Option<&GlkFileRef>) -> Option<IterationResult<FileRef>> {
+    pub fn glk_fileref_iterate(&self, fileref: Option<&GlkFileRef>) -> Option<GlkFileRef> {
         self.filerefs.iterate(fileref)
     }
 
@@ -435,11 +434,11 @@ where S: Default + GlkSystem {
         lock!(str).get_position()
     }
 
-    pub fn glk_stream_get_rock(&self, str: &GlkStream) -> GlkResult<u32> {
-        self.streams.get_rock(str).ok_or(InvalidReference)
+    pub fn glk_stream_get_rock(str: &GlkStream) -> GlkResult<u32> {
+        Ok(lock!(str).rock)
     }
 
-    pub fn glk_stream_iterate(&self, str: Option<&GlkStream>) -> Option<IterationResult<Stream>> {
+    pub fn glk_stream_iterate(&self, str: Option<&GlkStream>) -> Option<GlkStream> {
         self.streams.iterate(str)
     }
 
@@ -608,8 +607,8 @@ where S: Default + GlkSystem {
         lock!(win).parent.as_ref().map(|win| Into::<GlkWindow>::into(win))
     }
 
-    pub fn glk_window_get_rock(&self, win: &GlkWindow) -> GlkResult<u32> {
-        self.windows.get_rock(win).ok_or(InvalidReference)
+    pub fn glk_window_get_rock(win: &GlkWindow) -> GlkResult<u32> {
+        Ok(lock!(win).rock)
     }
 
     pub fn glk_window_get_root(&self) -> Option<GlkWindow> {
@@ -658,7 +657,7 @@ where S: Default + GlkSystem {
         lock!(win).wintype
     }
 
-    pub fn glk_window_iterate(&self, win: Option<&GlkWindow>) -> Option<IterationResult<Window>> {
+    pub fn glk_window_iterate(&self, win: Option<&GlkWindow>) -> Option<GlkWindow> {
         self.windows.iterate(win)
     }
 

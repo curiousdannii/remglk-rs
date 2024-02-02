@@ -16,10 +16,10 @@ use std::sync::{Arc, Mutex};
 
 use widestring::U32CStr;
 
-use remglk::glkapi::GlkObject;
+use remglk::glkapi::*;
 
 // Functions for sharing our Glk objects across the FFI barrier
-pub fn borrow<T>(obj: Option<&GlkObject<T>>) -> *const Mutex<T> {
+pub fn borrow<T>(obj: Option<&GlkObject<T>>) -> *const Mutex<GlkObjectMetadata<T>> {
     if let Some(obj) = obj {
         Arc::as_ptr(obj)
     }
@@ -28,12 +28,12 @@ pub fn borrow<T>(obj: Option<&GlkObject<T>>) -> *const Mutex<T> {
     }
 }
 
-pub fn from_ptr<T>(ptr: *const Mutex<T>) -> GlkObject<T> {
+pub fn from_ptr<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> GlkObject<T> {
     unsafe {Arc::increment_strong_count(ptr);}
     reclaim(ptr)
 }
 
-pub fn from_ptr_opt<T>(ptr: *const Mutex<T>) -> Option<GlkObject<T>> {
+pub fn from_ptr_opt<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> Option<GlkObject<T>> {
     if ptr.is_null() {
         None
     }
@@ -42,7 +42,7 @@ pub fn from_ptr_opt<T>(ptr: *const Mutex<T>) -> Option<GlkObject<T>> {
     }
 }
 
-pub fn reclaim<T>(ptr: *const Mutex<T>) -> GlkObject<T> {
+pub fn reclaim<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> GlkObject<T> {
     if ptr.is_null() {
         panic!("Invalid (null) reference!")
     }
@@ -54,11 +54,11 @@ pub fn reclaim<T>(ptr: *const Mutex<T>) -> GlkObject<T> {
     }
 }
 
-pub fn to_owned<T>(obj: GlkObject<T>) -> *const Mutex<T> {
+pub fn to_owned<T>(obj: GlkObject<T>) -> *const Mutex<GlkObjectMetadata<T>> {
     Arc::into_raw(obj.obj)
 }
 
-pub fn to_owned_opt<T>(obj: Option<GlkObject<T>>) -> *const Mutex<T> {
+pub fn to_owned_opt<T>(obj: Option<GlkObject<T>>) -> *const Mutex<GlkObjectMetadata<T>> {
     match obj {
         Some(obj) => Arc::into_raw(obj.obj),
         None => ptr::null(),
