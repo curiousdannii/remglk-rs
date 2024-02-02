@@ -14,31 +14,40 @@ mod common;
 pub mod constants;
 mod filerefs;
 mod objects;
-mod protocol;
+pub mod protocol;
 mod streams;
 mod windows;
 
 use std::cmp::min;
+use std::io::Cursor;
 use std::mem;
+use std::str;
 use std::time::SystemTime;
 
+use byteorder::{BigEndian, ReadBytesExt};
+
+use super::*;
 use arrays::*;
-use common::*;
-use GlkApiError::*;
+pub use common::*;
+pub use GlkApiError::*;
 use constants::*;
+use filerefs::*;
 use objects::*;
 use protocol::*;
 use streams::*;
 use windows::*;
 
 // Expose for so they can be turned into pointers
+pub use filerefs::FileRef;
 pub use objects::GlkObject;
 pub use streams::Stream;
 pub use windows::Window;
 
 #[derive(Default)]
-pub struct GlkApi {
+pub struct GlkApi<S>
+where S: Default + GlkSystem {
     current_stream: Option<GlkStreamWeak>,
+    filerefs: GlkObjectStore<FileRef>,
     gen: u32,
     metrics: NormalisedMetrics,
     partial_inputs: PartialInputs,
@@ -46,12 +55,21 @@ pub struct GlkApi {
     streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
     stylehints_grid: WindowStyles,
+    system: S,
     timer: TimerData,
     windows: GlkObjectStore<Window>,
     windows_changed: bool,
 }
 
-impl GlkApi {
+impl<S> GlkApi<S>
+where S: Default + GlkSystem {
+    pub fn new(system: S) -> Self {
+        GlkApi {
+            system,
+            ..Default::default()
+        }
+    }
+
     // The Glk API
 
     pub fn glk_cancel_char_event(win: &GlkWindow) {
@@ -101,6 +119,56 @@ impl GlkApi {
             0xE0..=0xE6 | 0xF8..=0xFE => val - 0x20,
             _ => val,
         }
+    }
+
+    pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
+        let filetype = file_type(usage & fileusage_TypeMask);
+        // Clean the filename
+        let mut fixed_filename = String::default();
+        for char in filename.chars() {
+            match char {
+                '"' | '\\' | '/' | '>' | '<' | ':' | '?' | '*' | char::REPLACEMENT_CHARACTER => {},
+                _ => fixed_filename.push(char),
+            };
+        }
+        if fixed_filename.is_empty() {
+            fixed_filename = "null".to_string();
+        }
+        fixed_filename.push_str(filetype_suffix(filetype));
+        self.create_fileref(fixed_filename, rock, usage, None)
+    }
+
+    pub fn glk_fileref_create_from_fileref(&mut self, usage: u32, fileref: &GlkFileRef, rock: u32) -> GlkFileRef {
+        let fileref = lock!(fileref);
+        self.create_fileref(fileref.system_fileref.filename.clone(), rock, usage, None)
+    }
+
+    pub fn glk_fileref_create_temp(&mut self, usage: u32, rock: u32) -> GlkFileRef {
+        let filetype = file_type(usage & fileusage_TypeMask);
+        let system_fileref = self.system.fileref_temporary(filetype);
+        self.create_fileref(system_fileref.filename.clone(), rock, usage, Some(system_fileref))
+    }
+
+    pub fn glk_fileref_delete_file(fileref: &GlkFileRef) {
+        let fileref = lock!(fileref);
+        S::fileref_delete(&fileref.system_fileref);
+    }
+
+    pub fn glk_fileref_destroy(&mut self, fileref: GlkFileRef) {
+        self.filerefs.unregister(fileref);
+    }
+
+    pub fn glk_fileref_does_file_exist(fileref: &GlkFileRef) -> bool {
+        let fileref = lock!(fileref);
+        S::fileref_exists(&fileref.system_fileref)
+    }
+
+    pub fn glk_fileref_get_rock(&self, fileref: &GlkFileRef) -> GlkResult<u32> {
+        self.filerefs.get_rock(fileref).ok_or(InvalidReference)
+    }
+
+    pub fn glk_fileref_iterate(&self, fileref: Option<&GlkFileRef>) -> Option<IterationResult<FileRef>> {
+        self.filerefs.iterate(fileref)
     }
 
     pub fn glk_get_buffer_stream<'a>(str: &GlkStream, buf: &mut [u8]) -> GlkResult<'a, u32> {
@@ -234,6 +302,14 @@ impl GlkApi {
 
     pub fn glk_stream_iterate(&self, str: Option<&GlkStream>) -> Option<IterationResult<Stream>> {
         self.streams.iterate(str)
+    }
+
+    pub fn glk_stream_open_file(&mut self, fileref: &GlkFileRef, mode: u32, rock: u32) -> GlkResult<Option<GlkStream>> {
+        self.create_file_stream(fileref, mode, rock, false)
+    }
+
+    pub fn glk_stream_open_file_uni(&mut self, fileref: &GlkFileRef, mode: u32, rock: u32) -> GlkResult<Option<GlkStream>> {
+        self.create_file_stream(fileref, mode, rock, true)
     }
 
     pub fn glk_stream_open_memory(&mut self, buf: Box<[u8]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
@@ -604,6 +680,44 @@ impl GlkApi {
 
     // Internal functions
 
+    fn create_fileref(&mut self, filename: String, rock: u32, usage: u32, system_fileref: Option<SystemFileRef>) -> GlkFileRef {
+        let system_fileref = system_fileref.unwrap_or_else(|| {
+            S::fileref_construct(filename, file_type(usage & fileusage_TypeMask), None)
+        });
+
+        let fref = FileRef::new(system_fileref, usage);
+        let fref_glkobj = GlkObject::new(fref);
+        self.filerefs.register(&fref_glkobj, rock);
+        fref_glkobj
+    }
+
+    fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: u32, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
+        let fileref = lock!(fileref);
+        let mode = file_mode(mode)?;
+        if mode == FileMode::Read && !S::fileref_exists(&fileref.system_fileref) {
+            return Ok(None);
+        }
+
+        let data: Vec<u8> = if mode == FileMode::Write {
+            vec![]
+        }
+        else {
+            S::fileref_read(&fileref.system_fileref)?.to_vec()
+        };
+
+        // Create an appopriate stream
+        let str = create_stream_from_buffer(data, fileref.binary, mode, uni, &fileref.system_fileref)?;
+
+        if mode == FileMode::WriteAppend {
+            let mut str = lock!(str);
+            str.set_position(SeekMode::End, 0);
+        }
+
+        self.streams.register(&str, rock);
+
+        Ok(Some(str))
+    }
+
     fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream>
     where Stream: From<ArrayBackedStream<T>> {
         if fmode == FileMode::WriteAppend {
@@ -846,11 +960,40 @@ struct TimerData {
     started: Option<SystemTime>,
 }
 
+fn bebuffer_to_array(buf: &[u8]) -> Vec<u32> {
+    let mut curs = Cursor::new(buf);
+    let mut dest: Vec<u32> = vec![];
+    let _ = curs.read_u32_into::<BigEndian>(&mut dest);
+    dest
+}
+
 fn colour_code_to_css(colour: u32) -> String {
     // Uppercase colours are required by RegTest
     format!("#{:6X}", colour & 0xFFFFFF)
 }
 
+fn create_stream_from_buffer(buf: Vec<u8>, binary: bool, mode: FileMode, unicode: bool, fileref: &SystemFileRef) -> GlkResult<'static, GlkStream> {
+    let data = match (unicode, binary) {
+        (false, _) => GlkOwnedBuffer::U8(buf.into_boxed_slice()),
+        (true, false) => str::from_utf8(&buf)?.into(),
+        (true, true) => GlkOwnedBuffer::U32(bebuffer_to_array(&buf).into_boxed_slice()),
+    };
+
+    let str = GlkObject::new(if mode == FileMode::Read {
+        match data {
+            GlkOwnedBuffer::U8(buf) => ArrayBackedStream::<u8>::new(buf, mode, None).into(),
+            GlkOwnedBuffer::U32(buf) => ArrayBackedStream::<u32>::new(buf, mode, None).into(),
+        }
+    }
+    else {
+        match data {
+            GlkOwnedBuffer::U8(buf) => FileStream::<u8>::new(fileref, buf, mode).into(),
+            GlkOwnedBuffer::U32(buf) => FileStream::<u32>::new(fileref, buf, mode).into(),
+        }
+    });
+    Ok(str)
+}
+
 fn normalise_window_dimension(val: f64) -> usize {
-    val.floor().min(0.0) as usize
+    val.floor().max(0.0) as usize
 }

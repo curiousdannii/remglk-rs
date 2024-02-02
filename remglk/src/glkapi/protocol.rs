@@ -122,16 +122,16 @@ pub struct RefreshEvent {
 pub struct SpecialEvent {
     pub base: EventBase,
     /** Event value (file reference from Dialog) */
-    pub value: Option<FileRef>,
+    pub value: Option<SystemFileRef>,
 }
 
-pub struct FileRef {
+#[derive(Clone, Default)]
+pub struct SystemFileRef {
     pub content: Option<String>,
-    pub dirent: Option<String>,
     pub filename: String,
     pub gameid: Option<String>,
     // TODO: do we need null here?
-    pub usage: Option<String>,
+    pub usage: Option<FileType>,
 }
 
 pub struct TimerEvent {
@@ -531,8 +531,6 @@ pub type WindowStyles = HashMap<String, CSSProperties>;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum BufferWindowImageAlignment {InlineCenter,InlineDown, InlineUp, MarginLeft, MarginRight}
-#[derive(Copy, Clone, PartialEq)]
-pub enum FileType {Command, Data, Save, Transcript}
 #[derive(Copy, Clone, PartialEq)]
 pub enum SpecialKeyCode {Delete, Down, End, Escape, Func1, Func2, Func3, Func4, Func5, Func6, Func7, Func8, Func9, Func10, Func11, Func12, Home, Left, Pagedown, Pageup, Return, Right, Tab, Up}
 #[derive(Copy, Clone, PartialEq)]

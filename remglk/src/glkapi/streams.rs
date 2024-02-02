@@ -9,7 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-use std::cmp::min;
+use std::cmp::{max, min};
 
 use enum_dispatch::enum_dispatch;
 
@@ -25,7 +25,8 @@ pub type GlkStreamWeak = GlkObjectWeak<Stream>;
 pub enum Stream {
     ArrayBackedU8(ArrayBackedStream<u8>),
     ArrayBackedU32(ArrayBackedStream<u32>),
-    //FileStream,
+    FileStreamU8(FileStream<u8>),
+    FileStreamU32(FileStream<u32>),
     Null(NullStream),
     Window(WindowStream),
 }
@@ -222,41 +223,48 @@ where Box<[T]>: GlkArray {
     }
 }
 
-/* /** Writable FileStreams are based on array backed streams, but can grow in length.
+/** Writable FileStreams are based on array backed streams, but can grow in length.
     Read-only file streams just use an ArrayBackedStream directly.
 */
-pub struct FileStream {
-    fref: FileRef,
-    str: ArrayBackedStream,
+#[derive(Default)]
+pub struct FileStream<T> {
+    fileref: SystemFileRef,
+    str: ArrayBackedStream<T>,
 }
 
-impl FileStream {
-    pub fn new(fref: FileRef, buf: GlkArray, fmode: FileMode) -> FileStream {
+impl<T> FileStream<T>
+where T: Clone + Default {
+    pub fn new(fileref: &SystemFileRef, buf: Box<[T]>, fmode: FileMode) -> FileStream<T> {
         assert!(fmode != FileMode::Read);
+        let mut str = ArrayBackedStream::new(buf, fmode, None);
+        str.expandable = true;
         FileStream {
-            fref,
-            str: ArrayBackedStream::new(buf, fmode, None),
+            fileref: fileref.clone(),
+            str,
         }
     }
 
-    fn expand(&mut self, increase: usize) {
+    pub fn expand(&mut self, increase: usize) {
         let end_pos = self.str.pos + increase;
-        if end_pos > self.str.buf.len() {
-            self.str.buf.resize(end_pos);
-            self.str.len = end_pos;
+        let mut max_len = self.str.buf.len();
+        if end_pos > max_len {
+            // Expand the vec by at least 100
+            max_len += max(end_pos - max_len, 100);
+            let mut buf = mem::take(&mut self.str.buf).into_vec();
+            buf.resize(max_len, T::default());
+            self.str.buf = buf.into_boxed_slice();
         }
+        self.str.expand(increase);
     }
 }
 
-impl StreamOperations for FileStream {
+impl<T> StreamOperations for FileStream<T>
+where T: Clone + Default, Box<[T]>: GlkArray {
     fn close(&self) -> GlkResult<StreamResultCounts> {
-        Ok(StreamResultCounts {
-            read_count: self.str.read_count as u32,
-            write_count: self.str.write_count as u32,
-        })
+        self.str.close()
     }
 
-    fn get_buffer(&mut self, buf: &mut GlkArray) -> GlkResult<u32> {
+    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
         self.str.get_buffer(buf)
     }
 
@@ -264,7 +272,7 @@ impl StreamOperations for FileStream {
         self.str.get_char(uni)
     }
 
-    fn get_line(&mut self, buf: &mut GlkArray) -> GlkResult<u32> {
+    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
         self.str.get_line(buf)
     }
 
@@ -272,7 +280,7 @@ impl StreamOperations for FileStream {
         self.str.get_position()
     }
 
-    fn put_buffer(&mut self, buf: &GlkArray) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
         if self.str.pos + buf.len() > self.str.len {
             self.expand(buf.len());
         }
@@ -286,10 +294,19 @@ impl StreamOperations for FileStream {
         self.str.put_char(ch)
     }
 
-    fn set_position(&mut self, mode: SeekMode, pos: i32) {
-        self.str.set_position(mode, pos)
+    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<()> {
+        let buf: GlkOwnedBuffer = str.into();
+        self.put_buffer(&(&buf).into())
     }
-} */
+
+    fn set_position(&mut self, mode: SeekMode, pos: i32) {
+        self.str.set_position(mode, pos);
+    }
+
+    fn write_count(&self) -> usize {
+        self.str.write_count
+    }
+}
 
 /** A NullStream is only used for a memory stream with no buffer */
 #[derive(Default)]

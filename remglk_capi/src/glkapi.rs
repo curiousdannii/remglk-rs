@@ -9,6 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use std::ffi::CStr;
 use std::sync::{Mutex, OnceLock};
 
 use remglk::glkapi;
@@ -23,13 +24,21 @@ type BufferMutU8 = *mut u8;
 type BufferMutU32 = *mut u32;
 type CStringU8 = *const i8;
 type CStringU32 = *const u32;
+type FileRefPtr = *const Mutex<FileRef>;
 type StreamPtr = *const Mutex<Stream>;
 type WindowPtr = *const Mutex<Window>;
 type WindowPtrMut = *mut Mutex<Window>;
 
+#[path = "systems/standard.rs"]
+mod standard;
+use standard::StandardSystem;
+type GlkApi = glkapi::GlkApi<StandardSystem>;
+
 fn glkapi() -> &'static Mutex<GlkApi> {
     static GLKAPI: OnceLock<Mutex<GlkApi>> = OnceLock::new();
-    GLKAPI.get_or_init(|| Mutex::new(GlkApi::default()))
+    GLKAPI.get_or_init(|| {
+        Mutex::new(GlkApi::new(StandardSystem::default()))
+    })
 }
 
 // TODO: error handling!
@@ -63,6 +72,59 @@ pub extern "C" fn glk_char_to_lower(val: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn glk_char_to_upper(val: u32) -> u32 {
     GlkApi::glk_char_to_upper(val)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_create_by_name(usage: u32, filename_ptr: *const i8, rock: u32) -> FileRefPtr {
+    let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
+    let filename = filename_cstr.to_string_lossy().to_string();
+    let result = glkapi().lock().unwrap().glk_fileref_create_by_name(usage, filename, rock);
+    to_owned(result)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_create_by_prompt(usage: u32, fmode: u32, rock: u32) -> FileRefPtr {
+    unimplemented!()
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_create_from_fileref(usage: u32, fileref: FileRefPtr, rock: u32) -> FileRefPtr {
+    let result = glkapi().lock().unwrap().glk_fileref_create_from_fileref(usage, &from_ptr(fileref), rock);
+    to_owned(result)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_create_temp(usage: u32, rock: u32) -> FileRefPtr {
+    let result = glkapi().lock().unwrap().glk_fileref_create_temp(usage, rock);
+    to_owned(result)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_delete_file(fileref: FileRefPtr) {
+    GlkApi::glk_fileref_delete_file(&from_ptr(fileref));
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_destroy(fileref: FileRefPtr) {
+    glkapi().lock().unwrap().glk_fileref_destroy(reclaim(fileref));
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_does_file_exist(fileref: FileRefPtr) -> u32 {
+    GlkApi::glk_fileref_does_file_exist(&from_ptr(fileref)) as u32
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_get_rock(fileref: FileRefPtr) -> u32 {
+    glkapi().lock().unwrap().glk_fileref_get_rock(&from_ptr(fileref)).unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn glk_fileref_iterate(fileref: FileRefPtr, rock_ptr: *mut u32) -> FileRefPtr {
+    let fileref = from_ptr_opt(fileref);
+    let (obj, rock) = glkapi().lock().unwrap().glk_fileref_iterate(fileref.as_ref()).map_or((None, 0), |res| (Some(res.obj), res.rock));
+    write_ptr(rock_ptr, rock);
+    borrow(obj.as_ref())
 }
 
 #[no_mangle]
@@ -245,6 +307,18 @@ pub extern "C" fn glk_stream_iterate(str: StreamPtr, rock_ptr: *mut u32) -> Stre
     let (obj, rock) = glkapi().lock().unwrap().glk_stream_iterate(str.as_ref()).map_or((None, 0), |res| (Some(res.obj), res.rock));
     write_ptr(rock_ptr, rock);
     borrow(obj.as_ref())
+}
+
+#[no_mangle]
+pub extern "C" fn glk_stream_open_file(fileref: FileRefPtr, mode: u32, rock: u32) -> StreamPtr {
+    let result = glkapi().lock().unwrap().glk_stream_open_file(&from_ptr(fileref), mode, rock);
+    to_owned_opt(result.unwrap())
+}
+
+#[no_mangle]
+pub extern "C" fn glk_stream_open_file_uni(fileref: FileRefPtr, mode: u32, rock: u32) -> StreamPtr {
+    let result = glkapi().lock().unwrap().glk_stream_open_file_uni(&from_ptr(fileref), mode, rock);
+    to_owned_opt(result.unwrap())
 }
 
 #[no_mangle]

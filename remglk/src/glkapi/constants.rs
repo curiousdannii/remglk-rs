@@ -69,7 +69,7 @@ pub const keycode_Func11: u32 = 0xffffffe5;
 pub const keycode_Func12: u32 = 0xffffffe4;
 // The last keycode is always (0x100000000 - keycode_MAXVAL)
 pub const keycode_MAXVAL: u32 = 28;
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum TerminatorCode {
     Escape = 0xfffffff8,
@@ -97,7 +97,7 @@ pub const evtype_Redraw: u32 = 6;
 pub const evtype_SoundNotify: u32 = 7;
 pub const evtype_Hyperlink: u32 = 8;
 pub const evtype_VolumeNotify: u32 = 9;
-#[derive(Copy, Clone, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 #[repr(C)]
 pub enum GlkEventType {
     #[default]
@@ -148,7 +148,7 @@ pub const wintype_Blank: u32 = 2;
 pub const wintype_TextBuffer: u32 = 3;
 pub const wintype_TextGrid: u32 = 4;
 pub const wintype_Graphics: u32 = 5;
-#[derive(Copy, Clone, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 #[repr(C)]
 pub enum WindowType {
     All = 0,
@@ -195,6 +195,31 @@ pub const fileusage_SavedGame: u32 = 0x01;
 pub const fileusage_Transcript: u32 = 0x02;
 pub const fileusage_InputRecord: u32 = 0x03;
 pub const fileusage_TypeMask: u32 = 0x0f;
+#[derive(Clone, Copy, Default, PartialEq)]
+#[repr(C)]
+pub enum FileType {
+    #[default]
+    Data = 0,
+    SavedGame,
+    Transcript,
+    InputRecord,
+}
+pub fn file_type(filetype: u32) -> FileType {
+    match filetype {
+        fileusage_Data => FileType::Data,
+        fileusage_SavedGame => FileType::SavedGame,
+        fileusage_Transcript => FileType::Transcript,
+        fileusage_TypeMask => FileType::InputRecord,
+        _ => FileType::Data,
+    }
+}
+pub fn filetype_suffix(filetype: FileType) -> &'static str {
+    match filetype {
+        FileType::Data => ".glkdata",
+        FileType::SavedGame => ".glksave",
+        FileType::Transcript | FileType::InputRecord => ".txt",
+    }
+}
 
 pub const fileusage_TextMode: u32 = 0x100;
 pub const fileusage_BinaryMode: u32 = 0x000;
@@ -203,20 +228,29 @@ pub const filemode_Write: u32 = 0x01;
 pub const filemode_Read: u32 = 0x02;
 pub const filemode_ReadWrite: u32 = 0x03;
 pub const filemode_WriteAppend: u32 = 0x05;
-#[derive(Copy, Clone, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, Hash, PartialEq)]
 #[repr(C)]
 pub enum FileMode {
+    Write = 0x01,
     #[default]
     Read = 0x02,
     ReadWrite = 0x03,
-    Write = 0x01,
     WriteAppend = 0x05,
+}
+pub fn file_mode(filemode: u32) -> GlkResult<'static, FileMode> {
+    match filemode {
+        filemode_Write => Ok(FileMode::Write),
+        filemode_Read => Ok(FileMode::Read),
+        filemode_ReadWrite => Ok(FileMode::ReadWrite),
+        filemode_WriteAppend => Ok(FileMode::WriteAppend),
+        _ => Err(IllegalFilemode),
+    }
 }
 
 pub const seekmode_Start: u32 = 0;
 pub const seekmode_Current: u32 = 1;
 pub const seekmode_End: u32 = 2;
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum SeekMode {
     Current = 1,

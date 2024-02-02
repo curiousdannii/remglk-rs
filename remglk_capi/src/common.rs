@@ -58,6 +58,13 @@ pub fn to_owned<T>(obj: GlkObject<T>) -> *const Mutex<T> {
     Arc::into_raw(obj.obj)
 }
 
+pub fn to_owned_opt<T>(obj: Option<GlkObject<T>>) -> *const Mutex<T> {
+    match obj {
+        Some(obj) => Arc::into_raw(obj.obj),
+        None => ptr::null(),
+    }
+}
+
 pub fn write_ptr<T>(ptr: *mut T, val: T) {
     if ptr.is_null() {}
     else {

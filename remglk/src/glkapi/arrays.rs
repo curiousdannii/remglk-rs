@@ -81,7 +81,7 @@ impl From<&str> for GlkOwnedBuffer {
 }
 
 impl<'a> From<&'a GlkOwnedBuffer> for GlkBuffer<'a> {
-    fn from(value: &'a  GlkOwnedBuffer) -> Self {
+    fn from(value: &'a GlkOwnedBuffer) -> Self {
         match value {
             GlkOwnedBuffer::U8(ref buf) => GlkBuffer::U8(buf.as_ref()),
             GlkOwnedBuffer::U32(ref buf) => GlkBuffer::U32(buf.as_ref()),

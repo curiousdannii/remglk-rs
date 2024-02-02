@@ -9,9 +9,12 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use std::io;
+use std::str;
+
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum GlkApiError {
     #[error("cannot change window split direction")]
     CannotChangeWindowSplitDirection,
@@ -53,6 +56,10 @@ pub enum GlkApiError {
     WindowDoesntSupportCharInput,
     #[error("cannot write to read-only stream")]
     WriteToReadOnly,
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error(transparent)]
+    Utf8(#[from] str::Utf8Error),
 }
 pub type GlkResult<'a, T> = Result<T, GlkApiError>;
 
