@@ -19,15 +19,13 @@ mod streams;
 mod windows;
 
 use std::cmp::min;
-use std::io::Cursor;
 use std::mem;
+use std::ops::Deref;
 use std::str;
 use std::time::SystemTime;
 
-use byteorder::{BigEndian, ReadBytesExt};
-
 use super::*;
-use arrays::*;
+pub use arrays::*;
 pub use common::*;
 pub use GlkApiError::*;
 use constants::*;
@@ -196,35 +194,47 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<()> {
-        current_stream!(self).put_buffer(&GlkBuffer::U8(buf))
+        self.glk_put_buffer_stream(current_stream!(self), buf)
     }
 
-    pub fn glk_put_buffer_stream<'a>(str: &GlkStream, buf: &[u8]) -> GlkResult<'a, ()> {
-        lock!(str).put_buffer(&GlkBuffer::U8(buf))
+    pub fn glk_put_buffer_stream<'a>(&mut self, str: &GlkStream, buf: &[u8]) -> GlkResult<'a, ()> {
+        let mut str = lock!(str);
+        str.put_buffer(&GlkBuffer::U8(buf))?;
+        write_stream!(self, str);
+        Ok(())
     }
 
-    pub fn glk_put_buffer_stream_uni<'a>(str: &GlkStream, buf: &[u32]) -> GlkResult<'a, ()> {
-        lock!(str).put_buffer(&GlkBuffer::U32(buf))
+    pub fn glk_put_buffer_stream_uni<'a>(&mut self, str: &GlkStream, buf: &[u32]) -> GlkResult<'a, ()> {
+        let mut str = lock!(str);
+        str.put_buffer(&GlkBuffer::U32(buf))?;
+        write_stream!(self, str);
+        Ok(())
     }
 
     pub fn glk_put_buffer_uni(&mut self, buf: &[u32]) -> GlkResult<()> {
-        current_stream!(self).put_buffer(&GlkBuffer::U32(buf))
+        self.glk_put_buffer_stream_uni(current_stream!(self), buf)
     }
 
     pub fn glk_put_char(&mut self, ch: u8) -> GlkResult<()> {
-        current_stream!(self).put_char(ch as u32)
+        self.glk_put_char_stream(current_stream!(self), ch)
     }
 
-    pub fn glk_put_char_stream(str: &GlkStream, ch: u8) -> GlkResult<()> {
-        lock!(str).put_char(ch as u32)
+    pub fn glk_put_char_stream(&mut self, str: &GlkStream, ch: u8) -> GlkResult<()> {
+        let mut str = lock!(str);
+        str.put_char(ch as u32)?;
+        write_stream!(self, str);
+        Ok(())
     }
 
-    pub fn glk_put_char_stream_uni(str: &GlkStream, ch: u32) -> GlkResult<()> {
-        lock!(str).put_char(ch)
+    pub fn glk_put_char_stream_uni(&mut self, str: &GlkStream, ch: u32) -> GlkResult<()> {
+        let mut str = lock!(str);
+        str.put_char(ch)?;
+        write_stream!(self, str);
+        Ok(())
     }
 
     pub fn glk_put_char_uni(&mut self, ch: u32) -> GlkResult<()> {
-        current_stream!(self).put_char(ch)
+        self.glk_put_char_stream_uni(current_stream!(self), ch)
     }
 
     pub fn glk_request_char_event(&self, win: &GlkWindow) -> GlkResult<()> {
@@ -263,7 +273,8 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_set_hyperlink(&self, val: u32) -> GlkResult<()> {
-        Ok(current_stream!(self).set_hyperlink(val))
+        GlkApi::<S>::glk_set_hyperlink_stream(current_stream!(self), val);
+        Ok(())
     }
 
     pub fn glk_set_hyperlink_stream(str: &GlkStream, val: u32) {
@@ -271,7 +282,8 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_set_style(&self, val: u32) -> GlkResult<()> {
-        Ok(current_stream!(self).set_style(val))
+        GlkApi::<S>::glk_set_style_stream(current_stream!(self), val);
+        Ok(())
     }
 
     pub fn glk_set_style_stream(str: &GlkStream, val: u32) {
@@ -282,9 +294,12 @@ where S: Default + GlkSystem {
         self.current_stream = win.map(|win| lock!(win).str.clone())
     }
 
-    pub fn glk_stream_close(&mut self, str: GlkStream) -> GlkResult<StreamResultCounts> {
-        let res = lock!(str).close();
-        self.streams.unregister(str);
+    pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<StreamResultCounts> {
+        let str = lock!(str_glkobj);
+        let res = str.close();
+        write_stream!(self, str);
+        drop(str);
+        self.streams.unregister(str_glkobj);
         res
     }
 
@@ -733,7 +748,7 @@ where S: Default + GlkSystem {
         Ok(str)
     }
 
-    fn handle_line_input<T>(&self, win: &mut Window, win_data: &mut TextWindow<T>, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent>
+    fn handle_line_input<T>(&mut self, win: &mut Window, win_data: &mut TextWindow<T>, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent>
     where T: Default + WindowOperations {
         // The Glk spec is a bit ambiguous here
         // I'm going to echo first
@@ -743,7 +758,9 @@ where S: Default + GlkSystem {
             win.put_string(&input_linebreak, Some(style_Input));
             if let Some(str) = &win.echostr {
                 let str: GlkStream = str.into();
-                lock!(str).put_string(&input_linebreak, Some(style_Input))?;
+                let mut str = lock!(str);
+                str.put_string(&input_linebreak, Some(style_Input))?;
+                write_stream!(self, str);
             }
         }
 
@@ -960,13 +977,6 @@ struct TimerData {
     started: Option<SystemTime>,
 }
 
-fn bebuffer_to_array(buf: &[u8]) -> Vec<u32> {
-    let mut curs = Cursor::new(buf);
-    let mut dest: Vec<u32> = vec![];
-    let _ = curs.read_u32_into::<BigEndian>(&mut dest);
-    dest
-}
-
 fn colour_code_to_css(colour: u32) -> String {
     // Uppercase colours are required by RegTest
     format!("#{:6X}", colour & 0xFFFFFF)
@@ -976,7 +986,7 @@ fn create_stream_from_buffer(buf: Vec<u8>, binary: bool, mode: FileMode, unicode
     let data = match (unicode, binary) {
         (false, _) => GlkOwnedBuffer::U8(buf.into_boxed_slice()),
         (true, false) => str::from_utf8(&buf)?.into(),
-        (true, true) => GlkOwnedBuffer::U32(bebuffer_to_array(&buf).into_boxed_slice()),
+        (true, true) => GlkOwnedBuffer::U32(u8slice_to_u32vec(&buf).into_boxed_slice()),
     };
 
     let str = GlkObject::new(if mode == FileMode::Read {

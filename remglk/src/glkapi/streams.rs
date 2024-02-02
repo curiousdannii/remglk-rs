@@ -228,7 +228,7 @@ where Box<[T]>: GlkArray {
 */
 #[derive(Default)]
 pub struct FileStream<T> {
-    fileref: SystemFileRef,
+    pub fileref: SystemFileRef,
     str: ArrayBackedStream<T>,
 }
 
@@ -244,7 +244,7 @@ where T: Clone + Default {
         }
     }
 
-    pub fn expand(&mut self, increase: usize) {
+    fn expand(&mut self, increase: usize) {
         let end_pos = self.str.pos + increase;
         let mut max_len = self.str.buf.len();
         if end_pos > max_len {
@@ -255,6 +255,10 @@ where T: Clone + Default {
             self.str.buf = buf.into_boxed_slice();
         }
         self.str.expand(increase);
+    }
+
+    pub fn get_buf(&self) -> &[T] {
+        &self.str.buf[0..self.str.pos]
     }
 }
 

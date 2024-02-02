@@ -55,7 +55,11 @@ impl GlkSystem for StandardSystem {
         }
     }
 
-    fn fileref_write<'a>(&mut self, fileref: &SystemFileRef, buf: &[u8]) -> GlkResult<'a, ()> {
-        Ok(fs::write(&fileref.filename, buf)?)
+    fn fileref_write(&mut self, fileref: &SystemFileRef, buf: GlkBuffer) -> GlkResult<()> {
+        // TODO: caching
+        match buf {
+            GlkBuffer::U8(buf) => Ok(fs::write(&fileref.filename, buf)?),
+            GlkBuffer::U32(buf) => Ok(fs::write(&fileref.filename, u32slice_to_u8vec(buf))?)
+        }
     }
 }

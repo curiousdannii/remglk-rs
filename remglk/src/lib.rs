@@ -25,5 +25,5 @@ pub trait GlkSystem {
     fn fileref_exists(fileref: &SystemFileRef) -> bool;
     fn fileref_read(fileref: &SystemFileRef) -> GlkResult<Box<[u8]>>;
     fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef;
-    fn fileref_write<'a>(&mut self, fileref: &SystemFileRef, buf: &[u8]) -> GlkResult<'a, ()>;
+    fn fileref_write(&mut self, fileref: &SystemFileRef, buf: GlkBuffer) -> GlkResult<()>;
 }

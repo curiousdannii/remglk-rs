@@ -12,6 +12,7 @@ https://github.com/curiousdannii/remglk-rs
 use std::io;
 use std::str;
 
+use byteorder::{BigEndian, ReadBytesExt};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -64,8 +65,8 @@ pub enum GlkApiError {
 pub type GlkResult<'a, T> = Result<T, GlkApiError>;
 
 macro_rules! current_stream {
-    ($str: expr) => {
-        lock!($str.current_stream.as_ref().map(|str| Into::<GlkStream>::into(str)).as_ref().ok_or(NoCurrentStream)?)
+    ($self: expr) => {
+        $self.current_stream.as_ref().map(|str| Into::<GlkStream>::into(str)).as_ref().ok_or(NoCurrentStream)?
     };
 }
 pub(crate) use current_stream;
@@ -76,3 +77,31 @@ macro_rules! lock {
     }
 }
 pub(crate) use lock;
+
+macro_rules! write_stream {
+    ($self: expr, $str: expr) => {
+        match $str.deref() {
+            Stream::FileStreamU8(str) => $self.system.fileref_write(&str.fileref, GlkBuffer::U8(str.get_buf()))?,
+            Stream::FileStreamU32(str) => $self.system.fileref_write(&str.fileref, GlkBuffer::U32(str.get_buf()))?,
+            _ => {},
+        };
+    };
+}
+pub(crate) use write_stream;
+
+// Array conversions
+pub fn u8slice_to_u32vec(buf: &[u8]) -> Vec<u32> {
+    let mut curs = io::Cursor::new(buf);
+    let mut dest: Vec<u32> = vec![];
+    let _ = curs.read_u32_into::<BigEndian>(&mut dest);
+    dest
+}
+
+// From https://codereview.stackexchange.com/a/250318/52143
+pub fn u32slice_to_u8vec(buf: &[u32]) -> Vec<u8> {
+    let mut dest = Vec::with_capacity(buf.len() * 4);
+    for val in buf {
+        dest.extend(&val.to_be_bytes());
+    }
+    dest
+}
