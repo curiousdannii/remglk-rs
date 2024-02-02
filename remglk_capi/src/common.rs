@@ -82,6 +82,15 @@ pub fn glk_buffer_mut<'a, T>(buf: *mut T, buflen: u32) -> &'a mut [T]
 where T: Clone {
     unsafe {slice::from_raw_parts_mut(buf, buflen as usize)}
 }
+pub fn glk_buffer_mut_opt<'a, T>(buf: *mut T, buflen: u32) -> Option<&'a mut [T]>
+where T: Clone {
+    if buf.is_null() {
+        None
+    }
+    else {
+        unsafe {Some(slice::from_raw_parts_mut(buf, buflen as usize))}
+    }
+}
 
 pub fn cstring_u8<'a>(buf: *const i8) -> &'a [u8] {
     unsafe {CStr::from_ptr(buf).to_bytes()}

@@ -25,7 +25,7 @@ type BufferMutU32 = *mut u32;
 type CStringU8 = *const i8;
 type CStringU32 = *const u32;
 type FileRefPtr = *const Mutex<FileRef>;
-type StreamPtr = *const Mutex<Stream>;
+pub type StreamPtr = *const Mutex<Stream>;
 type WindowPtr = *const Mutex<Window>;
 type WindowPtrMut = *mut Mutex<Window>;
 
@@ -34,7 +34,7 @@ mod standard;
 use standard::StandardSystem;
 type GlkApi = glkapi::GlkApi<StandardSystem>;
 
-fn glkapi() -> &'static Mutex<GlkApi> {
+pub fn glkapi() -> &'static Mutex<GlkApi> {
     static GLKAPI: OnceLock<Mutex<GlkApi>> = OnceLock::new();
     GLKAPI.get_or_init(|| {
         Mutex::new(GlkApi::new(StandardSystem::default()))
@@ -42,6 +42,21 @@ fn glkapi() -> &'static Mutex<GlkApi> {
 }
 
 // TODO: error handling!
+
+#[no_mangle]
+pub extern "C" fn glk_buffer_to_lower_case_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
+    GlkApi::glk_buffer_to_lower_case_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
+}
+
+#[no_mangle]
+pub extern "C" fn glk_buffer_to_title_case_uni(buf: BufferMutU32, len: u32, initlen: u32, lowerrest: u32) -> u32 {
+    GlkApi::glk_buffer_to_title_case_uni(glk_buffer_mut(buf, len), initlen as usize, lowerrest > 0) as u32
+}
+
+#[no_mangle]
+pub extern "C" fn glk_buffer_to_upper_case_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
+    GlkApi::glk_buffer_to_upper_case_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
+}
 
 #[no_mangle]
 pub extern "C" fn glk_cancel_char_event(win: WindowPtr) {
@@ -72,6 +87,11 @@ pub extern "C" fn glk_char_to_lower(val: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn glk_char_to_upper(val: u32) -> u32 {
     GlkApi::glk_char_to_upper(val)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_exit() {
+    glkapi().lock().unwrap().glk_exit();
 }
 
 #[no_mangle]
@@ -125,6 +145,16 @@ pub extern "C" fn glk_fileref_iterate(fileref: FileRefPtr, rock_ptr: *mut u32) -
     let (obj, rock) = glkapi().lock().unwrap().glk_fileref_iterate(fileref.as_ref()).map_or((None, 0), |res| (Some(res.obj), res.rock));
     write_ptr(rock_ptr, rock);
     borrow(obj.as_ref())
+}
+
+#[no_mangle]
+pub extern "C" fn glk_gestalt(sel: u32, val: u32) -> u32 {
+    glkapi().lock().unwrap().glk_gestalt(sel, val)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_gestalt_ext(sel: u32, val: u32, buf: BufferMutU32, len: u32) -> u32 {
+    glkapi().lock().unwrap().glk_gestalt_ext(sel, val, glk_buffer_mut_opt(buf, len))
 }
 
 #[no_mangle]
@@ -252,6 +282,12 @@ pub extern "C" fn glk_request_mouse_event(win: WindowPtr) {
 #[no_mangle]
 pub extern "C" fn glk_request_timer_events(msecs: u32) {
     glkapi().lock().unwrap().glk_request_timer_events(msecs);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_select_poll(ev_ptr: *mut GlkEvent) {
+    let res: GlkEvent = glkapi().lock().unwrap().glk_select_poll().into();
+    write_ptr(ev_ptr, res);
 }
 
 #[no_mangle]

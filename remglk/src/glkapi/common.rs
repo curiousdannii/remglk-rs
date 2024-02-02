@@ -14,6 +14,7 @@ use std::str;
 
 use byteorder::{BigEndian, ReadBytesExt};
 use thiserror::Error;
+use widestring::Utf32String;
 
 #[derive(Debug, Error)]
 pub enum GlkApiError {
@@ -89,12 +90,26 @@ macro_rules! write_stream {
 }
 pub(crate) use write_stream;
 
-// Array conversions
+// Array & string conversions
+
+pub fn str_to_u32vec(str: &str) -> Vec<u32> {
+    let str = Utf32String::from_str(str);
+    str.into_vec()
+}
+
+pub fn u8slice_to_string(buf: &[u8]) -> String {
+    buf.iter().map(|&c| c as char).collect()
+}
+
 pub fn u8slice_to_u32vec(buf: &[u8]) -> Vec<u32> {
     let mut curs = io::Cursor::new(buf);
     let mut dest: Vec<u32> = vec![];
     let _ = curs.read_u32_into::<BigEndian>(&mut dest);
     dest
+}
+
+pub fn u32slice_to_string(buf: &[u32]) -> String {
+    buf.iter().map(|&c| char::from_u32(c).unwrap()).collect()
 }
 
 // From https://codereview.stackexchange.com/a/250318/52143

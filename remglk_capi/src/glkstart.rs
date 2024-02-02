@@ -18,6 +18,9 @@ use std::str;
 
 use thiserror::Error;
 
+use crate::common::*;
+use crate::glkapi::*;
+
 const glkunix_arg_End: i32 = 0;
 const glkunix_arg_ValueFollows: i32 = 1;
 const glkunix_arg_NoValue: i32 = 2;
@@ -182,4 +185,18 @@ unsafe fn glkunix_arguments() -> Vec<GlkUnixArgument> {
             desc: CStr::from_ptr(arg.desc).to_str().expect("glkunix_arguments: has a non-UTF-8-safe description").into(),
         })
         .collect()
+}
+
+#[no_mangle]
+pub extern "C" fn glkunix_stream_open_pathname(filename_ptr: *const i8, textmode: u32, rock: u32) -> StreamPtr {
+    // Remglk banned this from being used except during glkunix_startup_code, but I don't think that's really necessary
+    let mut glkapi = glkapi().lock().unwrap();
+    let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
+    let filename = filename_cstr.to_string_lossy().to_string();
+    let fileref = glkapi.glk_fileref_create_by_name_uncleaned(0, filename, rock);
+    let str = glkapi.glk_stream_open_file(&fileref, textmode, rock).unwrap().unwrap();
+    glkapi.glk_fileref_destroy(fileref);
+    let str_copy = str.clone();
+    let _ = glkapi.glk_stream_close(str);
+    to_owned(str_copy)
 }

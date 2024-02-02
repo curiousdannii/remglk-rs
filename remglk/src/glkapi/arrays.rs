@@ -9,7 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-use widestring::Utf32String;
+use super::*;
 
 pub const MAX_LATIN1: u32 = 0xFF;
 pub const QUESTION_MARK: u32 = '?' as u32;
@@ -42,8 +42,8 @@ impl GlkBuffer<'_> {
 
     pub fn to_string(&self) -> String {
         match self {
-            GlkBuffer::U8(buf) => buf.iter().map(|&c| c as char).collect(),
-            GlkBuffer::U32(buf) => buf.iter().map(|&c| char::from_u32(c).unwrap()).collect(),
+            GlkBuffer::U8(buf) => u8slice_to_string(buf),
+            GlkBuffer::U32(buf) => u32slice_to_string(buf),
         }
     }
 }
@@ -75,8 +75,7 @@ impl GlkOwnedBuffer {
 
 impl From<&str> for GlkOwnedBuffer {
     fn from(value: &str) -> Self {
-        let str = Utf32String::from_str(value);
-        GlkOwnedBuffer::U32(str.into_vec().into_boxed_slice())
+        GlkOwnedBuffer::U32(str_to_u32vec(value).into_boxed_slice())
     }
 }
 

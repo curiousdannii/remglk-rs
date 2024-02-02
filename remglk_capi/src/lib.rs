@@ -16,6 +16,7 @@ mod glkstart;
 
 use std::ffi::{c_char, c_int};
 
+use glkapi::glk_exit;
 use glkstart::*;
 
 /** Processed arguments which we give to `glkunix_startup_code` */
@@ -51,10 +52,9 @@ extern "C" fn main() {
         count: processed_args.len() as c_int,
         args: processed_args.iter().map(|arg| arg.as_ptr()).collect::<Vec<*const c_char>>().as_ptr(),
     })} == 0 {
-        //glk_exit();
-        unimplemented!();
+        glk_exit();
     }
 
     unsafe{glk_main()};
-    //glk_exit();
+    glk_exit();
 }

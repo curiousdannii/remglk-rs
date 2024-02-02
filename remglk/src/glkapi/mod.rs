@@ -45,6 +45,7 @@ pub use windows::Window;
 pub struct GlkApi<S>
 where S: Default + GlkSystem {
     current_stream: Option<GlkStreamWeak>,
+    exited: bool,
     filerefs: GlkObjectStore<FileRef>,
     gen: u32,
     metrics: NormalisedMetrics,
@@ -53,6 +54,7 @@ where S: Default + GlkSystem {
     streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
     stylehints_grid: WindowStyles,
+    support: SupportedFeatures,
     system: S,
     timer: TimerData,
     windows: GlkObjectStore<Window>,
@@ -69,6 +71,36 @@ where S: Default + GlkSystem {
     }
 
     // The Glk API
+
+    pub fn glk_buffer_to_lower_case_uni(buf: &mut [u32], initlen: usize) -> usize {
+        let res = str_to_u32vec(&u32slice_to_string(&buf[..initlen]).to_lowercase());
+        let len = res.len();
+        let act_len = min(len, buf.len());
+        buf[..act_len].copy_from_slice(&res[..act_len]);
+        len
+    }
+
+    pub fn glk_buffer_to_title_case_uni(buf: &mut [u32], initlen: usize, lowerrest: bool) -> usize {
+        let mut res = str_to_u32vec(&u32slice_to_string(&buf[0..1]).to_uppercase());
+        if lowerrest {
+            res.append(&mut str_to_u32vec(&u32slice_to_string(&buf[1..initlen]).to_lowercase()));
+        }
+        else {
+            res.extend_from_slice(&buf[1..initlen]);
+        }
+        let len = res.len();
+        let act_len = min(len, buf.len());
+        buf[..act_len].copy_from_slice(&res[..act_len]);
+        len
+    }
+
+    pub fn glk_buffer_to_upper_case_uni(buf: &mut [u32], initlen: usize) -> usize {
+        let res = str_to_u32vec(&u32slice_to_string(&buf[..initlen]).to_uppercase());
+        let len = res.len();
+        let act_len = min(len, buf.len());
+        buf[..act_len].copy_from_slice(&res[..act_len]);
+        len
+    }
 
     pub fn glk_cancel_char_event(win: &GlkWindow) {
         lock!(win).input.text_input_type = None;
@@ -119,6 +151,10 @@ where S: Default + GlkSystem {
         }
     }
 
+    pub fn glk_exit(&mut self) {
+        self.exited = true;
+    }
+
     pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
         let filetype = file_type(usage & fileusage_TypeMask);
         // Clean the filename
@@ -134,6 +170,11 @@ where S: Default + GlkSystem {
         }
         fixed_filename.push_str(filetype_suffix(filetype));
         self.create_fileref(fixed_filename, rock, usage, None)
+    }
+
+    // For glkunix_stream_open_pathname
+    pub fn glk_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
+        self.create_fileref(filename, rock, usage, None)
     }
 
     pub fn glk_fileref_create_from_fileref(&mut self, usage: u32, fileref: &GlkFileRef, rock: u32) -> GlkFileRef {
@@ -167,6 +208,69 @@ where S: Default + GlkSystem {
 
     pub fn glk_fileref_iterate(&self, fileref: Option<&GlkFileRef>) -> Option<IterationResult<FileRef>> {
         self.filerefs.iterate(fileref)
+    }
+
+    pub fn glk_gestalt(&self, sel: u32, val: u32) -> u32 {
+        self.glk_gestalt_ext(sel, val, None)
+    }
+
+    #[allow(non_upper_case_globals)]
+    pub fn glk_gestalt_ext(&self, sel: u32, val: u32, buf: Option<&mut [u32]>) -> u32 {
+        match sel {
+            gestalt_Version => 0x00000705,
+
+            gestalt_CharInput => {
+                if let keycode_Func12..=keycode_Unknown = val {
+                    1
+                }
+                else {
+                    char::from_u32(val).map(|ch| ch.is_control() as u32).unwrap_or(0)
+                }
+            },
+
+            gestalt_LineInput => if let 32..=126 = val {1} else {0},
+
+            gestalt_CharOutput => {
+                // Output is always one character, even if mangled
+                if let Some(buf) = buf {
+                    buf[0] = 1;
+                }
+                // We can print anything except control characters
+                char::from_u32(val).map(|ch| if ch.is_control() {gestalt_CharOutput_CannotPrint} else {gestalt_CharOutput_ExactPrint}).unwrap_or(gestalt_CharOutput_CannotPrint)
+            },
+
+            gestalt_MouseInput | gestalt_Timer => self.support.timers as u32,
+
+            //gestalt_Graphics | gestalt_DrawImage => 1,
+
+            //gestalt_Sound | gestalt_SoundVolume | gestalt_SoundNotify => 1,
+
+            gestalt_Hyperlinks | gestalt_HyperlinkInput => self.support.hyperlinks as u32,
+
+            //gestalt_SoundMusic => 1,
+
+            //gestalt_GraphicsTransparency => 1,
+
+            gestalt_Unicode => 1,
+
+            //gestalt_UnicodeNorm => 1,
+
+            //gestalt_LineInputEcho => 1,
+
+            //gestalt_LineTerminators | gestalt_LineTerminatorKey => 1,
+
+            //gestalt_DateTime => 1,
+
+            //gestalt_Sound2 => 1,
+
+            //gestalt_ResourceStream => 1,
+
+            //gestalt_GraphicsCharInput => 1,
+
+            //gestalt_GarglkText => 1,
+
+            _ => 0,
+        }
     }
 
     pub fn glk_get_buffer_stream<'a>(str: &GlkStream, buf: &mut [u8]) -> GlkResult<'a, u32> {
@@ -270,6 +374,26 @@ where S: Default + GlkSystem {
     pub fn glk_request_timer_events(&mut self, msecs: u32) {
         self.timer.interval = msecs;
         self.timer.started = if msecs > 0 {Some(SystemTime::now())} else {None}
+    }
+
+    pub fn glk_select_poll(&mut self) -> GlkEvent {
+        // Assume we're single threaded, so the only event we could have received is a timer event
+        if self.timer.interval > 0 {
+            let now = SystemTime::now();
+            let diff = now.duration_since(self.timer.started.unwrap());
+            if let Ok(dur) = diff {
+                if dur.as_millis() as u32 > self.timer.interval {
+                    self.timer.last_interval = 0;
+                    self.timer.started = None;
+                    return GlkEvent {
+                        evtype: GlkEventType::Timer,
+                        ..Default::default()
+                    }
+                }
+            }
+        }
+
+        GlkEvent::default()
     }
 
     pub fn glk_set_hyperlink(&self, val: u32) -> GlkResult<()> {
@@ -968,6 +1092,12 @@ pub struct GlkEvent {
 pub struct StreamResultCounts {
     pub read_count: u32,
     pub write_count: u32,
+}
+
+#[derive(Default)]
+struct SupportedFeatures {
+    hyperlinks: bool,
+    timers: bool,
 }
 
 #[derive(Default)]
