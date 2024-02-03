@@ -9,9 +9,9 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use std::ffi::c_void;
 use std::mem;
 
-use libc::c_void;
 use remglk::glkapi::*;
 use objects::*;
 use std::sync::Mutex;
@@ -20,8 +20,8 @@ use super::*;
 use common::*;
 use glkapi::*;
 
-pub type RegisterCallbackGeneric = extern fn(*const c_void, u32) -> DispatchRock;
-pub type UnregisterCallbackGeneric = extern fn(*const c_void, u32, DispatchRock);
+type RegisterCallbackGeneric = extern fn(*const c_void, u32) -> DispatchRock;
+type UnregisterCallbackGeneric = extern fn(*const c_void, u32, DispatchRock);
 
 #[no_mangle]
 pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCallbackGeneric, unregister_cb: UnregisterCallbackGeneric) {
@@ -61,4 +61,24 @@ fn obj_ptr_to_disprock<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> *const Dis
     let obj = obj.lock().unwrap();
     let disprock = obj.disprock.as_ref().unwrap();
     disprock
+}
+
+type RetainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char) -> DispatchRock;
+type UnretainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char, DispatchRock);
+
+#[no_mangle]
+pub unsafe extern "C" fn gidispatch_set_retained_registry(register_cb: RetainArrayCallbackGeneric, unregister_cb: UnretainArrayCallbackGeneric) {
+    let mut glkapi = glkapi().lock().unwrap();
+    let retain = mem::transmute::<RetainArrayCallbackGeneric, RetainArrayCallback<u8>>(register_cb);
+    let unretain = mem::transmute::<UnretainArrayCallbackGeneric, UnretainArrayCallback<u8>>(unregister_cb);
+    glkapi.retain_array_callbacks_u8 = Some(RetainArrayCallbacks {
+        retain,
+        unretain,
+    });
+    let retain = mem::transmute::<RetainArrayCallbackGeneric, RetainArrayCallback<u32>>(register_cb);
+    let unretain = mem::transmute::<UnretainArrayCallbackGeneric, UnretainArrayCallback<u32>>(unregister_cb);
+    glkapi.retain_array_callbacks_u32 = Some(RetainArrayCallbacks {
+        retain,
+        unretain,
+    });
 }

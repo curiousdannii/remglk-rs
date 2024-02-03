@@ -56,6 +56,8 @@ pub enum GlkApiError {
     SplitMustBeNull,
     #[error("window doesn't support character input")]
     WindowDoesntSupportCharInput,
+    #[error("window doesn't support line input")]
+    WindowDoesntSupportLineInput,
     #[error("cannot write to read-only stream")]
     WriteToReadOnly,
     #[error(transparent)]

@@ -50,6 +50,8 @@ where S: Default + GlkSystem {
     gen: u32,
     metrics: NormalisedMetrics,
     partial_inputs: PartialInputs,
+    pub retain_array_callbacks_u8: Option<RetainArrayCallbacks<u8>>,
+    pub retain_array_callbacks_u32: Option<RetainArrayCallbacks<u32>>,
     root_window: Option<GlkWindowWeak>,
     pub streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
@@ -421,6 +423,15 @@ where S: Default + GlkSystem {
         let str = lock!(str_glkobj);
         let res = str.close();
         write_stream!(self, str);
+
+        if let Some(disprock) = &str.array_disprock {
+            match str.deref().deref() {
+                Stream::ArrayBackedU8(str) => self.unretain_array(&GlkBuffer::U8(&str.buf), disprock),
+                Stream::ArrayBackedU32(str) => self.unretain_array(&GlkBuffer::U32(&str.buf), disprock),
+                _ => {},
+            };
+        }
+
         drop(str);
         self.streams.unregister(str_glkobj);
         res
@@ -451,11 +462,17 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stream_open_memory(&mut self, buf: Box<[u8]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
-        self.create_memory_stream(buf, fmode, rock)
+        let disprock = self.retain_array_callbacks_u8.as_ref().map(|_| {
+            self.retain_array(&GlkBuffer::U8(&buf))
+        });
+        self.create_memory_stream(buf, fmode, rock, disprock)
     }
 
     pub fn glk_stream_open_memory_uni(&mut self, buf: Box<[u32]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
-        self.create_memory_stream(buf, fmode, rock)
+        let disprock = self.retain_array_callbacks_u8.as_ref().map(|_| {
+            self.retain_array(&GlkBuffer::U32(&buf))
+        });
+        self.create_memory_stream(buf, fmode, rock, disprock)
     }
 
     pub fn glk_stream_set_current(&mut self, str: Option<&GlkStream>) {
@@ -856,7 +873,7 @@ where S: Default + GlkSystem {
         Ok(Some(str))
     }
 
-    fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream>
+    fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<GlkStream>
     where Stream: From<ArrayBackedStream<T>> {
         if fmode == FileMode::WriteAppend {
             return Err(IllegalFilemode);
@@ -865,13 +882,17 @@ where S: Default + GlkSystem {
             NullStream::default().into()
         }
         else {
-            ArrayBackedStream::<T>::new(buf, fmode, None).into()
+            ArrayBackedStream::<T>::new(buf, fmode).into()
         });
+        if disprock.is_some() {
+            let mut str = lock!(str);
+            str.array_disprock = disprock;
+        }
         self.streams.register(&str, rock);
         Ok(str)
     }
 
-    fn handle_line_input<T>(&mut self, win: &mut Window, win_data: &mut TextWindow<T>, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent>
+    fn handle_line_input<T>(&mut self, win: &mut GlkObjectMetadata<Window>, win_data: &mut TextWindow<T>, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent>
     where T: Default + WindowOperations {
         // The Glk spec is a bit ambiguous here
         // I'm going to echo first
@@ -895,7 +916,13 @@ where S: Default + GlkSystem {
         let mut dest_unowned: GlkBufferMut = (dest).into();
         set_buffer(&src_unowned, 0, &mut dest_unowned, 0, len);
 
-        // TODO: Unretain
+        if let Some(disprock) = &win.array_disprock {
+            match &win.data {
+                WindowData::Buffer(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
+                WindowData::Grid(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
+                _ => {},
+            }
+        }
 
         win.input.text_input_type = None;
         win_data.line_input_buffer = None;
@@ -1010,10 +1037,16 @@ where S: Default + GlkSystem {
 
     fn remove_window(&mut self, win_glkobj: GlkWindow, recurse: bool) {
         self.windows_changed = true;
-
-        // TODO: unretain array
-
         let win = lock!(win_glkobj);
+
+        if let Some(disprock) = &win.array_disprock {
+            match &win.data {
+                WindowData::Buffer(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
+                WindowData::Grid(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
+                _ => {},
+            }
+        }
+
         if let WindowData::Pair(data) = &win.data {
             if recurse {
                 self.remove_window(Into::<GlkWindow>::into(&data.child1), true);
@@ -1051,12 +1084,16 @@ where S: Default + GlkSystem {
         }
         if let WindowType::Buffer | WindowType::Grid = win.wintype {}
         else {
-            return Err(WindowDoesntSupportCharInput);
+            return Err(WindowDoesntSupportLineInput);
+        }
+
+        if self.retain_array_callbacks_u8.is_some() {
+            win.array_disprock = Some(self.retain_array(&(&buf).into()));
         }
 
         win.input.gen = Some(self.gen);
         if initlen > 0 {
-            //win.input.initial
+            win.input.initial = Some(buf.to_string(initlen as usize));
         }
         win.input.text_input_type = Some(TextInputType::Line);
         match win.data {
@@ -1070,9 +1107,21 @@ where S: Default + GlkSystem {
             _ => unreachable!(),
         };
 
-        // TODO: retain array
-
         Ok(())
+    }
+
+    pub fn retain_array(&self, buf: &GlkBuffer) -> DispatchRock {
+        match buf {
+            GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr()),
+            GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr()),
+        }
+    }
+
+    pub fn unretain_array(&self, buf: &GlkBuffer, disprock: &DispatchRock) {
+        match buf {
+            GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr(), disprock),
+            GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr(), disprock),
+        };
     }
 }
 
@@ -1083,6 +1132,15 @@ pub struct GlkEvent {
     pub win: Option<GlkWindow>,
     pub val1: u32,
     pub val2: u32,
+}
+
+// Retained array callbacks
+pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8) -> DispatchRock;
+pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const u8, &DispatchRock);
+
+pub struct RetainArrayCallbacks<T> {
+    pub retain: RetainArrayCallback<T>,
+    pub unretain: UnretainArrayCallback<T>,
 }
 
 /** Final read/write character counts of a stream */
@@ -1120,8 +1178,8 @@ fn create_stream_from_buffer(buf: Vec<u8>, binary: bool, mode: FileMode, unicode
 
     let str = GlkObject::new(if mode == FileMode::Read {
         match data {
-            GlkOwnedBuffer::U8(buf) => ArrayBackedStream::<u8>::new(buf, mode, None).into(),
-            GlkOwnedBuffer::U32(buf) => ArrayBackedStream::<u32>::new(buf, mode, None).into(),
+            GlkOwnedBuffer::U8(buf) => ArrayBackedStream::<u8>::new(buf, mode).into(),
+            GlkOwnedBuffer::U32(buf) => ArrayBackedStream::<u32>::new(buf, mode).into(),
         }
     }
     else {

@@ -71,6 +71,13 @@ impl GlkOwnedBuffer {
             GlkOwnedBuffer::U32(buf) => buf.len(),
         }
     }
+
+    pub fn to_string(&self, len: usize) -> String {
+        match self {
+            GlkOwnedBuffer::U8(buf) => u8slice_to_string(&buf[..len]),
+            GlkOwnedBuffer::U32(buf) => u32slice_to_string(&buf[..len]),
+        }
+    }
 }
 
 impl From<&str> for GlkOwnedBuffer {

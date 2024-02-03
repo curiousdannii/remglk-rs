@@ -9,7 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-use std::ffi::CStr;
+use std::ffi::{CStr, c_void};
 use std::sync::{Mutex, OnceLock};
 
 use remglk::glkapi;
@@ -306,6 +306,9 @@ pub extern "C" fn glk_set_hyperlink(val: u32) {
 pub extern "C" fn glk_set_hyperlink_stream(str: StreamPtr, val: u32) {
     GlkApi::glk_set_hyperlink_stream(&from_ptr(str), val);
 }
+
+#[no_mangle]
+pub extern "C" fn glk_set_interrupt_handler(_func: *const c_void) {}
 
 #[no_mangle]
 pub extern "C" fn glk_set_style(val: u32) {

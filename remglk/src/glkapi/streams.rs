@@ -70,8 +70,7 @@ pub trait StreamOperations {
 */
 #[derive(Default)]
 pub struct ArrayBackedStream<T> {
-    buf: Box<[T]>,
-    close_cb: Option<fn()>,
+    pub buf: Box<[T]>,
     /** Whether we need to check if we should expand the active buffer region before writing */
     expandable: bool,
     fmode: FileMode,
@@ -87,11 +86,10 @@ pub struct ArrayBackedStream<T> {
 }
 
 impl<T> ArrayBackedStream<T> {
-    pub fn new(buf: Box<[T]>, fmode: FileMode, close_cb: Option<fn()>) -> ArrayBackedStream<T> {
+    pub fn new(buf: Box<[T]>, fmode: FileMode) -> ArrayBackedStream<T> {
         let buf_len = buf.len();
         ArrayBackedStream {
             buf,
-            close_cb,
             expandable: fmode == FileMode::Write,
             fmode,
             len: match fmode {
@@ -115,9 +113,6 @@ impl<T> ArrayBackedStream<T> {
 impl<T> StreamOperations for ArrayBackedStream<T>
 where Box<[T]>: GlkArray {
     fn close(&self) -> GlkResult<StreamResultCounts> {
-        if let Some(cb) = self.close_cb {
-            cb();
-        }
         Ok(StreamResultCounts {
             read_count: self.read_count as u32,
             write_count: self.write_count as u32,
@@ -242,7 +237,7 @@ impl<T> FileStream<T>
 where T: Clone + Default {
     pub fn new(fileref: &SystemFileRef, buf: Box<[T]>, fmode: FileMode) -> FileStream<T> {
         assert!(fmode != FileMode::Read);
-        let mut str = ArrayBackedStream::new(buf, fmode, None);
+        let mut str = ArrayBackedStream::new(buf, fmode);
         str.expandable = true;
         FileStream {
             fileref: fileref.clone(),

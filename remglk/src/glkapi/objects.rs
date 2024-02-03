@@ -181,6 +181,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
 /** Contains the private metadata we keep in each object store */
 #[derive(Default)]
 pub struct GlkObjectMetadata<T> {
+    pub array_disprock: Option<DispatchRock>,
     pub disprock: Option<DispatchRock>,
     /** The ID, used in the GlkOte protocol */
     pub id: u32,
