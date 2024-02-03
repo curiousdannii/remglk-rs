@@ -109,7 +109,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_cancel_hyperlink_event(win: &GlkWindow) {
-        lock!(win).input.hyperlink = None;
+        lock!(win).input.hyperlink = false;
     }
 
     pub fn glk_cancel_line_event(&mut self, win: &GlkWindow) -> GlkResult<GlkEvent> {
@@ -133,7 +133,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_cancel_mouse_event(win: &GlkWindow) {
-        lock!(win).input.mouse = None;
+        lock!(win).input.mouse = false;
     }
 
     pub fn glk_char_to_lower(val: u32) -> u32 {
@@ -178,6 +178,10 @@ where S: Default + GlkSystem {
         self.create_fileref(filename, rock, usage, None)
     }
 
+    pub fn glk_fileref_create_by_prompt(&mut self, _usage: u32, _fmode: FileMode, _rock: u32) -> Option<GlkFileRef> {
+        unimplemented!()
+    }
+
     pub fn glk_fileref_create_from_fileref(&mut self, usage: u32, fileref: &GlkFileRef, rock: u32) -> GlkFileRef {
         let fileref = lock!(fileref);
         self.create_fileref(fileref.system_fileref.filename.clone(), rock, usage, None)
@@ -189,18 +193,18 @@ where S: Default + GlkSystem {
         self.create_fileref(system_fileref.filename.clone(), rock, usage, Some(system_fileref))
     }
 
-    pub fn glk_fileref_delete_file(fileref: &GlkFileRef) {
+    pub fn glk_fileref_delete_file(&mut self, fileref: &GlkFileRef) {
         let fileref = lock!(fileref);
-        S::fileref_delete(&fileref.system_fileref);
+        self.system.fileref_delete(&fileref.system_fileref);
     }
 
     pub fn glk_fileref_destroy(&mut self, fileref: GlkFileRef) {
         self.filerefs.unregister(fileref);
     }
 
-    pub fn glk_fileref_does_file_exist(fileref: &GlkFileRef) -> bool {
+    pub fn glk_fileref_does_file_exist(&mut self, fileref: &GlkFileRef) -> bool {
         let fileref = lock!(fileref);
-        S::fileref_exists(&fileref.system_fileref)
+        self.system.fileref_exists(&fileref.system_fileref)
     }
 
     pub fn glk_fileref_get_rock(fileref: &GlkFileRef) -> GlkResult<u32> {
@@ -353,7 +357,7 @@ where S: Default + GlkSystem {
     pub fn glk_request_hyperlink_event(win: &GlkWindow) {
         let mut win = lock!(win);
         if let WindowType::Buffer | WindowType::Grid = win.wintype {
-            win.input.hyperlink = Some(true);
+            win.input.hyperlink = true;
         }
     }
 
@@ -368,13 +372,19 @@ where S: Default + GlkSystem {
     pub fn glk_request_mouse_event(win: &GlkWindow) {
         let mut win = lock!(win);
         if let WindowType::Graphics | WindowType::Grid = win.wintype {
-            win.input.mouse = Some(true);
+            win.input.mouse = true;
         }
     }
 
     pub fn glk_request_timer_events(&mut self, msecs: u32) {
         self.timer.interval = msecs;
         self.timer.started = if msecs > 0 {Some(SystemTime::now())} else {None}
+    }
+
+    pub fn glk_select(&mut self) -> GlkEvent {
+        let update = self.update();
+        let event = self.system.send_glkote_update(update);
+        self.handle_event(event)
     }
 
     pub fn glk_select_poll(&mut self) -> GlkEvent {
@@ -833,11 +843,61 @@ where S: Default + GlkSystem {
         lock!(win).echostr = str.map(|str| str.downgrade());
     }
 
+    // The GlkOte protocol functions
+
+    fn handle_event(&mut self, _event: Event) -> GlkEvent {
+        unimplemented!()
+    }
+
+    fn update(&mut self) -> Update {
+        let mut state = StateUpdate {
+            gen: self.gen,
+            ..Default::default()
+        };
+
+        if self.exited {
+            state.disable = true;
+        }
+
+        // Get the window updates
+        for win in self.windows.store.iter() {
+            let mut win = lock!(win);
+            if let WindowData::Blank(_) | WindowData::Pair(_) = win.data {
+                continue;
+            }
+            let mut update = win.update();
+            if let Some(content) = update.content.take() {
+                state.content.push(content);
+            }
+            if update.input.hyperlink || update.input.mouse || update.input.text_input_type.is_some() {
+                state.input.push(update.input);
+            }
+            if self.windows_changed {
+                state.windows.push(update.size);
+            }
+        }
+        self.windows_changed = false;
+
+        // TODO: Page BG colour
+
+        // TODO: special input
+
+        // Timer
+        if self.timer.last_interval != self.timer.interval {
+            state.timer = if self.timer.interval > 0 {Some(self.timer.interval)} else {None};
+            self.timer.last_interval = self.timer.interval;
+        }
+
+        // TODO: Autorestore state
+
+        unimplemented!()
+    }
+
     // Internal functions
 
     fn create_fileref(&mut self, filename: String, rock: u32, usage: u32, system_fileref: Option<SystemFileRef>) -> GlkFileRef {
         let system_fileref = system_fileref.unwrap_or_else(|| {
-            S::fileref_construct(filename, file_type(usage & fileusage_TypeMask), None)
+            self.system.fileref_construct(filename, file_type(usage & fileusage_TypeMask), None)
         });
 
         let fref = FileRef::new(system_fileref, usage);
@@ -849,7 +909,7 @@ where S: Default + GlkSystem {
     fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: u32, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
         let fileref = lock!(fileref);
         let mode = file_mode(mode)?;
-        if mode == FileMode::Read && !S::fileref_exists(&fileref.system_fileref) {
+        if mode == FileMode::Read && !self.system.fileref_exists(&fileref.system_fileref) {
             return Ok(None);
         }
 
@@ -857,7 +917,7 @@ where S: Default + GlkSystem {
             vec![]
         }
         else {
-            S::fileref_read(&fileref.system_fileref)?.to_vec()
+            self.system.fileref_read(&fileref.system_fileref)?.to_vec()
         };
 
         // Create an appopriate stream

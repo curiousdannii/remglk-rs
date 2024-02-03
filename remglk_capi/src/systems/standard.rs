@@ -15,7 +15,7 @@ use std::path::Path;
 
 use super::*;
 use remglk::GlkSystem;
-use glkapi::protocol::SystemFileRef;
+use glkapi::protocol::{Event, SystemFileRef, Update};
 
 #[derive(Default)]
 pub struct StandardSystem {
@@ -23,7 +23,7 @@ pub struct StandardSystem {
 }
 
 impl GlkSystem for StandardSystem {
-    fn fileref_construct(filename: String, filetype: FileType, gameid: Option<String>) -> SystemFileRef {
+    fn fileref_construct(&mut self, filename: String, filetype: FileType, gameid: Option<String>) -> SystemFileRef {
         SystemFileRef {
             filename,
             gameid,
@@ -32,15 +32,15 @@ impl GlkSystem for StandardSystem {
         }
     }
 
-    fn fileref_delete(fileref: &SystemFileRef) {
+    fn fileref_delete(&mut self, fileref: &SystemFileRef) {
         let _ = fs::remove_file(Path::new(&fileref.filename));
     }
 
-    fn fileref_exists(fileref: &SystemFileRef) -> bool {
+    fn fileref_exists(&mut self, fileref: &SystemFileRef) -> bool {
         Path::new(&fileref.filename).exists()
     }
 
-    fn fileref_read(fileref: &SystemFileRef) -> GlkResult<Box<[u8]>> {
+    fn fileref_read(&mut self, fileref: &SystemFileRef) -> GlkResult<Box<[u8]>> {
         Ok(fs::read(&fileref.filename)?.into_boxed_slice())
     }
 
@@ -61,5 +61,9 @@ impl GlkSystem for StandardSystem {
             GlkBuffer::U8(buf) => Ok(fs::write(&fileref.filename, buf)?),
             GlkBuffer::U32(buf) => Ok(fs::write(&fileref.filename, u32slice_to_u8vec(buf))?)
         }
+    }
+
+    fn send_glkote_update(&mut self, _update: Update) -> Event {
+        unimplemented!()
     }
 }

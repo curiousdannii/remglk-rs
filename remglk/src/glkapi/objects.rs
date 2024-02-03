@@ -84,7 +84,7 @@ pub struct GlkObjectStore<T> {
     first: Option<GlkObjectWeak<T>>,
     object_class: u32,
     register_cb: Option<DispatchRegisterCallback<T>>,
-    store: HashSet<GlkObject<T>>,
+    pub store: HashSet<GlkObject<T>>,
     unregister_cb: Option<DispatchUnregisterCallback<T>>,
 }
 
@@ -177,6 +177,8 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         GlkObjectStore::new()
     }
 }
+
+
 
 /** Contains the private metadata we keep in each object store */
 #[derive(Default)]

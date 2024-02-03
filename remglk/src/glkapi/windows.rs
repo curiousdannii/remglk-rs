@@ -44,9 +44,9 @@ pub enum WindowData {
 
 #[derive(Default)]
 pub struct WindowUpdate {
-    content: Option<ContentUpdate>,
-    input: Option<InputUpdate>,
-    size: Option<protocol::WindowUpdate>,
+    pub content: Option<ContentUpdate>,
+    pub input: InputUpdate,
+    pub size: protocol::WindowUpdate,
 }
 
 impl Window {
@@ -81,8 +81,8 @@ impl Window {
 
         // Now give it to the specific window types for them to fill in
         self.data.update(WindowUpdate {
-            input: Some(input_update),
-            size: Some(protocol::WindowUpdate {
+            input: input_update,
+            size: protocol::WindowUpdate {
                 height: self.wbox.bottom - self.wbox.top,
                 id: 0, // Must be replaced!
                 left: self.wbox.left,
@@ -91,7 +91,7 @@ impl Window {
                 wintype: self.wintype,
                 width: self.wbox.right - self.wbox.left,
                 ..Default::default()
-            }),
+            },
             ..Default::default()
         })
     }
@@ -190,14 +190,13 @@ where T: Default + WindowOperations {
     fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
         // TODO: don't resend stylehints when only metrics have changed?
         if !self.stylehints.is_empty() {
-            update.size.as_mut().unwrap().styles = Some(self.stylehints.clone());
+            update.size.styles = Some(self.stylehints.clone());
         }
 
         // Fill in the maxlen as we didn't have access to it in Window.update
-        let input_update = update.input.as_mut().unwrap();
         if let Some(buf) = &self.line_input_buffer {
-            if let Some(TextInputType::Line) = input_update.text_input_type {
-                input_update.maxlen = Some(buf.len() as u32);
+            if let Some(TextInputType::Line) = update.input.text_input_type {
+                update.input.maxlen = Some(buf.len() as u32);
             }
         }
 
@@ -247,7 +246,7 @@ impl BufferWindow {
         }
     }
 
-    fn set_flow_break(&mut self) {
+    fn _set_flow_break(&mut self) {
         self.content.last_mut().unwrap().flowbreak = true;
     }
 }
@@ -306,7 +305,7 @@ impl WindowOperations for BufferWindow {
         // Exclude empty text runs
         for par in self.content.iter_mut() {
             par.content = cleanup_paragraph_styles(par.content.drain(..).filter(|line| match line {
-                LineData::Image(_) => true,
+                LineData::_Image(_) => true,
                 LineData::TextRun(textrun) => !textrun.text.is_empty(),
             }).collect());
         }
@@ -314,10 +313,10 @@ impl WindowOperations for BufferWindow {
         if self.cleared || self.content.len() > 1 || !self.content[0].content.is_empty() {
             let mut content_update = BufferWindowContentUpdate {
                 base: TextualWindowUpdate::default(),
-                text: Some(self.content.drain(..).map(|par| par.into()).collect()),
+                text: self.content.drain(..).map(|par| par.into()).collect(),
             };
             if self.cleared {
-                content_update.base.clear = Some(true);
+                content_update.base.clear = true;
                 self.cleared = false;
             }
             update.content = Some(ContentUpdate::Buffer(content_update));
@@ -348,9 +347,78 @@ impl Paragraph {
 impl From<Paragraph> for BufferWindowParagraphUpdate {
     fn from(par: Paragraph) -> Self {
         BufferWindowParagraphUpdate {
-            append: if par.append {Some(true)} else {None},
-            content: if !par.content.is_empty() {Some(par.content)} else {None},
-            flowbreak: if par.flowbreak {Some(true)} else {None},
+            append: par.append,
+            content: port_line_data(par.content),
+            flowbreak: par.flowbreak,
+        }
+    }
+}
+
+#[derive(Clone)]
+enum LineData {
+    //StylePair(String, String),
+    _Image(BufferWindowImage),
+    TextRun(TextRun),
+}
+
+impl From<LineData> for protocol::LineData {
+    fn from(ld: LineData) -> Self {
+        match ld {
+            LineData::_Image(image) => protocol::LineData::Image(image),
+            LineData::TextRun(tr) => protocol::LineData::TextRun(tr.into()),
+        }
+    }
+}
+
+fn port_line_data(lines: Vec<LineData>) -> Vec<protocol::LineData> {
+    lines.into_iter().map(|ld| ld.into()).collect()
+}
+
+#[derive(Clone, Default)]
+struct TextRun {
+    pub css_styles: Option<Arc<Mutex<CSSProperties>>>,
+    pub hyperlink: Option<u32>,
+    pub style: u32,
+    pub text: String,
+}
+
+impl TextRun {
+    pub fn new(text: &str) -> Self {
+        TextRun {
+            text: text.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /** Clone a text run, sharing CSS */
+    pub fn clone(&self, text: &str) -> Self {
+        TextRun {
+            css_styles: self.css_styles.as_ref().cloned(),
+            hyperlink: self.hyperlink,
+            style: self.style,
+            text: text.to_string(),
+        }
+    }
+}
+
+// Two TextRuns are considered equal if everything except their text matches...
+impl PartialEq for TextRun {
+    fn eq(&self, other: &Self) -> bool {
+        self.hyperlink == other.hyperlink && self.style == other.style && match (&self.css_styles, &other.css_styles) {
+            (Some(self_styles), Some(other_styles)) => Arc::ptr_eq(self_styles, other_styles),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+impl From<TextRun> for protocol::TextRun {
+    fn from(textrun: TextRun) -> Self {
+        protocol::TextRun {
+            css_styles: textrun.css_styles.map(|textrun| textrun.lock().unwrap().clone()),
+            hyperlink: textrun.hyperlink,
+            style: textrun.style,
+            text: textrun.text,
         }
     }
 }
@@ -485,33 +553,31 @@ impl WindowOperations for GridWindow {
                         acc
                     }).into_iter().map(LineData::TextRun).collect();
                     Some(GridWindowLine {
-                        content: cleanup_paragraph_styles(content),
+                        content: port_line_data(cleanup_paragraph_styles(content)),
                         line: i as u32,
                     })
                 }).collect(),
             };
             if self.cleared {
-                grid_content.base.clear = Some(true);
+                grid_content.base.clear = true;
                 self.cleared = false;
             }
             update.content = Some(ContentUpdate::Grid(grid_content));
         }
 
-        let input_update = update.input.as_mut().unwrap();
-        if input_update.text_input_type.is_some() {
+        if update.input.text_input_type.is_some() {
             let (x, y) = if self.fit_cursor() {
                 (self.width - 1, self.height - 1)
             }
             else {
                 (self.x, self.y)
             };
-            input_update.xpos = Some(x as u32);
-            input_update.ypos = Some(y as u32);
+            update.input.xpos = Some(x as u32);
+            update.input.ypos = Some(y as u32);
         }
 
-        let size = update.size.as_mut().unwrap();
-        size.gridheight = Some(self.height as u32);
-        size.gridwidth = Some(self.width as u32);
+        update.size.gridheight = Some(self.height as u32);
+        update.size.gridwidth = Some(self.width as u32);
 
         update
     }

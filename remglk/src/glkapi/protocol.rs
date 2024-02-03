@@ -10,7 +10,6 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use super::*;
 
@@ -21,18 +20,18 @@ use super::*;
 
 /** GlkOte->GlkApi/RemGlk input events */
 pub enum Event {
-    ArrangeEvent,
-    CharEvent,
-    DebugEvent,
-    ExternalEvent,
-    HyperlinkEvent,
-    InitEvent,
-    LineEvent,
-    MouseEvent,
-    RedrawEvent,
-    RefreshEvent,
-    SpecialEvent,
-    TimerEvent,
+    Arrange(ArrangeEvent),
+    Char(CharEvent),
+    Debug(DebugEvent),
+    External(ExternalEvent),
+    Hyperlink(HyperlinkEvent),
+    Init(InitEvent),
+    Line(LineEvent),
+    Mouse(MouseEvent),
+    Redraw(RedrawEvent),
+    Refresh(RefreshEvent),
+    Special(SpecialEvent),
+    Timer(TimerEvent),
 }
 
 pub struct EventBase {
@@ -59,7 +58,7 @@ pub struct CharEvent {
 }
 pub enum CharEventData {
     NormalKey(char),
-    SpecialKeyCode,
+    SpecialKey(SpecialKeyCode),
 }
 
 pub struct DebugEvent {
@@ -234,17 +233,17 @@ pub struct NormalisedMetrics {
 }
 
 /** GlkApi/RemGlk->GlkOte content updates */
-pub enum Update<A> {
-    ErrorUpdate,
-    ExitUpdate,
-    PassUpdate,
-    RetryUpdate,
-    StateUpdate(StateUpdate<A>),
+pub enum Update {
+    Error(ErrorUpdate),
+    Exit(ExitUpdate),
+    Pass(PassUpdate),
+    Retry(RetryUpdate),
+    State(StateUpdate),
 }
 
 pub struct ErrorUpdate {
     /** Error message */
-    pub message: str,
+    pub message: String,
 }
 
 pub struct ExitUpdate {}
@@ -253,18 +252,19 @@ pub struct PassUpdate {}
 
 pub struct RetryUpdate {}
 
-pub struct StateUpdate<A> {
-    /** Library specific autorestore data */
-    pub autorestore: Option<A>,
+#[derive(Default)]
+pub struct StateUpdate {
+    /* Library specific autorestore data */
+    //pub autorestore: Option,
     /** Content data */
-    pub content: Option<Vec<ContentUpdate>>,
-    /** Debug output */
-    pub debugoutput: Option<Vec<String>>,
-    pub disable: Option<bool>,
+    pub content: Vec<ContentUpdate>,
+    /* Debug output */
+    //pub debugoutput: Option<Vec<String>>,
+    pub disable: bool,
     /** Generation number */
     pub gen: u32,
     /** Windows with active input */
-    pub input: Option<Vec<InputUpdate>>,
+    pub input: Vec<InputUpdate>,
     /** Background colour for the page margin (ie, outside of the gameport) */
     pub page_margin_bg: Option<String>,
     /** Special input */
@@ -272,7 +272,7 @@ pub struct StateUpdate<A> {
     // TODO: do we need a null here?
     pub timer: Option<u32>,
     /** Updates to window (new windows, or changes to their arrangements) */
-    pub windows: Option<Vec<WindowUpdate>>,
+    pub windows: Vec<WindowUpdate>,
 }
 
 // Update structures
@@ -289,7 +289,7 @@ pub struct TextualWindowUpdate {
     /** Window ID */
     pub id: u32,
     /** Clear the window */
-    pub clear: Option<bool>,
+    pub clear: bool,
     /** Background colour after clearing */
     pub bg: Option<String>,
     /** Foreground colour after clearing */
@@ -300,17 +300,17 @@ pub struct TextualWindowUpdate {
 pub struct BufferWindowContentUpdate {
     pub base: TextualWindowUpdate,
     /** text data */
-    pub text: Option<Vec<BufferWindowParagraphUpdate>>,
+    pub text: Vec<BufferWindowParagraphUpdate>,
 }
 
 /** A buffer window paragraph */
 pub struct BufferWindowParagraphUpdate {
     /** Append to last input */
-    pub append: Option<bool>,
+    pub append: bool,
     /** Line data */
-    pub content: Option<Vec<LineData>>,
+    pub content: Vec<LineData>,
     /** Paragraph breaks after floating images */
-    pub flowbreak: Option<bool>,
+    pub flowbreak: bool,
 }
 
 /** Graphics window content update */
@@ -323,9 +323,9 @@ pub struct GraphicsWindowContentUpdate {
 
 /** Graphics window operation */
 pub enum GraphicsWindowOperation {
-    FillOperation,
-    ImageOperation,
-    SetcolorOperation,
+    Fill(FillOperation),
+    Image(ImageOperation),
+    SetColor(SetColorOperation),
 }
 
 /** Fill operation */
@@ -355,9 +355,9 @@ pub struct ImageOperation {
 }
 
 /** Setcolor operation */
-pub struct SetcolorOperation {
+pub struct SetColorOperation {
     /** CSS color */
-    pub color: str,
+    pub color: String,
 }
 
 /** Grid window content update */
@@ -400,7 +400,7 @@ pub struct BufferWindowImage {
 #[derive(Clone, Default)]
 pub struct TextRun {
     /** Additional CSS styles */
-    pub css_styles: Option<Arc<Mutex<CSSProperties>>>,
+    pub css_styles: Option<CSSProperties>,
     /** Hyperlink value */
     pub hyperlink: Option<u32>,
     /** Run style */
@@ -409,43 +409,13 @@ pub struct TextRun {
     pub text: String,
 }
 
-impl TextRun {
-    pub fn new(text: &str) -> Self {
-        TextRun {
-            text: text.to_string(),
-            ..Default::default()
-        }
-    }
-
-    /** Clone a text run, sharing CSS */
-    pub fn clone(&self, text: &str) -> Self {
-        TextRun {
-            css_styles: self.css_styles.as_ref().cloned(),
-            hyperlink: self.hyperlink,
-            style: self.style,
-            text: text.to_string(),
-        }
-    }
-}
-
-// Two TextRuns are considered equal if everything except their text matches...
-impl PartialEq for TextRun {
-    fn eq(&self, other: &Self) -> bool {
-        self.hyperlink == other.hyperlink && self.style == other.style && match (&self.css_styles, &other.css_styles) {
-            (Some(self_styles), Some(other_styles)) => Arc::ptr_eq(self_styles, other_styles),
-            (None, None) => true,
-            _ => false,
-        }
-    }
-}
-
 /** Windows with active input */
 #[derive(Default)]
 pub struct InputUpdate {
     /** Generation number, for when the textual input was first requested */
     pub gen: Option<u32>,
     /** Hyperlink requested */
-    pub hyperlink: Option<bool>,
+    pub hyperlink: bool,
     /** Window ID */
     pub id: u32,
     /** Preloaded line input */
@@ -453,7 +423,7 @@ pub struct InputUpdate {
     /** Maximum line input length */
     pub maxlen: Option<u32>,
     /** Mouse input requested */
-    pub mouse: Option<bool>,
+    pub mouse: bool,
     /** Line input terminators */
     pub terminators: Option<Vec<TerminatorCode>>,
     /** Textual input type */

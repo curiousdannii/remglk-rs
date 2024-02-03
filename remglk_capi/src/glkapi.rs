@@ -103,8 +103,9 @@ pub extern "C" fn glk_fileref_create_by_name(usage: u32, filename_ptr: *const i8
 }
 
 #[no_mangle]
-pub extern "C" fn glk_fileref_create_by_prompt(usage: u32, fmode: u32, rock: u32) -> FileRefPtr {
-    unimplemented!()
+pub extern "C" fn glk_fileref_create_by_prompt(usage: u32, fmode: FileMode, rock: u32) -> FileRefPtr {
+    let result = glkapi().lock().unwrap().glk_fileref_create_by_prompt(usage, fmode, rock);
+    to_owned_opt(result)
 }
 
 #[no_mangle]
@@ -121,7 +122,7 @@ pub extern "C" fn glk_fileref_create_temp(usage: u32, rock: u32) -> FileRefPtr {
 
 #[no_mangle]
 pub extern "C" fn glk_fileref_delete_file(fileref: FileRefPtr) {
-    GlkApi::glk_fileref_delete_file(&from_ptr(fileref));
+    glkapi().lock().unwrap().glk_fileref_delete_file(&from_ptr(fileref));
 }
 
 #[no_mangle]
@@ -131,7 +132,7 @@ pub extern "C" fn glk_fileref_destroy(fileref: FileRefPtr) {
 
 #[no_mangle]
 pub extern "C" fn glk_fileref_does_file_exist(fileref: FileRefPtr) -> u32 {
-    GlkApi::glk_fileref_does_file_exist(&from_ptr(fileref)) as u32
+    glkapi().lock().unwrap().glk_fileref_does_file_exist(&from_ptr(fileref)) as u32
 }
 
 #[no_mangle]
@@ -289,6 +290,12 @@ pub extern "C" fn glk_request_mouse_event(win: WindowPtr) {
 #[no_mangle]
 pub extern "C" fn glk_request_timer_events(msecs: u32) {
     glkapi().lock().unwrap().glk_request_timer_events(msecs);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_select(ev_ptr: *mut GlkEvent) {
+    let res: GlkEvent = glkapi().lock().unwrap().glk_select().into();
+    write_ptr(ev_ptr, res);
 }
 
 #[no_mangle]
