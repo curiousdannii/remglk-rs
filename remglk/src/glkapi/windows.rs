@@ -75,7 +75,7 @@ impl Window {
             input_update.text_input_type = self.input.text_input_type;
             if text_input_type == TextInputType::Line {
                 input_update.initial = self.input.initial.take();
-                input_update.terminators = self.input.terminators.clone();
+                //input_update.terminators = self.input.terminators.clone();
             }
         }
 
@@ -417,7 +417,7 @@ impl From<TextRun> for protocol::TextRun {
         protocol::TextRun {
             css_styles: textrun.css_styles.map(|textrun| textrun.lock().unwrap().clone()),
             hyperlink: textrun.hyperlink,
-            style: textrun.style,
+            style: style_name(textrun.style).to_string(),
             text: textrun.text,
         }
     }

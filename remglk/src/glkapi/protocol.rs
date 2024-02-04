@@ -10,6 +10,9 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::collections::HashMap;
+use std::ops::Not;
+
+use serde::{Deserialize, Serialize};
 
 use super::*;
 
@@ -19,15 +22,20 @@ use super::*;
 */
 
 /** GlkOte->GlkApi/RemGlk input events */
+#[derive(Deserialize)]
 pub struct Event {
     /** Generation number */
     pub gen: u32,
     /** Partial line input values */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub partial: PartialInputs,
     /** The specific event data */
+    #[serde(flatten)]
     pub data: EventData,
 }
 
+#[derive(Deserialize)]
+#[serde(tag = "type")]
 pub enum EventData {
     Arrange(ArrangeEvent),
     Char(CharEvent),
@@ -45,11 +53,15 @@ pub enum EventData {
 
 pub type PartialInputs = Option<HashMap<u32, String>>;
 
+#[derive(Deserialize)]
+#[serde(rename = "arrange")]
 pub struct ArrangeEvent {
     pub metrics: Metrics,
 }
 
 /** Character (single key) event */
+#[derive(Deserialize)]
+#[serde(rename = "char")]
 pub struct CharEvent {
     /** Character that was received */
     pub value: String,
@@ -57,15 +69,21 @@ pub struct CharEvent {
     pub window: u32,
 }
 
+#[derive(Deserialize)]
+#[serde(rename = "debug")]
 pub struct DebugEvent {
     pub value: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename = "external")]
 pub struct ExternalEvent {
     // TODO?
     //value: any,
 }
 
+#[derive(Deserialize)]
+#[serde(rename = "hyperlink")]
 pub struct HyperlinkEvent {
     pub value: u32,
     /** Window ID */
@@ -73,22 +91,30 @@ pub struct HyperlinkEvent {
 }
 
 /** Initilisation event */
+#[derive(Deserialize)]
+#[serde(rename = "init")]
 pub struct InitEvent {
+    /** Generation number, should be 0! */
+    pub gen: u32,
     pub metrics: Metrics,
     /** Capabilities list */
     pub support: Vec<String>,
 }
 
 /** Line (text) event */
+#[derive(Deserialize)]
+#[serde(rename = "line")]
 pub struct LineEvent {
-    /** Terminator key */
-    pub terminator: Option<TerminatorCode>,
+    /* Terminator key */
+    //pub terminator: Option<TerminatorCode>,
     /** Line input */
     pub value: String,
     /** Window ID */
     pub window: u32,
 }
 
+#[derive(Deserialize)]
+#[serde(rename = "mouse")]
 pub struct MouseEvent {
     /** Window ID */
     pub window: u32,
@@ -98,19 +124,27 @@ pub struct MouseEvent {
     pub y: u32,
 }
 
+#[derive(Deserialize)]
+#[serde(rename = "redraw")]
 pub struct RedrawEvent {
     /** Window ID */
     pub window: Option<u32>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename = "refresh")]
 pub struct RefreshEvent {}
 
+#[derive(Deserialize)]
+#[serde(rename = "specialresponse")]
 pub struct SpecialEvent {
+    /** Response type */
+    pub response: String,
     /** Event value (file reference from Dialog) */
     pub value: Option<SystemFileRef>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Deserialize)]
 pub struct SystemFileRef {
     pub content: Option<String>,
     pub filename: String,
@@ -119,9 +153,12 @@ pub struct SystemFileRef {
     pub usage: Option<FileType>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename = "timer")]
 pub struct TimerEvent {}
 
 /** Screen and font metrics - all potential options */
+#[derive(Deserialize)]
 pub struct Metrics {
     /** Buffer character height */
     pub buffercharheight: Option<f64>,
@@ -356,87 +393,112 @@ impl From<Metrics> for GlkResult<'static, NormalisedMetrics> {
 }
 
 /** GlkApi/RemGlk->GlkOte content updates */
+#[derive(Serialize)]
+#[serde(tag = "type")]
 pub enum Update {
     Error(ErrorUpdate),
-    Exit(ExitUpdate),
     Pass(PassUpdate),
     Retry(RetryUpdate),
     State(StateUpdate),
 }
 
+#[derive(Serialize)]
+#[serde(rename = "error")]
 pub struct ErrorUpdate {
     /** Error message */
     pub message: String,
 }
 
-pub struct ExitUpdate {}
-
+#[derive(Serialize)]
+#[serde(rename = "pass")]
 pub struct PassUpdate {}
 
+#[derive(Serialize)]
+#[serde(rename = "retry")]
 pub struct RetryUpdate {}
 
-#[derive(Default)]
+#[derive(Default, Serialize)]
+#[serde(rename = "update")]
 pub struct StateUpdate {
     /* Library specific autorestore data */
     //pub autorestore: Option,
     /** Content data */
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub content: Vec<ContentUpdate>,
     /* Debug output */
     //pub debugoutput: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Not::not")]
     pub disable: bool,
     /** Generation number */
     pub gen: u32,
     /** Windows with active input */
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub input: Vec<InputUpdate>,
     /** Background colour for the page margin (ie, outside of the gameport) */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page_margin_bg: Option<String>,
-    /** Special input */
-    pub specialinput: Option<SpecialInput>,
+    /* Special input */
+    //pub specialinput: Option<SpecialInput>,
     // TODO: do we need a null here?
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timer: Option<u32>,
     /** Updates to window (new windows, or changes to their arrangements) */
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub windows: Vec<WindowUpdate>,
 }
 
 // Update structures
 
 /** Content update */
+#[derive(Serialize)]
+#[serde(untagged)]
 pub enum ContentUpdate {
     Buffer(BufferWindowContentUpdate),
     Graphics(GraphicsWindowContentUpdate),
     Grid(GridWindowContentUpdate),
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct TextualWindowUpdate {
     /** Window ID */
     pub id: u32,
     /** Clear the window */
+    #[serde(skip_serializing_if = "Not::not")]
     pub clear: bool,
     /** Background colour after clearing */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bg: Option<String>,
     /** Foreground colour after clearing */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fg: Option<String>,
 }
 
 /** Buffer window content update */
+#[derive(Serialize)]
 pub struct BufferWindowContentUpdate {
+    #[serde(flatten)]
     pub base: TextualWindowUpdate,
     /** text data */
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub text: Vec<BufferWindowParagraphUpdate>,
 }
 
 /** A buffer window paragraph */
+#[derive(Serialize)]
 pub struct BufferWindowParagraphUpdate {
     /** Append to last input */
+    #[serde(skip_serializing_if = "Not::not")]
     pub append: bool,
     /** Line data */
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub content: Vec<LineData>,
     /** Paragraph breaks after floating images */
+    #[serde(skip_serializing_if = "Not::not")]
     pub flowbreak: bool,
 }
 
 /** Graphics window content update */
+#[derive(Serialize)]
 pub struct GraphicsWindowContentUpdate {
     /** Window ID */
     pub id: u32,
@@ -445,6 +507,8 @@ pub struct GraphicsWindowContentUpdate {
 }
 
 /** Graphics window operation */
+#[derive(Serialize)]
+#[serde(tag = "special")]
 pub enum GraphicsWindowOperation {
     Fill(FillOperation),
     Image(ImageOperation),
@@ -452,24 +516,35 @@ pub enum GraphicsWindowOperation {
 }
 
 /** Fill operation */
+#[derive(Serialize)]
+#[serde(rename = "fill")]
 pub struct FillOperation {
     /** CSS color */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<u32>,
     /** X coordinate */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub x: Option<u32>,
     /** Y coordinate */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub  y: Option<u32>,
 }
 
 /** Image operation */
+#[derive(Serialize)]
+#[serde(rename = "image")]
 pub struct ImageOperation {
     pub height: u32,
     /** Image number (from Blorb or similar) */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<u32>,
     pub width: u32,
     /** Image URL */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     /** X position */
     pub x: u32,
@@ -478,82 +553,106 @@ pub struct ImageOperation {
 }
 
 /** Setcolor operation */
+#[derive(Serialize)]
+#[serde(rename = "setcolor")]
 pub struct SetColorOperation {
     /** CSS color */
     pub color: String,
 }
 
 /** Grid window content update */
+#[derive(Serialize)]
 pub struct GridWindowContentUpdate {
+    #[serde(flatten)]
     pub base: TextualWindowUpdate,
     /** Lines data */
     pub lines: Vec<GridWindowLine>,
 }
+#[derive(Serialize)]
 pub struct GridWindowLine {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub content: Vec<LineData>,
     pub line: u32,
 }
 
 /** Line data */
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "special")]
 pub enum LineData {
     //StylePair(String, String),
     Image(BufferWindowImage),
+    #[serde(untagged)]
     TextRun(TextRun),
 }
 
 /** Buffer window image */
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct BufferWindowImage {
-    /** Image alignment */
-    pub alignment: Option<BufferWindowImageAlignment>,
+    /* Image alignment */
+    //pub alignment: Option<BufferWindowImageAlignment>,
     /** Image alt text */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub alttext: Option<String>,
     pub height: u32,
     /** Hyperlink value */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hyperlink: Option<u32>,
     /** Image number */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<u32>,
     pub width: u32,
     /** Image URL */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 }
 
 /** Text run */
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize)]
 pub struct TextRun {
     /** Additional CSS styles */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub css_styles: Option<CSSProperties>,
     /** Hyperlink value */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hyperlink: Option<u32>,
     /** Run style */
-    pub style: u32,
+    pub style: String,
     /** Run content */
     pub text: String,
 }
 
 /** Windows with active input */
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct InputUpdate {
     /** Generation number, for when the textual input was first requested */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub gen: Option<u32>,
     /** Hyperlink requested */
+    #[serde(skip_serializing_if = "Not::not")]
     pub hyperlink: bool,
     /** Window ID */
     pub id: u32,
     /** Preloaded line input */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub initial: Option<String>,
     /** Maximum line input length */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub maxlen: Option<u32>,
     /** Mouse input requested */
+    #[serde(skip_serializing_if = "Not::not")]
     pub mouse: bool,
-    /** Line input terminators */
-    pub terminators: Option<Vec<TerminatorCode>>,
+    /* Line input terminators */
+    //pub terminators: Option<Vec<TerminatorCode>>,
     /** Textual input type */
+    #[serde(rename = "type")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text_input_type: Option<TextInputType>,
     /** Grid window coordinate X */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub xpos: Option<u32>,
     /** Grid window coordinate Y */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ypos: Option<u32>,
 }
 
@@ -576,15 +675,19 @@ pub struct SpecialInput {
 }
 
 /** Updates to window (new windows, or changes to their arrangements) */
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct WindowUpdate {
     /** Graphics height (pixels) */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub graphheight: Option<u32>,
     /** Graphics width (pixels) */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub graphwidth: Option<u32>,
     /** Grid height (chars) */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub gridheight: Option<u32>,
     /** Grid width (chars) */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub gridwidth: Option<u32>,
     pub height: f64,
     /** Window ID */
@@ -594,10 +697,12 @@ pub struct WindowUpdate {
     /** Rock value */
     pub rock: u32,
     /** Window styles */
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub styles: Option<WindowStyles>,
     /** Top position */
     pub top: f64,
     /** Type */
+    #[serde(rename = "type")]
     pub wintype: WindowType,
     pub width: f64,
 }
@@ -610,7 +715,8 @@ pub struct WindowUpdate {
  *   Ex: `background-color: #FFF, color: #000, reverse: 1` will be displayed as white text on a black background
  */
 pub type CSSProperties = HashMap<String, CSSValue>;
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize)]
+#[serde(untagged)]
 pub enum CSSValue {
     String(String),
     Number(f64),
@@ -624,5 +730,6 @@ pub type WindowStyles = HashMap<String, CSSProperties>;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum BufferWindowImageAlignment {InlineCenter,InlineDown, InlineUp, MarginLeft, MarginRight}
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TextInputType {Char, Line}

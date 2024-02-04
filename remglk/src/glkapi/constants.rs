@@ -11,6 +11,8 @@ https://github.com/curiousdannii/remglk-rs
 
 #![allow(non_upper_case_globals)]
 
+use serde::{Deserialize, Serialize};
+
 use super::*;
 
 pub const gestalt_Version: u32 = 0;
@@ -177,8 +179,9 @@ pub const wintype_Blank: u32 = 2;
 pub const wintype_TextBuffer: u32 = 3;
 pub const wintype_TextGrid: u32 = 4;
 pub const wintype_Graphics: u32 = 5;
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq, Serialize)]
 #[repr(C)]
+#[serde(rename_all = "lowercase")]
 pub enum WindowType {
     All = 0,
     Pair = 1,
@@ -224,7 +227,7 @@ pub const fileusage_SavedGame: u32 = 0x01;
 pub const fileusage_Transcript: u32 = 0x02;
 pub const fileusage_InputRecord: u32 = 0x03;
 pub const fileusage_TypeMask: u32 = 0x0f;
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Default, Deserialize, PartialEq)]
 #[repr(C)]
 pub enum FileType {
     #[default]
