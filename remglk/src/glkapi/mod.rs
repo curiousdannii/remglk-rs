@@ -154,6 +154,8 @@ where S: Default + GlkSystem {
 
     pub fn glk_exit(&mut self) {
         self.exited = true;
+        let update = self.update();
+        self.system.send_glkote_update(update);
     }
 
     pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
@@ -383,7 +385,8 @@ where S: Default + GlkSystem {
 
     pub fn glk_select(&mut self) -> GlkResult<GlkEvent> {
         let update = self.update();
-        let event = self.system.send_glkote_update(update);
+        self.system.send_glkote_update(update);
+        let event = self.system.get_glkote_event();
         self.handle_event(event)
     }
 
@@ -489,7 +492,7 @@ where S: Default + GlkSystem {
         self.current_stream = str.map(|str| str.downgrade());
     }
 
-    pub fn glk_stream_set_position(str: &GlkStream, mode: SeekMode, pos: i32) {
+    pub fn glk_stream_set_position(str: &GlkStream, pos: i32, mode: SeekMode) {
         lock!(str).set_position(mode, pos);
     }
 
@@ -846,7 +849,7 @@ where S: Default + GlkSystem {
     // The GlkOte protocol functions
 
     pub fn get_glkote_init(&mut self) {
-        let event = self.system.get_glkote_init();
+        let event = self.system.get_glkote_event();
         self.handle_event(event).unwrap();
     }
 
@@ -1027,7 +1030,7 @@ where S: Default + GlkSystem {
 
         // TODO: Autorestore state
 
-        unimplemented!()
+        Update::State(state)
     }
 
     // Internal functions

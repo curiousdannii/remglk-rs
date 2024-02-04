@@ -92,6 +92,7 @@ pub extern "C" fn glk_char_to_upper(val: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn glk_exit() {
     glkapi().lock().unwrap().glk_exit();
+    std::process::exit(0);
 }
 
 #[no_mangle]
@@ -401,8 +402,8 @@ pub extern "C" fn glk_stream_set_current(str: StreamPtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn glk_stream_set_position(str: StreamPtr, mode: SeekMode, pos: i32) {
-    GlkApi::glk_stream_set_position(&from_ptr(str), mode, pos);
+pub extern "C" fn glk_stream_set_position(str: StreamPtr, pos: i32, mode: SeekMode) {
+    GlkApi::glk_stream_set_position(&from_ptr(str), pos, mode);
 }
 
 #[no_mangle]

@@ -27,7 +27,6 @@ pub struct Event {
     /** Generation number */
     pub gen: u32,
     /** Partial line input values */
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub partial: PartialInputs,
     /** The specific event data */
     #[serde(flatten)]
@@ -35,6 +34,7 @@ pub struct Event {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum EventData {
     Arrange(ArrangeEvent),
@@ -47,6 +47,7 @@ pub enum EventData {
     Mouse(MouseEvent),
     Redraw(RedrawEvent),
     Refresh(RefreshEvent),
+    #[serde(rename = "specialresponse")]
     Special(SpecialEvent),
     Timer(TimerEvent),
 }
@@ -54,14 +55,12 @@ pub enum EventData {
 pub type PartialInputs = Option<HashMap<u32, String>>;
 
 #[derive(Deserialize)]
-#[serde(rename = "arrange")]
 pub struct ArrangeEvent {
     pub metrics: Metrics,
 }
 
 /** Character (single key) event */
 #[derive(Deserialize)]
-#[serde(rename = "char")]
 pub struct CharEvent {
     /** Character that was received */
     pub value: String,
@@ -70,20 +69,17 @@ pub struct CharEvent {
 }
 
 #[derive(Deserialize)]
-#[serde(rename = "debug")]
 pub struct DebugEvent {
     pub value: String,
 }
 
 #[derive(Deserialize)]
-#[serde(rename = "external")]
 pub struct ExternalEvent {
     // TODO?
     //value: any,
 }
 
 #[derive(Deserialize)]
-#[serde(rename = "hyperlink")]
 pub struct HyperlinkEvent {
     pub value: u32,
     /** Window ID */
@@ -92,10 +88,7 @@ pub struct HyperlinkEvent {
 
 /** Initilisation event */
 #[derive(Deserialize)]
-#[serde(rename = "init")]
 pub struct InitEvent {
-    /** Generation number, should be 0! */
-    pub gen: u32,
     pub metrics: Metrics,
     /** Capabilities list */
     pub support: Vec<String>,
@@ -103,7 +96,6 @@ pub struct InitEvent {
 
 /** Line (text) event */
 #[derive(Deserialize)]
-#[serde(rename = "line")]
 pub struct LineEvent {
     /* Terminator key */
     //pub terminator: Option<TerminatorCode>,
@@ -114,7 +106,6 @@ pub struct LineEvent {
 }
 
 #[derive(Deserialize)]
-#[serde(rename = "mouse")]
 pub struct MouseEvent {
     /** Window ID */
     pub window: u32,
@@ -125,18 +116,15 @@ pub struct MouseEvent {
 }
 
 #[derive(Deserialize)]
-#[serde(rename = "redraw")]
 pub struct RedrawEvent {
     /** Window ID */
     pub window: Option<u32>,
 }
 
 #[derive(Deserialize)]
-#[serde(rename = "refresh")]
 pub struct RefreshEvent {}
 
 #[derive(Deserialize)]
-#[serde(rename = "specialresponse")]
 pub struct SpecialEvent {
     /** Response type */
     pub response: String,
@@ -154,7 +142,6 @@ pub struct SystemFileRef {
 }
 
 #[derive(Deserialize)]
-#[serde(rename = "timer")]
 pub struct TimerEvent {}
 
 /** Screen and font metrics - all potential options */
@@ -394,31 +381,29 @@ impl From<Metrics> for GlkResult<'static, NormalisedMetrics> {
 
 /** GlkApi/RemGlk->GlkOte content updates */
 #[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum Update {
     Error(ErrorUpdate),
     Pass(PassUpdate),
     Retry(RetryUpdate),
+    #[serde(rename = "update")]
     State(StateUpdate),
 }
 
 #[derive(Serialize)]
-#[serde(rename = "error")]
 pub struct ErrorUpdate {
     /** Error message */
     pub message: String,
 }
 
 #[derive(Serialize)]
-#[serde(rename = "pass")]
 pub struct PassUpdate {}
 
 #[derive(Serialize)]
-#[serde(rename = "retry")]
 pub struct RetryUpdate {}
 
 #[derive(Default, Serialize)]
-#[serde(rename = "update")]
 pub struct StateUpdate {
     /* Library specific autorestore data */
     //pub autorestore: Option,

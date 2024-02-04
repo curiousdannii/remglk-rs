@@ -16,6 +16,7 @@ use std::ffi::{c_char, c_int, CStr, CString};
 use std::slice;
 use std::str;
 
+use remglk::glkapi::constants::*;
 use thiserror::Error;
 
 use crate::common::*;
@@ -63,7 +64,7 @@ pub fn process_args() -> ArgProcessingResults {
         // Add the program name
         push_arg(&args[0]);
 
-        let mut args_iter = args.iter().peekable();
+        let mut args_iter = args[1..].iter().peekable();
         'outer: while let Some(arg) = args_iter.next() {
             // Go through all of the app arguments
 
@@ -141,7 +142,7 @@ pub fn process_args() -> ArgProcessingResults {
     }
 
     let args: Vec<String> = env::args().collect();
-    let app_arguments = unsafe{glkunix_arguments()};
+    let app_arguments = unsafe {glkunix_arguments()};
     match process_args_inner(&args, &app_arguments) {
         Ok(InnerResult::Help) => ArgProcessingResults::Msg(print_usage(&args[0], &app_arguments)),
         Ok(InnerResult::ProcessedArgs(args)) => ArgProcessingResults::ProcessedArgs(args),
@@ -168,10 +169,11 @@ unsafe fn glkunix_arguments() -> Vec<GlkUnixArgument> {
     }
 
     extern "C" {
-        static glkunix_arguments: *const GlkUnixArgumentC;
+        fn glkunix_arguments_addr() -> *const GlkUnixArgumentC;
     }
 
     // Count how many arguments there are
+    let glkunix_arguments = glkunix_arguments_addr();
     let len = (0..)
         .map(|i| glkunix_arguments.offset(i))
         .take_while(|&arg| (*arg).argtype != glkunix_arg_End)
@@ -193,10 +195,8 @@ pub extern "C" fn glkunix_stream_open_pathname(filename_ptr: *const i8, textmode
     let mut glkapi = glkapi().lock().unwrap();
     let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
     let filename = filename_cstr.to_string_lossy().to_string();
-    let fileref = glkapi.glk_fileref_create_by_name_uncleaned(0, filename, rock);
-    let str = glkapi.glk_stream_open_file(&fileref, textmode, rock).unwrap().unwrap();
+    let fileref = glkapi.glk_fileref_create_by_name_uncleaned(filemode_Read | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename, rock);
+    let str = glkapi.glk_stream_open_file(&fileref, filemode_Read, rock).unwrap().unwrap();
     glkapi.glk_fileref_destroy(fileref);
-    let str_copy = str.clone();
-    let _ = glkapi.glk_stream_close(str);
-    to_owned(str_copy)
+    to_owned(str)
 }

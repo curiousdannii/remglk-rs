@@ -84,9 +84,11 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
     pub fn new() -> Self {
         GlkObjectStore {
             counter: 1,
+            first: None,
             object_class: T::get_object_class_id(),
+            register_cb: None,
             store: vec![],
-            ..Default::default()
+            unregister_cb: None,
         }
     }
 

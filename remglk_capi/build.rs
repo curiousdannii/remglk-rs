@@ -15,6 +15,7 @@ fn main() {
         .file("src/glk/gi_debug.c")
         .file("src/glk/gi_dispa.c")
         .file("src/glk/rgblorb.c")
+        .file("src/glk/support.c")
         .warnings(false)
         .compile("miniglk");
     println!("cargo:rerun-if-changed=src/");

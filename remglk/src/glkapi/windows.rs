@@ -204,7 +204,6 @@ where T: Default + WindowOperations {
     }
 }
 
-#[derive(Default)]
 pub struct BufferWindow {
     cleared: bool,
     content: Vec<Paragraph>,
@@ -212,16 +211,8 @@ pub struct BufferWindow {
 }
 
 impl BufferWindow {
-    pub fn new() -> Self {
-        BufferWindow {
-            cleared: true,
-            content: vec![Paragraph::new(TextRun::default())],
-            echo_line_input: true,
-        }
-    }
-
     fn clear_content(&mut self, new: Option<&TextRun>) {
-        let new = new.unwrap_or(self.last_textrun()).clone("");
+        let new = new.unwrap_or_else(|| self.last_textrun()).clone("");
         self.content = vec![Paragraph {
             append: true,
             content: vec![LineData::TextRun(new)],
@@ -324,6 +315,16 @@ impl WindowOperations for BufferWindow {
 
         self.clear_content(Some(&last_textrun));
         update
+    }
+}
+
+impl Default for BufferWindow {
+    fn default() -> Self {
+        BufferWindow {
+            cleared: true,
+            content: vec![Paragraph::new(TextRun::default())],
+            echo_line_input: true,
+        }
     }
 }
 

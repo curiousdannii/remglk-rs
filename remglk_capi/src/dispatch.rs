@@ -14,7 +14,6 @@ use std::mem;
 
 use remglk::glkapi::*;
 use objects::*;
-use std::sync::Mutex;
 
 use super::*;
 use common::*;
@@ -37,30 +36,26 @@ pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCal
     glkapi.windows.set_callbacks(register, unregister);
 }
 
+// The C function `gidispatch_get_objrock` takes a generic pointer, which we can't really deal with here in Rust, so support.c will handle calling the appropriate function
 #[no_mangle]
-pub unsafe extern "C" fn gidispatch_get_objrock(ptr: *const c_void, objclass: u32) -> *const DispatchRock {
-    match objclass {
-        0 => {
-            let ptr = mem::transmute::<*const c_void, WindowPtr>(ptr);
-            obj_ptr_to_disprock(ptr)
-        },
-        1 => {
-            let ptr = mem::transmute::<*const c_void, StreamPtr>(ptr);
-            obj_ptr_to_disprock(ptr)
-        },
-        2 => {
-            let ptr = mem::transmute::<*const c_void, FileRefPtr>(ptr);
-            obj_ptr_to_disprock(ptr)
-        },
-        _ => unreachable!(),
-    }
-}
-
-fn obj_ptr_to_disprock<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> *const DispatchRock {
+pub extern "C" fn gidispatch_get_objrock_fileref(ptr: FileRefPtr) -> *const DispatchRock {
     let obj = from_ptr(ptr);
     let obj = obj.lock().unwrap();
-    let disprock = obj.disprock.as_ref().unwrap();
-    disprock
+    obj.disprock.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn gidispatch_get_objrock_stream(ptr: StreamPtr) -> *const DispatchRock {
+    let obj = from_ptr(ptr);
+    let obj = obj.lock().unwrap();
+    obj.disprock.as_ref().unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn gidispatch_get_objrock_window(ptr: WindowPtr) -> *const DispatchRock {
+    let obj = from_ptr(ptr);
+    let obj = obj.lock().unwrap();
+    obj.disprock.as_ref().unwrap()
 }
 
 type RetainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char) -> DispatchRock;

@@ -11,6 +11,7 @@ https://github.com/curiousdannii/remglk-rs
 
 use std::env::temp_dir;
 use std::fs;
+use std::io::{self, BufRead};
 use std::path::Path;
 
 use super::*;
@@ -63,11 +64,23 @@ impl GlkSystem for StandardSystem {
         }
     }
 
-    fn get_glkote_init(&mut self) -> Event {
-        unimplemented!()
+    fn get_glkote_event(&mut self) -> Event {
+        // Read a line from stdin
+        let stdin = io::stdin();
+        for line in stdin.lock().lines() {
+            let data = line.unwrap();
+            if data.is_empty() {
+                continue;
+            }
+            let event: Event = serde_json::from_str(&data).unwrap();
+            return event;
+        }
+        unreachable!()
     }
 
-    fn send_glkote_update(&mut self, _update: Update) -> Event {
-        unimplemented!()
+    fn send_glkote_update(&mut self, update: Update) {
+        // Send the update
+        let output = serde_json::to_string(&update).unwrap();
+        println!("{}", output);
     }
 }
