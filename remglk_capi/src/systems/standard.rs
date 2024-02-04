@@ -63,6 +63,10 @@ impl GlkSystem for StandardSystem {
         }
     }
 
+    fn get_glkote_init(&mut self) -> Event {
+        unimplemented!()
+    }
+
     fn send_glkote_update(&mut self, _update: Update) -> Event {
         unimplemented!()
     }

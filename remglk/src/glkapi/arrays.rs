@@ -11,9 +11,6 @@ https://github.com/curiousdannii/remglk-rs
 
 use super::*;
 
-pub const MAX_LATIN1: u32 = 0xFF;
-pub const QUESTION_MARK: u32 = '?' as u32;
-
 /** A Glk buffer argument */
 pub enum GlkBuffer<'a> {
     U8(&'a [u8]),

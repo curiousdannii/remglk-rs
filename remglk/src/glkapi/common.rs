@@ -16,12 +16,19 @@ use byteorder::{BigEndian, ReadBytesExt};
 use thiserror::Error;
 use widestring::Utf32String;
 
+use super::*;
+
+pub const MAX_LATIN1: u32 = 0xFF;
+pub const QUESTION_MARK: u32 = '?' as u32;
+
 #[derive(Debug, Error)]
 pub enum GlkApiError {
     #[error("cannot change window split direction")]
     CannotChangeWindowSplitDirection,
     #[error("cannot close window stream")]
     CannotCloseWindowStream,
+    #[error("event not supported")]
+    EventNotSupported,
     #[error("illegal filemode")]
     IllegalFilemode,
     #[error("invalid reference")]
@@ -46,6 +53,8 @@ pub enum GlkApiError {
     NotGridWindow,
     #[error("invalid window: not a pair window")]
     NotPairWindow,
+    #[error("outspacing must be zero")]
+    OutspacingMustBeZero,
     #[error("window already has keyboard request")]
     PendingKeyboardRequest,
     #[error("window has pending line input")]
@@ -60,6 +69,8 @@ pub enum GlkApiError {
     WindowDoesntSupportLineInput,
     #[error("cannot write to read-only stream")]
     WriteToReadOnly,
+    #[error("event has wrong generation number: expected {0}, received {1}")]
+    WrongGeneration(u32, u32),
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]

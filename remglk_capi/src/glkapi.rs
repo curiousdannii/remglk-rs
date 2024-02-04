@@ -294,7 +294,7 @@ pub extern "C" fn glk_request_timer_events(msecs: u32) {
 
 #[no_mangle]
 pub extern "C" fn glk_select(ev_ptr: *mut GlkEvent) {
-    let res: GlkEvent = glkapi().lock().unwrap().glk_select().into();
+    let res = glkapi().lock().unwrap().glk_select().unwrap().into();
     write_ptr(ev_ptr, res);
 }
 

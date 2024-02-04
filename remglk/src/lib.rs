@@ -27,6 +27,8 @@ pub trait GlkSystem {
     fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef;
     fn fileref_write(&mut self, fileref: &SystemFileRef, buf: GlkBuffer) -> GlkResult<()>;
 
-    // Send an upate to GlkOte, and get an Event back!
+    /** Wait for the initial event with the metrics */
+    fn get_glkote_init(&mut self) -> Event;
+    /** Send an upate to GlkOte, and get an Event back! */
     fn send_glkote_update(&mut self, update: Update) -> Event;
 }

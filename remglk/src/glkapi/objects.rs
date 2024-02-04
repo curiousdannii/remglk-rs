@@ -9,12 +9,10 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-use std::collections::HashSet;
-use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex, Weak};
 
-/** Wraps a Glk object in an `Arc<Mutex>`, and ensures they can be hashed */
+/** Wraps a Glk object in an `Arc<Mutex>` */
 #[derive(Default)]
 pub struct GlkObject<T> {
     pub obj: Arc<Mutex<GlkObjectMetadata<T>>>,
@@ -63,13 +61,6 @@ impl<T> From<&GlkObjectWeak<T>> for GlkObject<T> {
     }
 }
 
-// Hash GlkObjects by the Arc's pointer
-impl<T> Hash for GlkObject<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.obj).hash(state);
-    }
-}
-
 // Two GlkObject are equal if they point to the same object
 impl<T> PartialEq for GlkObject<T> {
     fn eq(&self, other: &Self) -> bool {
@@ -84,7 +75,7 @@ pub struct GlkObjectStore<T> {
     first: Option<GlkObjectWeak<T>>,
     object_class: u32,
     register_cb: Option<DispatchRegisterCallback<T>>,
-    pub store: HashSet<GlkObject<T>>,
+    store: Vec<GlkObject<T>>,
     unregister_cb: Option<DispatchUnregisterCallback<T>>,
 }
 
@@ -94,9 +85,18 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         GlkObjectStore {
             counter: 1,
             object_class: T::get_object_class_id(),
-            store: HashSet::new(),
+            store: vec![],
             ..Default::default()
         }
+    }
+
+    pub fn get_by_id(&self, id: u32) -> Option<GlkObject<T>> {
+        let pos = self.store.iter().position(|obj| obj.lock().unwrap().id == id);
+        pos.map(|id| self.store[id].clone())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=&GlkObject<T>>{
+        self.store.iter()
     }
 
     pub fn iterate(&self, obj: Option<&GlkObject<T>>) -> Option<GlkObject<T>> {
@@ -119,7 +119,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         match self.first.as_ref() {
             None => {
                 self.first = Some(obj_glkobj.downgrade());
-                self.store.insert(obj_glkobj.clone());
+                self.store.push(obj_glkobj.clone());
             },
             Some(old_first) => {
                 obj.next = Some(old_first.clone());
@@ -127,7 +127,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
                 let mut old_first = old_first.lock().unwrap();
                 old_first.prev = Some(obj_glkobj.downgrade());
                 self.first = Some(obj_glkobj.downgrade());
-                self.store.insert(obj_glkobj.clone());
+                self.store.push(obj_glkobj.clone());
             }
         };
     }
@@ -166,7 +166,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
             let disprock = obj.disprock.take().unwrap();
             unregister_cb(obj_ptr, self.object_class, disprock);
         }
-        self.store.remove(&obj_glkobj);
+        self.store.swap_remove(self.store.iter().position(|obj| obj == &obj_glkobj).unwrap());
         assert_eq!(Arc::strong_count(&obj_glkobj), 1, "Dangling strong reference to obj after it was unregistered");
     }
 }
@@ -177,8 +177,6 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         GlkObjectStore::new()
     }
 }
-
-
 
 /** Contains the private metadata we keep in each object store */
 #[derive(Default)]

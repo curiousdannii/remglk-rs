@@ -86,6 +86,35 @@ pub enum TerminatorCode {
     Func11 = 0xffffffe5,
     Func12 = 0xffffffe4,
 }
+pub fn key_name_to_code(key: &str) -> u32 {
+    match key {
+        "delete" => keycode_Delete,
+        "down" => keycode_Down,
+        "end" => keycode_End,
+        "escape" => keycode_Escape,
+        "func1" => keycode_Func1,
+        "func2" => keycode_Func2,
+        "func3" => keycode_Func3,
+        "func4" => keycode_Func4,
+        "func5" => keycode_Func5,
+        "func6" => keycode_Func6,
+        "func7" => keycode_Func7,
+        "func8" => keycode_Func8,
+        "func9" => keycode_Func9,
+        "func10" => keycode_Func10,
+        "func11" => keycode_Func11,
+        "func12" => keycode_Func12,
+        "home" => keycode_Home,
+        "left" => keycode_Left,
+        "pagedown" => keycode_PageDown,
+        "pageup" => keycode_PageUp,
+        "return" => keycode_Return,
+        "right" => keycode_Right,
+        "tab" => keycode_Tab,
+        "up" => keycode_Up,
+        _ => keycode_Unknown,
+    }
+}
 
 pub const evtype_None: u32 = 0;
 pub const evtype_Timer: u32 = 1;

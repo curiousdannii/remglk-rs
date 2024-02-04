@@ -19,7 +19,16 @@ use super::*;
 */
 
 /** GlkOte->GlkApi/RemGlk input events */
-pub enum Event {
+pub struct Event {
+    /** Generation number */
+    pub gen: u32,
+    /** Partial line input values */
+    pub partial: PartialInputs,
+    /** The specific event data */
+    pub data: EventData,
+}
+
+pub enum EventData {
     Arrange(ArrangeEvent),
     Char(CharEvent),
     Debug(DebugEvent),
@@ -34,46 +43,30 @@ pub enum Event {
     Timer(TimerEvent),
 }
 
-pub struct EventBase {
-    /** Generation number */
-    pub gen: u32,
-    /** Partial line input values */
-    pub partial: PartialInputs,
-}
-
 pub type PartialInputs = Option<HashMap<u32, String>>;
 
 pub struct ArrangeEvent {
-    pub base: EventBase,
     pub metrics: Metrics,
 }
 
 /** Character (single key) event */
 pub struct CharEvent {
-    pub base: EventBase,
     /** Character that was received */
-    pub value: CharEventData,
+    pub value: String,
     /** Window ID */
     pub window: u32,
 }
-pub enum CharEventData {
-    NormalKey(char),
-    SpecialKey(SpecialKeyCode),
-}
 
 pub struct DebugEvent {
-    pub base: EventBase,
     pub value: String,
 }
 
 pub struct ExternalEvent {
-    pub base: EventBase,
     // TODO?
     //value: any,
 }
 
 pub struct HyperlinkEvent {
-    pub base: EventBase,
     pub value: u32,
     /** Window ID */
     pub window: u32,
@@ -81,7 +74,6 @@ pub struct HyperlinkEvent {
 
 /** Initilisation event */
 pub struct InitEvent {
-    pub base: EventBase,
     pub metrics: Metrics,
     /** Capabilities list */
     pub support: Vec<String>,
@@ -89,7 +81,6 @@ pub struct InitEvent {
 
 /** Line (text) event */
 pub struct LineEvent {
-    pub base: EventBase,
     /** Terminator key */
     pub terminator: Option<TerminatorCode>,
     /** Line input */
@@ -99,7 +90,6 @@ pub struct LineEvent {
 }
 
 pub struct MouseEvent {
-    pub base: EventBase,
     /** Window ID */
     pub window: u32,
     /** Mouse click X */
@@ -109,17 +99,13 @@ pub struct MouseEvent {
 }
 
 pub struct RedrawEvent {
-    pub base: EventBase,
     /** Window ID */
     pub window: Option<u32>,
 }
 
-pub struct RefreshEvent {
-    pub base: EventBase,
-}
+pub struct RefreshEvent {}
 
 pub struct SpecialEvent {
-    pub base: EventBase,
     /** Event value (file reference from Dialog) */
     pub value: Option<SystemFileRef>,
 }
@@ -133,9 +119,7 @@ pub struct SystemFileRef {
     pub usage: Option<FileType>,
 }
 
-pub struct TimerEvent {
-    pub base: EventBase,
-}
+pub struct TimerEvent {}
 
 /** Screen and font metrics - all potential options */
 pub struct Metrics {
@@ -198,7 +182,6 @@ pub struct Metrics {
 }
 
 /** Normalised screen and font metrics */
-#[derive(Default)]
 pub struct NormalisedMetrics {
     /** Buffer character height */
     pub buffercharheight: f64,
@@ -225,11 +208,151 @@ pub struct NormalisedMetrics {
     pub inspacingx: f64,
     /** Inspacing Y */
     pub inspacingy: f64,
-    /** Outspacing X */
-    pub outspacingx: f64,
-    /** Outspacing Y */
-    pub outspacingy: f64,
     pub width: f64,
+}
+
+impl Default for NormalisedMetrics {
+    fn default() -> Self {
+        NormalisedMetrics {
+            buffercharheight: 1.0,
+            buffercharwidth: 1.0,
+            buffermarginx: 0.0,
+            buffermarginy: 0.0,
+            graphicsmarginx: 0.0,
+            graphicsmarginy: 0.0,
+            gridcharheight: 1.0,
+            gridcharwidth: 1.0,
+            gridmarginx: 0.0,
+            gridmarginy: 0.0,
+            height: 50.0,
+            inspacingx: 0.0,
+            inspacingy: 0.0,
+            width: 80.0,
+        }
+    }
+}
+
+impl NormalisedMetrics {
+    fn apply_unnormalised(&mut self, metrics: &Metrics) {
+        if let Some(val) = metrics.buffercharheight {
+            self.buffercharheight = val;
+        }
+        if let Some(val) = metrics.buffercharwidth {
+            self.buffercharwidth = val;
+        }
+        if let Some(val) = metrics.buffermarginx {
+            self.buffermarginx = val;
+        }
+        if let Some(val) = metrics.buffermarginy {
+            self.buffermarginy = val;
+        }
+        if let Some(val) = metrics.graphicsmarginx {
+            self.graphicsmarginx = val;
+        }
+        if let Some(val) = metrics.graphicsmarginy {
+            self.graphicsmarginy = val;
+        }
+        if let Some(val) = metrics.gridcharheight {
+            self.gridcharheight = val;
+        }
+        if let Some(val) = metrics.gridcharwidth {
+            self.gridcharwidth = val;
+        }
+        if let Some(val) = metrics.gridmarginx {
+            self.gridmarginx = val;
+        }
+        if let Some(val) = metrics.gridmarginy {
+            self.gridmarginy = val;
+        }
+        self.height = metrics.height;
+        if let Some(val) = metrics.inspacingx {
+            self.inspacingx = val;
+        }
+        if let Some(val) = metrics.inspacingy {
+            self.inspacingy = val;
+        }
+        self.width = metrics.width;
+    }
+}
+
+impl From<Metrics> for GlkResult<'static, NormalisedMetrics> {
+    fn from(metrics: Metrics) -> Self {
+        if let Some(val) = metrics.outspacing {
+            if val > 0.0 {
+                return Err(OutspacingMustBeZero);
+            }
+        }
+        if let Some(val) = metrics.outspacingx {
+            if val > 0.0 {
+                return Err(OutspacingMustBeZero);
+            }
+        }
+        if let Some(val) = metrics.outspacingy {
+            if val > 0.0 {
+                return Err(OutspacingMustBeZero);
+            }
+        }
+
+        let mut normalised_metrics = NormalisedMetrics::default();
+
+        if let Some(val) = metrics.charheight {
+            normalised_metrics.buffercharheight = val;
+            normalised_metrics.gridcharheight = val;
+        }
+        if let Some(val) = metrics.charwidth {
+            normalised_metrics.buffercharwidth = val;
+            normalised_metrics.gridcharwidth = val;
+        }
+
+        if let Some(val) = metrics.margin {
+            normalised_metrics.buffermarginx = val;
+            normalised_metrics.buffermarginy = val;
+            normalised_metrics.graphicsmarginx = val;
+            normalised_metrics.graphicsmarginy = val;
+            normalised_metrics.gridmarginx = val;
+            normalised_metrics.gridmarginy = val;
+        }
+        if let Some(val) = metrics.buffermargin {
+            normalised_metrics.buffermarginx = val;
+            normalised_metrics.buffermarginy = val;
+        }
+        if let Some(val) = metrics.graphicsmargin {
+            normalised_metrics.graphicsmarginx = val;
+            normalised_metrics.graphicsmarginy = val;
+        }
+        if let Some(val) = metrics.gridmargin {
+            normalised_metrics.gridmarginx = val;
+            normalised_metrics.gridmarginy = val;
+        }
+        if let Some(val) = metrics.marginx {
+            normalised_metrics.buffermarginx = val;
+            normalised_metrics.graphicsmarginx = val;
+            normalised_metrics.gridmarginx = val;
+        }
+        if let Some(val) = metrics.marginy {
+            normalised_metrics.buffermarginy = val;
+            normalised_metrics.graphicsmarginy = val;
+            normalised_metrics.gridmarginy = val;
+        }
+
+        if let Some(val) = metrics.spacing {
+            normalised_metrics.inspacingx = val;
+            normalised_metrics.inspacingy = val;
+        }
+        if let Some(val) = metrics.inspacing {
+            normalised_metrics.inspacingx = val;
+            normalised_metrics.inspacingy = val;
+        }
+        if let Some(val) = metrics.spacingx {
+            normalised_metrics.inspacingx = val;
+        }
+        if let Some(val) = metrics.spacingy {
+            normalised_metrics.inspacingy = val;
+        }
+
+        normalised_metrics.apply_unnormalised(&metrics);
+        Ok(normalised_metrics)
+    }
 }
 
 /** GlkApi/RemGlk->GlkOte content updates */
@@ -501,7 +624,5 @@ pub type WindowStyles = HashMap<String, CSSProperties>;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum BufferWindowImageAlignment {InlineCenter,InlineDown, InlineUp, MarginLeft, MarginRight}
-#[derive(Copy, Clone, PartialEq)]
-pub enum SpecialKeyCode {Delete, Down, End, Escape, Func1, Func2, Func3, Func4, Func5, Func6, Func7, Func8, Func9, Func10, Func11, Func12, Home, Left, Pagedown, Pageup, Return, Right, Tab, Up}
 #[derive(Copy, Clone, PartialEq)]
 pub enum TextInputType {Char, Line}

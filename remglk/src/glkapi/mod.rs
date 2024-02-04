@@ -112,19 +112,19 @@ where S: Default + GlkSystem {
         lock!(win).input.hyperlink = false;
     }
 
-    pub fn glk_cancel_line_event(&mut self, win: &GlkWindow) -> GlkResult<GlkEvent> {
-        let mut win_locked = lock!(win);
-        if let Some(TextInputType::Line) = win_locked.input.text_input_type {
-            let partial = self.partial_inputs.as_mut().map(|partials| partials.remove(&win_locked.id)).flatten().unwrap_or("".to_string());
+    pub fn glk_cancel_line_event(&mut self, win_glkobj: &GlkWindow) -> GlkResult<GlkEvent> {
+        let mut win = lock!(win_glkobj);
+        if let Some(TextInputType::Line) = win.input.text_input_type {
+            let partial = self.partial_inputs.as_mut().map(|partials| partials.remove(&win.id)).flatten().unwrap_or("".to_string());
             // Steal the data temporarily so that we're not double borrowing the window
-            let mut data = mem::take(&mut win_locked.data);
+            let mut data = mem::take(&mut win.data);
             let mut res = match &mut data {
-                WindowData::Buffer(data) => self.handle_line_input(&mut win_locked, data, &partial, None)?,
-                WindowData::Grid(data) => self.handle_line_input(&mut win_locked, data, &partial, None)?,
+                WindowData::Buffer(data) => self.handle_line_input(&mut win, data, &partial, None)?,
+                WindowData::Grid(data) => self.handle_line_input(&mut win, data, &partial, None)?,
                 _ => unreachable!(),
             };
-            win_locked.data = data;
-            res.win = Some(win.clone());
+            win.data = data;
+            res.win = Some(win_glkobj.clone());
             Ok(res)
         }
         else {
@@ -381,7 +381,7 @@ where S: Default + GlkSystem {
         self.timer.started = if msecs > 0 {Some(SystemTime::now())} else {None}
     }
 
-    pub fn glk_select(&mut self) -> GlkEvent {
+    pub fn glk_select(&mut self) -> GlkResult<GlkEvent> {
         let update = self.update();
         let event = self.system.send_glkote_update(update);
         self.handle_event(event)
@@ -845,8 +845,145 @@ where S: Default + GlkSystem {
 
     // The GlkOte protocol functions
 
-    fn handle_event(&mut self, _event: Event) -> GlkEvent {
-        unimplemented!()
+    pub fn get_glkote_init(&mut self) {
+        let event = self.system.get_glkote_init();
+        self.handle_event(event).unwrap();
+    }
+
+    fn handle_event(&mut self, mut event: Event) -> GlkResult<GlkEvent> {
+        if event.gen != self.gen {
+            if let EventData::Init(_) = event.data {}
+            else {
+                return Err(WrongGeneration(self.gen, event.gen));
+            }
+        }
+        self.gen += 1;
+
+        // TODO: special event handling
+
+        self.partial_inputs = event.partial.take();
+
+        let mut glkevent = GlkEvent::default();
+        match event.data {
+            EventData::Init(data) => {
+                self.metrics = normalise_metrics(data.metrics)?;
+                for support in data.support {
+                    match support.as_ref() {
+                        "hyperlinks" => self.support.hyperlinks = true,
+                        "timer" => self.support.timers = true,
+                        _ => {},
+                    };
+                }
+            },
+
+            EventData::Arrange(data) => {
+                self.metrics = normalise_metrics(data.metrics)?;
+                if let Some(win) = self.root_window.as_ref() {
+                    let win = Into::<GlkWindow>::into(win);
+                    self.rearrange_window(&win, WindowBox {
+                        bottom: self.metrics.height,
+                        right: self.metrics.width,
+                        ..Default::default()
+                    })?;
+                }
+                glkevent = GlkEvent {
+                    evtype: GlkEventType::Arrange,
+                    ..Default::default()
+                };
+            },
+
+            EventData::Char(data) => {
+                if let Some(win_glkobj) = self.windows.get_by_id(data.window) {
+                    let mut win = lock!(win_glkobj);
+                    if let Some(TextInputType::Char) = win.input.text_input_type {
+                        win.input.text_input_type = None;
+                        let val = if data.value.len() == 1 {
+                            let val = data.value.chars().next().unwrap() as u32;
+                            if !win.uni_char_input && val > MAX_LATIN1 {QUESTION_MARK} else {val}
+                        }
+                        else {
+                            key_name_to_code(&data.value)
+                        };
+                        glkevent = GlkEvent {
+                            evtype: GlkEventType::Char,
+                            win: Some(win_glkobj.clone()),
+                            val1: val,
+                            ..Default::default()
+                        };
+                    }
+                }
+            },
+
+            EventData::Hyperlink(data) => {
+                if let Some(win_glkobj) = self.windows.get_by_id(data.window) {
+                    let mut win = lock!(win_glkobj);
+                    if win.input.hyperlink {
+                        win.input.hyperlink = false;
+                        glkevent = GlkEvent {
+                            evtype: GlkEventType::Hyperlink,
+                            win: Some(win_glkobj.clone()),
+                            val1: data.value,
+                            ..Default::default()
+                        };
+                    }
+                }
+            },
+
+            EventData::Line(data) => {
+                if let Some(win_glkobj) = self.windows.get_by_id(data.window) {
+                    let mut win = lock!(win_glkobj);
+                    if let Some(TextInputType::Line) = win.input.text_input_type {
+                        let mut win_data = mem::take(&mut win.data);
+                        glkevent = match &mut win_data {
+                            WindowData::Buffer(win_data) => self.handle_line_input(&mut win, win_data, &data.value, None)?,
+                            WindowData::Grid(win_data) => self.handle_line_input(&mut win, win_data, &data.value, None)?,
+                            _ => unreachable!(),
+                        };
+                        win.data = win_data;
+                    }
+                }
+            },
+
+            EventData::Mouse(data) => {
+                if let Some(win_glkobj) = self.windows.get_by_id(data.window) {
+                    let mut win = lock!(win_glkobj);
+                    if win.input.mouse {
+                        win.input.mouse = false;
+                        glkevent = GlkEvent {
+                            evtype: GlkEventType::Mouse,
+                            win: Some(win_glkobj.clone()),
+                            val1: data.x,
+                            val2: data.y,
+                        };
+                    }
+                }
+            },
+
+            EventData::Redraw(_) => {
+                glkevent = GlkEvent {
+                    evtype: GlkEventType::Redraw,
+                    ..Default::default()
+                }
+            },
+
+            EventData::Special(_) => {
+                unimplemented!()
+            },
+
+            EventData::Timer(_) => {
+                self.timer.started = Some(SystemTime::now());
+                glkevent = GlkEvent {
+                    evtype: GlkEventType::Timer,
+                    ..Default::default()
+                }
+            },
+
+            _ => {
+                return Err(EventNotSupported);
+            },
+        };
+
+        Ok(glkevent)
     }
 
     fn update(&mut self) -> Update {
@@ -860,7 +997,7 @@ where S: Default + GlkSystem {
         }
 
         // Get the window updates
-        for win in self.windows.store.iter() {
+        for win in self.windows.iter() {
             let mut win = lock!(win);
             if let WindowData::Blank(_) | WindowData::Pair(_) = win.data {
                 continue;
@@ -1249,6 +1386,11 @@ fn create_stream_from_buffer(buf: Vec<u8>, binary: bool, mode: FileMode, unicode
         }
     });
     Ok(str)
+}
+
+fn normalise_metrics(metrics: Metrics) -> GlkResult<'static, NormalisedMetrics> {
+    let res: GlkResult<NormalisedMetrics> = metrics.into();
+    res
 }
 
 fn normalise_window_dimension(val: f64) -> usize {

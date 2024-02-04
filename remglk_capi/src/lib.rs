@@ -17,7 +17,7 @@ mod glkstart;
 
 use std::ffi::{c_char, c_int};
 
-use glkapi::glk_exit;
+use glkapi::{glkapi, glk_exit};
 use glkstart::*;
 
 /** Processed arguments which we give to `glkunix_startup_code` */
@@ -55,6 +55,9 @@ extern "C" fn main() {
     })} == 0 {
         glk_exit();
     }
+
+    // Wait for the initial event with the metrics
+    glkapi().lock().unwrap().get_glkote_init();
 
     unsafe{glk_main()};
     glk_exit();
