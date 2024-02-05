@@ -70,7 +70,7 @@ pub trait StreamOperations {
 */
 #[derive(Default)]
 pub struct ArrayBackedStream<T> {
-    pub buf: Box<[T]>,
+    buf: Box<[T]>,
     /** Whether we need to check if we should expand the active buffer region before writing */
     expandable: bool,
     fmode: FileMode,
@@ -107,6 +107,10 @@ impl<T> ArrayBackedStream<T> {
         if self.len == self.buf.len() {
             self.expandable = false;
         }
+    }
+
+    pub fn take_buffer(&mut self) -> Box<[T]> {
+        mem::take(&mut self.buf)
     }
 }
 

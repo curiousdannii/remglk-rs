@@ -458,6 +458,15 @@ pub struct TextualWindowUpdate {
     pub fg: Option<String>,
 }
 
+impl TextualWindowUpdate {
+    pub fn new(id: u32) -> Self {
+        TextualWindowUpdate {
+            id,
+            ..Default::default()
+        }
+    }
+}
+
 /** Buffer window content update */
 #[derive(Serialize)]
 pub struct BufferWindowContentUpdate {

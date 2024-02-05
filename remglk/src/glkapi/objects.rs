@@ -109,6 +109,10 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         next_weak.map(|obj| (&obj).into())
     }
 
+    pub fn next_id(&self) -> u32 {
+        self.counter
+    }
+
     pub fn register(&mut self, obj_glkobj: &GlkObject<T>, rock: u32) {
         let obj_ptr = obj_glkobj.as_ptr();
         let mut obj = obj_glkobj.lock().unwrap();
@@ -147,7 +151,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
     /** Remove an object from the store */
     pub fn unregister(&mut self, obj_glkobj: GlkObject<T>) {
         let obj_ptr = obj_glkobj.as_ptr();
-        let mut obj = obj_glkobj.lock().unwrap();
+        let obj = obj_glkobj.lock().unwrap();
         let prev = obj.prev();
         let next = obj.next();
         if let Some(prev) = &prev {
@@ -164,9 +168,10 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
                 self.first = next.as_ref().map(|obj| obj.downgrade());
             }
         }
-        if let Some(unregister_cb) = self.unregister_cb {
-            let disprock = obj.disprock.take().unwrap();
-            unregister_cb(obj_ptr, self.object_class, disprock);
+        if let Some(disprock) = obj.disprock {
+            let disprock = disprock.clone();
+            drop(obj);
+            self.unregister_cb.unwrap()(obj_ptr, self.object_class, disprock);
         }
         self.store.swap_remove(self.store.iter().position(|obj| obj == &obj_glkobj).unwrap());
         assert_eq!(Arc::strong_count(&obj_glkobj), 1, "Dangling strong reference to obj after it was unregistered");

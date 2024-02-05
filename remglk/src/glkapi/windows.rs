@@ -25,8 +25,10 @@ pub type GlkWindowWeak = GlkObjectWeak<Window>;
 pub struct Window {
     pub data: WindowData,
     pub echostr: Option<GlkStreamWeak>,
+    pub id: u32,
     pub input: InputUpdate,
     pub parent: Option<GlkWindowWeak>,
+    pub rock: u32,
     pub str: GlkStreamWeak,
     pub wbox: WindowBox,
     pub wintype: WindowType,
@@ -45,14 +47,18 @@ pub enum WindowData {
 #[derive(Default)]
 pub struct WindowUpdate {
     pub content: Option<ContentUpdate>,
+    id: u32,
     pub input: InputUpdate,
     pub size: protocol::WindowUpdate,
 }
 
 impl Window {
-    pub fn new(data: WindowData, wintype: WindowType) -> (GlkWindow, GlkStream) {
+    pub fn new(data: WindowData, id: u32, rock: u32, wintype: WindowType) -> (GlkWindow, GlkStream) {
         let win = GlkObject::new(Window {
             data,
+            id,
+            input: InputUpdate::new(id),
+            rock,
             wintype,
             ..Default::default()
         });
@@ -67,7 +73,7 @@ impl Window {
         }
 
         // Fill in the input update here as WindowData doesn't have access to it
-        let mut input_update = InputUpdate::new(self.input.id);
+        let mut input_update = InputUpdate::new(self.id);
         input_update.hyperlink = self.input.hyperlink;
         input_update.mouse = self.input.mouse;
         if let Some(text_input_type) = self.input.text_input_type {
@@ -81,12 +87,13 @@ impl Window {
 
         // Now give it to the specific window types for them to fill in
         self.data.update(WindowUpdate {
+            id: self.id,
             input: input_update,
             size: protocol::WindowUpdate {
                 height: self.wbox.bottom - self.wbox.top,
-                id: 0, // Must be replaced!
+                id: self.id,
                 left: self.wbox.left,
-                rock: 0, // Must be replaced!
+                rock: self.rock,
                 top: self.wbox.top,
                 wintype: self.wintype,
                 width: self.wbox.right - self.wbox.left,
@@ -303,7 +310,7 @@ impl WindowOperations for BufferWindow {
         // Only send an update if there is new content or the window has been cleared
         if self.cleared || self.content.len() > 1 || !self.content[0].content.is_empty() {
             let mut content_update = BufferWindowContentUpdate {
-                base: TextualWindowUpdate::default(),
+                base: TextualWindowUpdate::new(update.id),
                 text: self.content.drain(..).map(|par| par.into()).collect(),
             };
             if self.cleared {
@@ -504,7 +511,8 @@ impl WindowOperations for GridWindow {
             else {
                 let line = &mut self.lines[self.y];
                 line.changed = true;
-                line.content[self.y] = self.current_styles.clone(&char.to_string());
+                line.content[self.x] = self.current_styles.clone(&char.to_string());
+                self.x += 1;
             }
         }
         if style.is_some() {
@@ -530,7 +538,7 @@ impl WindowOperations for GridWindow {
     fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
         if self.lines.iter().any(|line| line.changed) {
             let mut grid_content = GridWindowContentUpdate {
-                base: TextualWindowUpdate::default(),
+                base: TextualWindowUpdate::new(update.id),
                 lines: self.lines.iter_mut().enumerate().filter_map(|(i, line)| {
                     if !line.changed {
                         return None;

@@ -20,7 +20,7 @@ mod windows;
 
 use std::cmp::min;
 use std::mem;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::str;
 use std::time::SystemTime;
 
@@ -113,18 +113,11 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_cancel_line_event(&mut self, win_glkobj: &GlkWindow) -> GlkResult<GlkEvent> {
-        let mut win = lock!(win_glkobj);
+        let win = lock!(win_glkobj);
         if let Some(TextInputType::Line) = win.input.text_input_type {
             let partial = self.partial_inputs.as_mut().map(|partials| partials.remove(&win.id)).flatten().unwrap_or("".to_string());
-            // Steal the data temporarily so that we're not double borrowing the window
-            let mut data = mem::take(&mut win.data);
-            let mut res = match &mut data {
-                WindowData::Buffer(data) => self.handle_line_input(&mut win, data, &partial, None)?,
-                WindowData::Grid(data) => self.handle_line_input(&mut win, data, &partial, None)?,
-                _ => unreachable!(),
-            };
-            win.data = data;
-            res.win = Some(win_glkobj.clone());
+            // Do we need to drop win here?
+            let res = self.handle_line_input(&win_glkobj, &partial, None)?;
             Ok(res)
         }
         else {
@@ -433,15 +426,15 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<StreamResultCounts> {
-        let str = lock!(str_glkobj);
+        let mut str = lock!(str_glkobj);
         let res = str.close();
         write_stream!(self, str);
 
         if let Some(disprock) = str.array_disprock {
-            match str.deref().deref() {
-                Stream::ArrayBackedU8(str) => self.unretain_array(&GlkBuffer::U8(&str.buf), disprock),
-                Stream::ArrayBackedU32(str) => self.unretain_array(&GlkBuffer::U32(&str.buf), disprock),
-                _ => {},
+            match str.deref_mut().deref_mut() {
+                Stream::ArrayBackedU8(str) => self.unretain_array(GlkOwnedBuffer::U8(str.take_buffer()), disprock),
+                Stream::ArrayBackedU32(str) => self.unretain_array(GlkOwnedBuffer::U32(str.take_buffer()), disprock),
+                _ => unreachable!("Only ArrayBacked streams should have an array_disprock"),
             };
         }
 
@@ -724,7 +717,7 @@ where S: Default + GlkSystem {
             WindowType::Grid => TextWindow::<GridWindow>::new(&self.stylehints_grid).into(),
             _ => {return Err(InvalidWindowType);}
         };
-        let (win, str) = Window::new(windata, wintype);
+        let (win, str) = Window::new(windata, self.windows.next_id(), rock, wintype);
         self.windows.register(&win, rock);
         self.streams.register(&str, 0);
 
@@ -736,7 +729,7 @@ where S: Default + GlkSystem {
             pairwindata.child2 = win.downgrade();
 
             // Now the pairwin object can be created and registered
-            let (pairwin, pairwinstr) = Window::new(pairwindata.into(), WindowType::Pair);
+            let (pairwin, pairwinstr) = Window::new(pairwindata.into(), self.windows.next_id(), 0, WindowType::Pair);
             self.windows.register(&pairwin, 0);
             self.streams.register(&pairwinstr, 0);
 
@@ -935,15 +928,9 @@ where S: Default + GlkSystem {
 
             EventData::Line(data) => {
                 if let Some(win_glkobj) = self.windows.get_by_id(data.window) {
-                    let mut win = lock!(win_glkobj);
-                    if let Some(TextInputType::Line) = win.input.text_input_type {
-                        let mut win_data = mem::take(&mut win.data);
-                        glkevent = match &mut win_data {
-                            WindowData::Buffer(win_data) => self.handle_line_input(&mut win, win_data, &data.value, None)?,
-                            WindowData::Grid(win_data) => self.handle_line_input(&mut win, win_data, &data.value, None)?,
-                            _ => unreachable!(),
-                        };
-                        win.data = win_data;
+                    let text_input_type = lock!(win_glkobj).input.text_input_type;
+                    if let Some(TextInputType::Line) = text_input_type {
+                        glkevent = self.handle_line_input(&win_glkobj, &data.value, None)?;
                     }
                 }
             },
@@ -1093,11 +1080,17 @@ where S: Default + GlkSystem {
         Ok(str)
     }
 
-    fn handle_line_input<T>(&mut self, win: &mut GlkObjectMetadata<Window>, win_data: &mut TextWindow<T>, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent>
-    where T: Default + WindowOperations {
+    fn handle_line_input(&mut self, win_glkobj: &GlkWindow, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent> {
+        let mut win = lock!(win_glkobj);
+        let (request_echo_line_input, mut line_input_buffer) = match &mut win.data {
+            WindowData::Buffer(data) => (data.request_echo_line_input, data.line_input_buffer.take().unwrap()),
+            WindowData::Grid(data) => (data.request_echo_line_input, data.line_input_buffer.take().unwrap()),
+            _ => unreachable!(),
+        };
+
         // The Glk spec is a bit ambiguous here
         // I'm going to echo first
-        if win_data.request_echo_line_input {
+        if request_echo_line_input {
             let mut input_linebreak = input.to_string();
             input_linebreak.push_str("\n");
             win.put_string(&input_linebreak, Some(style_Input));
@@ -1111,28 +1104,22 @@ where S: Default + GlkSystem {
 
         // Convert the input to a buffer and copy into the window's buffer
         let src: GlkOwnedBuffer = input.into();
-        let dest = win_data.line_input_buffer.as_mut().unwrap();
-        let len = min(src.len(), dest.len());
+        let len = min(src.len(), line_input_buffer.len());
         let src_unowned: GlkBuffer = (&src).into();
-        let mut dest_unowned: GlkBufferMut = (dest).into();
+        let mut dest_unowned: GlkBufferMut = (&mut line_input_buffer).into();
         set_buffer(&src_unowned, 0, &mut dest_unowned, 0, len);
 
         if let Some(disprock) = win.array_disprock {
-            match &win.data {
-                WindowData::Buffer(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
-                WindowData::Grid(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
-                _ => {},
-            }
+            self.unretain_array(line_input_buffer, disprock);
         }
 
         win.input.text_input_type = None;
-        win_data.line_input_buffer = None;
 
         Ok(GlkEvent {
             evtype: GlkEventType::Line,
+            win: Some(win_glkobj.clone()),
             val1: src.len() as u32,
             val2: termkey.map_or(0, |termkey| termkey as u32),
-            ..Default::default()
         })
     }
 
@@ -1238,12 +1225,12 @@ where S: Default + GlkSystem {
 
     fn remove_window(&mut self, win_glkobj: GlkWindow, recurse: bool) {
         self.windows_changed = true;
-        let win = lock!(win_glkobj);
+        let mut win = lock!(win_glkobj);
 
         if let Some(disprock) = win.array_disprock {
-            match &win.data {
-                WindowData::Buffer(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
-                WindowData::Grid(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
+            match &mut win.data {
+                WindowData::Buffer(data) => self.unretain_array(data.line_input_buffer.take().unwrap(), disprock),
+                WindowData::Grid(data) => self.unretain_array(data.line_input_buffer.take().unwrap(), disprock),
                 _ => {},
             }
         }
@@ -1314,14 +1301,15 @@ where S: Default + GlkSystem {
     pub fn retain_array(&self, buf: &GlkBuffer) -> DispatchRockPtr {
         match buf {
             GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr()),
-            GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr()),
+            GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Iu".as_ptr()),
         }
     }
 
-    pub fn unretain_array(&self, buf: &GlkBuffer, disprock: DispatchRockPtr) {
+    pub fn unretain_array(&self, buf: GlkOwnedBuffer, disprock: DispatchRockPtr) {
+        let len = buf.len() as u32;
         match buf {
-            GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr(), disprock),
-            GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr(), disprock),
+            GlkOwnedBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, "&+#!Cn".as_ptr(), disprock),
+            GlkOwnedBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, "&+#!Iu".as_ptr(), disprock),
         };
     }
 }
