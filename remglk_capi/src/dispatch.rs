@@ -19,8 +19,8 @@ use super::*;
 use common::*;
 use glkapi::*;
 
-type RegisterCallbackGeneric = extern fn(*const c_void, u32) -> DispatchRock;
-type UnregisterCallbackGeneric = extern fn(*const c_void, u32, DispatchRock);
+type RegisterCallbackGeneric = extern fn(*const c_void, u32) -> DispatchRockPtr;
+type UnregisterCallbackGeneric = extern fn(*const c_void, u32, DispatchRockPtr);
 
 #[no_mangle]
 pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCallbackGeneric, unregister_cb: UnregisterCallbackGeneric) {
@@ -38,28 +38,28 @@ pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCal
 
 // The C function `gidispatch_get_objrock` takes a generic pointer, which we can't really deal with here in Rust, so support.c will handle calling the appropriate function
 #[no_mangle]
-pub extern "C" fn gidispatch_get_objrock_fileref(ptr: FileRefPtr) -> *const DispatchRock {
+pub extern "C" fn gidispatch_get_objrock_fileref(ptr: FileRefPtr) -> DispatchRockPtr {
     let obj = from_ptr(ptr);
     let obj = obj.lock().unwrap();
-    obj.disprock.as_ref().unwrap()
+    obj.disprock.unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn gidispatch_get_objrock_stream(ptr: StreamPtr) -> *const DispatchRock {
+pub extern "C" fn gidispatch_get_objrock_stream(ptr: StreamPtr) -> DispatchRockPtr {
     let obj = from_ptr(ptr);
     let obj = obj.lock().unwrap();
-    obj.disprock.as_ref().unwrap()
+    obj.disprock.unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn gidispatch_get_objrock_window(ptr: WindowPtr) -> *const DispatchRock {
+pub extern "C" fn gidispatch_get_objrock_window(ptr: WindowPtr) -> DispatchRockPtr {
     let obj = from_ptr(ptr);
     let obj = obj.lock().unwrap();
-    obj.disprock.as_ref().unwrap()
+    obj.disprock.unwrap()
 }
 
-type RetainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char) -> DispatchRock;
-type UnretainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char, DispatchRock);
+type RetainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char) -> DispatchRockPtr;
+type UnretainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char, DispatchRockPtr);
 
 #[no_mangle]
 pub unsafe extern "C" fn gidispatch_set_retained_registry(register_cb: RetainArrayCallbackGeneric, unregister_cb: UnretainArrayCallbackGeneric) {

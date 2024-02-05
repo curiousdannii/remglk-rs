@@ -437,7 +437,7 @@ where S: Default + GlkSystem {
         let res = str.close();
         write_stream!(self, str);
 
-        if let Some(disprock) = &str.array_disprock {
+        if let Some(disprock) = str.array_disprock {
             match str.deref().deref() {
                 Stream::ArrayBackedU8(str) => self.unretain_array(&GlkBuffer::U8(&str.buf), disprock),
                 Stream::ArrayBackedU32(str) => self.unretain_array(&GlkBuffer::U32(&str.buf), disprock),
@@ -736,16 +736,18 @@ where S: Default + GlkSystem {
             pairwindata.child2 = win.downgrade();
 
             // Now the pairwin object can be created and registered
-            let (pairwin, pairwinstr) = Window::new(PairWindow::default().into(), WindowType::Pair);
+            let (pairwin, pairwinstr) = Window::new(pairwindata.into(), WindowType::Pair);
             self.windows.register(&pairwin, 0);
             self.streams.register(&pairwinstr, 0);
 
             // Set up the rest of the relations
             let mut splitwin_inner = lock!(splitwin);
+            let wbox = splitwin_inner.wbox;
             let old_parent = splitwin_inner.parent.as_ref().map(|win| Into::<GlkWindow>::into(win));
             lock!(pairwin).parent = old_parent.as_ref().map(|win| win.downgrade());
             splitwin_inner.parent = Some(pairwin.downgrade());
             lock!(win).parent = Some(pairwin.downgrade());
+            drop(splitwin_inner);
 
             if let Some(old_parent) = old_parent {
                 let mut old_parent_inner = lock!(old_parent);
@@ -764,7 +766,6 @@ where S: Default + GlkSystem {
             else {
                 self.root_window = Some(pairwin.downgrade());
             }
-            let wbox = splitwin_inner.wbox;
             self.rearrange_window(&pairwin, wbox)?;
         }
         else {
@@ -1073,7 +1074,7 @@ where S: Default + GlkSystem {
         Ok(Some(str))
     }
 
-    fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<GlkStream>
+    fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32, disprock: Option<DispatchRockPtr>) -> GlkResult<GlkStream>
     where Stream: From<ArrayBackedStream<T>> {
         if fmode == FileMode::WriteAppend {
             return Err(IllegalFilemode);
@@ -1116,7 +1117,7 @@ where S: Default + GlkSystem {
         let mut dest_unowned: GlkBufferMut = (dest).into();
         set_buffer(&src_unowned, 0, &mut dest_unowned, 0, len);
 
-        if let Some(disprock) = &win.array_disprock {
+        if let Some(disprock) = win.array_disprock {
             match &win.data {
                 WindowData::Buffer(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
                 WindowData::Grid(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
@@ -1239,7 +1240,7 @@ where S: Default + GlkSystem {
         self.windows_changed = true;
         let win = lock!(win_glkobj);
 
-        if let Some(disprock) = &win.array_disprock {
+        if let Some(disprock) = win.array_disprock {
             match &win.data {
                 WindowData::Buffer(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
                 WindowData::Grid(data) => self.unretain_array(&data.line_input_buffer.as_ref().unwrap().into(), disprock),
@@ -1310,14 +1311,14 @@ where S: Default + GlkSystem {
         Ok(())
     }
 
-    pub fn retain_array(&self, buf: &GlkBuffer) -> DispatchRock {
+    pub fn retain_array(&self, buf: &GlkBuffer) -> DispatchRockPtr {
         match buf {
             GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr()),
             GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr()),
         }
     }
 
-    pub fn unretain_array(&self, buf: &GlkBuffer, disprock: &DispatchRock) {
+    pub fn unretain_array(&self, buf: &GlkBuffer, disprock: DispatchRockPtr) {
         match buf {
             GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr(), disprock),
             GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr(), disprock),
@@ -1335,8 +1336,8 @@ pub struct GlkEvent {
 }
 
 // Retained array callbacks
-pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8) -> DispatchRock;
-pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const u8, &DispatchRock);
+pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8) -> DispatchRockPtr;
+pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const u8, DispatchRockPtr);
 
 pub struct RetainArrayCallbacks<T> {
     pub retain: RetainArrayCallback<T>,

@@ -11,11 +11,7 @@ https://github.com/curiousdannii/remglk-rs
 
 #include <stdlib.h>
 #include "glk.h"
-#include "glkstart.h"
 #include "support.h"
-
-#include <stdio.h>
-#include <inttypes.h>
 
 gidispatch_rock_t gidispatch_get_objrock(void *obj, glui32 objclass) {
     switch (objclass) {
@@ -28,7 +24,6 @@ gidispatch_rock_t gidispatch_get_objrock(void *obj, glui32 objclass) {
     }
 }
 
-glkunix_argumentlist_t *glkunix_arguments_addr(void);
 glkunix_argumentlist_t *glkunix_arguments_addr(void) {
     return glkunix_arguments;
 }

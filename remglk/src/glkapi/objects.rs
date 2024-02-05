@@ -183,8 +183,8 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
 /** Contains the private metadata we keep in each object store */
 #[derive(Default)]
 pub struct GlkObjectMetadata<T> {
-    pub array_disprock: Option<DispatchRock>,
-    pub disprock: Option<DispatchRock>,
+    pub array_disprock: Option<DispatchRockPtr>,
+    pub disprock: Option<DispatchRockPtr>,
     /** The ID, used in the GlkOte protocol */
     pub id: u32,
     obj: T,
@@ -192,6 +192,7 @@ pub struct GlkObjectMetadata<T> {
     prev: Option<GlkObjectWeak<T>>,
     pub rock: u32,
 }
+unsafe impl<T> Send for GlkObjectMetadata<T> {}
 
 impl<T> GlkObjectMetadata<T>
 where T: Default {
@@ -225,15 +226,16 @@ impl<T> DerefMut for GlkObjectMetadata<T> {
 }
 
 /** A dispatch rock, which could be anything (*not* the same as a normal Glk rock) */
+// See for explanation https://stackoverflow.com/a/38315613/2854284
 #[repr(C)]
 pub struct DispatchRock {
     _data: [u8; 0],
-    // Not thread safe, not sure if it's okay without it though
-    //_marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
+pub type DispatchRockPtr = *const DispatchRock;
 
-pub type DispatchRegisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32) -> DispatchRock;
-pub type DispatchUnregisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32, DispatchRock);
+pub type DispatchRegisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32) -> DispatchRockPtr;
+pub type DispatchUnregisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32, DispatchRockPtr);
 
 pub trait GlkObjectClass {
     fn get_object_class_id() -> u32;

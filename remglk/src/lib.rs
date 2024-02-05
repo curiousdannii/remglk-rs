@@ -9,8 +9,6 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-#![forbid(unsafe_code)]
-
 pub mod glkapi;
 
 use glkapi::*;

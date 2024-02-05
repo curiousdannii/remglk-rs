@@ -502,7 +502,7 @@ impl WindowOperations for GridWindow {
                 self.y += 1;
             }
             else {
-                let line = &mut self.lines[self.x];
+                let line = &mut self.lines[self.y];
                 line.changed = true;
                 line.content[self.y] = self.current_styles.clone(&char.to_string());
             }

@@ -207,9 +207,12 @@ pub const winmethod_NoBorder: u32 = 0x100;
 pub const winmethod_BorderMask: u32 = 0x100;
 
 pub fn validate_winmethod(method: u32, wintype: WindowType) -> GlkResult<'static, (u32, u32, u32)> {
+    if wintype == WindowType::Pair {
+        return Err(SplitCantBePair);
+    }
     let division = method & winmethod_DivisionMask;
     let direction = method & winmethod_DirMask;
-    if direction != winmethod_Fixed && direction != winmethod_Proportional {
+    if division != winmethod_Fixed && division != winmethod_Proportional {
         return Err(InvalidWindowDivision)
     }
     if division == winmethod_Fixed && wintype == WindowType::Blank {
