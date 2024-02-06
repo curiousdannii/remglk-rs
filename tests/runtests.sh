@@ -18,6 +18,7 @@ run_test glulxercise.ulx.regtest
 # run_test extbinaryfile.ulx.regtest
 echo ' externalfile'
 run_test externalfile.ulx.regtest
+rm testfile*
 # echo ' graphwintest'
 # TODO: support refresh
 # run_test graphwintest.gblorb.regtest

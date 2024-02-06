@@ -115,9 +115,9 @@ where S: Default + GlkSystem {
     pub fn glk_cancel_line_event(&mut self, win_glkobj: &GlkWindow) -> GlkResult<GlkEvent> {
         let win = lock!(win_glkobj);
         if let Some(TextInputType::Line) = win.input.text_input_type {
-            let partial = self.partial_inputs.as_mut().map(|partials| partials.remove(&win.id)).flatten().unwrap_or("".to_string());
+            let partial = self.partial_inputs.as_mut().and_then(|partials| partials.remove(&win.id)).unwrap_or("".to_string());
             // Do we need to drop win here?
-            let res = self.handle_line_input(&win_glkobj, &partial, None)?;
+            let res = self.handle_line_input(win_glkobj, &partial, None)?;
             Ok(res)
         }
         else {
@@ -445,7 +445,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stream_get_current(&self) -> Option<GlkStream> {
-        self.current_stream.as_ref().map(|str| Into::<GlkStream>::into(str))
+        self.current_stream.as_ref().map(Into::<GlkStream>::into)
     }
 
     pub fn glk_stream_get_position(str: &GlkStream) -> u32 {
@@ -573,7 +573,7 @@ where S: Default + GlkSystem {
             let parent_win_glkobj = Into::<GlkWindow>::into(win.parent.as_ref().unwrap());
             let parent_win_ptr = parent_win_glkobj.as_ptr();
             let parent_win = lock!(parent_win_glkobj);
-            let grandparent_win = parent_win.parent.as_ref().map(|win| Into::<GlkWindow>::into(win));
+            let grandparent_win = parent_win.parent.as_ref().map(Into::<GlkWindow>::into);
             if let WindowData::Pair(data) = &parent_win.data {
                 let sibling_win = if data.child1.as_ptr() == win_ptr {&data.child2} else {&data.child1};
                 let sibling_win = Into::<GlkWindow>::into(sibling_win);
@@ -624,11 +624,11 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_window_get_echo_stream(win: &GlkWindow) -> Option<GlkStream> {
-        lock!(win).echostr.as_ref().map(|str| Into::<GlkStream>::into(str))
+        lock!(win).echostr.as_ref().map(Into::<GlkStream>::into)
     }
 
     pub fn glk_window_get_parent(win: &GlkWindow) -> Option<GlkWindow> {
-        lock!(win).parent.as_ref().map(|win| Into::<GlkWindow>::into(win))
+        lock!(win).parent.as_ref().map(Into::<GlkWindow>::into)
     }
 
     pub fn glk_window_get_rock(win: &GlkWindow) -> GlkResult<u32> {
@@ -636,7 +636,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_window_get_root(&self) -> Option<GlkWindow> {
-        self.root_window.as_ref().map(|win| Into::<GlkWindow>::into(win))
+        self.root_window.as_ref().map(Into::<GlkWindow>::into)
     }
 
     pub fn glk_window_get_sibling(win: &GlkWindow) -> GlkResult<Option<GlkWindow>> {
@@ -737,7 +737,7 @@ where S: Default + GlkSystem {
             // Set up the rest of the relations
             let mut splitwin_inner = lock!(splitwin);
             let wbox = splitwin_inner.wbox;
-            let old_parent = splitwin_inner.parent.as_ref().map(|win| Into::<GlkWindow>::into(win));
+            let old_parent = splitwin_inner.parent.as_ref().map(Into::<GlkWindow>::into);
             lock!(pairwin).parent = old_parent.as_ref().map(|win| win.downgrade());
             splitwin_inner.parent = Some(pairwin.downgrade());
             lock!(win).parent = Some(pairwin.downgrade());
@@ -1052,7 +1052,7 @@ where S: Default + GlkSystem {
             let buf = vec![];
             self.system.fileref_write(&fileref.system_fileref, GlkBuffer::U8(&buf))?;
             Ok(buf)
-        }, |buf| Ok(buf));
+        }, Ok);
         let data = data?;
 
         // Create an appopriate stream
@@ -1099,7 +1099,7 @@ where S: Default + GlkSystem {
         // I'm going to echo first
         if request_echo_line_input {
             let mut input_linebreak = input.to_string();
-            input_linebreak.push_str("\n");
+            input_linebreak.push('\n');
             win.put_string(&input_linebreak, Some(style_Input));
             if let Some(str) = &win.echostr {
                 let str: GlkStream = str.into();

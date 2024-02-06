@@ -103,7 +103,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
 
     pub fn iterate(&self, obj: Option<&GlkObject<T>>) -> Option<GlkObject<T>> {
         let next_weak = match obj {
-            Some(obj) => obj.lock().unwrap().next.as_ref().map(|weak| weak.clone()),
+            Some(obj) => obj.lock().unwrap().next.as_ref().cloned(),
             None => self.first.clone(),
         };
         next_weak.map(|obj| (&obj).into())
@@ -169,7 +169,6 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
             }
         }
         if let Some(disprock) = obj.disprock {
-            let disprock = disprock.clone();
             drop(obj);
             self.unregister_cb.unwrap()(obj_ptr, self.object_class, disprock);
         }

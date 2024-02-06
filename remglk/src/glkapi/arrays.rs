@@ -9,6 +9,8 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use std::fmt::Display;
+
 use super::*;
 
 /** A Glk buffer argument */
@@ -30,22 +32,23 @@ pub enum GlkOwnedBuffer {
 }
 
 impl GlkBuffer<'_> {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn len(&self) -> usize {
         match self {
             GlkBuffer::U8(buf) => buf.len(),
             GlkBuffer::U32(buf) => buf.len(),
         }
     }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            GlkBuffer::U8(buf) => u8slice_to_string(buf),
-            GlkBuffer::U32(buf) => u32slice_to_string(buf),
-        }
-    }
 }
 
 impl GlkBufferMut<'_> {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn len(&self) -> usize {
         match self {
             GlkBufferMut::U8(buf) => buf.len(),
@@ -62,6 +65,10 @@ impl GlkBufferMut<'_> {
 }
 
 impl GlkOwnedBuffer {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn len(&self) -> usize {
         match self {
             GlkOwnedBuffer::U8(buf) => buf.len(),
@@ -73,6 +80,15 @@ impl GlkOwnedBuffer {
         match self {
             GlkOwnedBuffer::U8(buf) => u8slice_to_string(&buf[..len]),
             GlkOwnedBuffer::U32(buf) => u32slice_to_string(&buf[..len]),
+        }
+    }
+}
+
+impl<'a> Display for GlkBuffer<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GlkBuffer::U8(buf) => f.write_str(&u8slice_to_string(buf)),
+            GlkBuffer::U32(buf) => f.write_str(&u32slice_to_string(buf)),
         }
     }
 }

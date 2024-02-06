@@ -74,19 +74,19 @@ pub const keycode_MAXVAL: u32 = 28;
 #[derive(Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum TerminatorCode {
-    Escape = 0xfffffff8,
-    Func1 = 0xffffffef,
-    Func2 = 0xffffffee,
-    Func3 = 0xffffffed,
-    Func4 = 0xffffffec,
-    Func5 = 0xffffffeb,
-    Func6 = 0xffffffea,
-    Func7 = 0xffffffe9,
-    Func8 = 0xffffffe8,
-    Func9 = 0xffffffe7,
-    Func10 = 0xffffffe6,
-    Func11 = 0xffffffe5,
-    Func12 = 0xffffffe4,
+    Escape = -8,
+    Func1 = -17,
+    Func2 = -18,
+    Func3 = -19,
+    Func4 = -20,
+    Func5 = -21,
+    Func6 = -22,
+    Func7 = -23,
+    Func8 = -24,
+    Func9 = -25,
+    Func10 = -26,
+    Func11 = -27,
+    Func12 = -28,
 }
 pub fn key_name_to_code(key: &str) -> u32 {
     match key {

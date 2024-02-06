@@ -9,5 +9,6 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup update
       - run: cargo build
+      - run: cargo clippy
       - run: ./tests/prepare.sh glulxe regtest
       - run: ./tests/runtests.sh
