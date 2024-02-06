@@ -12,7 +12,7 @@ https://github.com/curiousdannii/remglk-rs
 use std::io;
 use std::str;
 
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 use thiserror::Error;
 use widestring::Utf32String;
 
@@ -117,9 +117,11 @@ pub fn u8slice_to_string(buf: &[u8]) -> String {
 }
 
 pub fn u8slice_to_u32vec(buf: &[u8]) -> Vec<u32> {
-    let mut curs = io::Cursor::new(buf);
-    let mut dest: Vec<u32> = vec![];
-    let _ = curs.read_u32_into::<BigEndian>(&mut dest);
+    assert!(buf.len() % 4 == 0, "buffer length not multiple of 4");
+    let mut dest = Vec::with_capacity(buf.len() / 4);
+    for i in (0..buf.len()).step_by(4) {
+        dest.push(BigEndian::read_u32(&buf[i..]));
+    }
     dest
 }
 

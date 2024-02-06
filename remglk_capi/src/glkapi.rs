@@ -371,13 +371,13 @@ pub extern "C" fn glk_stream_iterate(str: StreamPtr, rock_ptr: *mut u32) -> Stre
 }
 
 #[no_mangle]
-pub extern "C" fn glk_stream_open_file(fileref: FileRefPtr, mode: u32, rock: u32) -> StreamPtr {
+pub extern "C" fn glk_stream_open_file(fileref: FileRefPtr, mode: FileMode, rock: u32) -> StreamPtr {
     let result = glkapi().lock().unwrap().glk_stream_open_file(&from_ptr(fileref), mode, rock);
     to_owned_opt(result.unwrap())
 }
 
 #[no_mangle]
-pub extern "C" fn glk_stream_open_file_uni(fileref: FileRefPtr, mode: u32, rock: u32) -> StreamPtr {
+pub extern "C" fn glk_stream_open_file_uni(fileref: FileRefPtr, mode: FileMode, rock: u32) -> StreamPtr {
     let result = glkapi().lock().unwrap().glk_stream_open_file_uni(&from_ptr(fileref), mode, rock);
     to_owned_opt(result.unwrap())
 }

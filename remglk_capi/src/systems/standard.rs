@@ -41,8 +41,8 @@ impl GlkSystem for StandardSystem {
         Path::new(&fileref.filename).exists()
     }
 
-    fn fileref_read(&mut self, fileref: &SystemFileRef) -> GlkResult<Box<[u8]>> {
-        Ok(fs::read(&fileref.filename)?.into_boxed_slice())
+    fn fileref_read(&mut self, fileref: &SystemFileRef) -> Option<Box<[u8]>> {
+        fs::read(&fileref.filename).ok().map(|buf| buf.into_boxed_slice())
     }
 
     fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef {

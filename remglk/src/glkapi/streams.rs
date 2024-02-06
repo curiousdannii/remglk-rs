@@ -141,8 +141,8 @@ where Box<[T]>: GlkArray {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
             return Err(ReadFromWriteOnly);
         }
-        self.read_count += 1;
         if self.pos < self.len {
+            self.read_count += 1;
             let ch = self.buf.get_u32(self.pos);
             self.pos += 1;
             return Ok(if !uni && ch > MAX_LATIN1 {QUESTION_MARK} else {ch} as i32);
@@ -240,9 +240,8 @@ pub struct FileStream<T> {
 impl<T> FileStream<T>
 where T: Clone + Default {
     pub fn new(fileref: &SystemFileRef, buf: Box<[T]>, fmode: FileMode) -> FileStream<T> {
-        assert!(fmode != FileMode::Read);
-        let mut str = ArrayBackedStream::new(buf, fmode);
-        str.expandable = true;
+        debug_assert!(fmode != FileMode::Read);
+        let str = ArrayBackedStream::new(buf, fmode);
         FileStream {
             fileref: fileref.clone(),
             str,
@@ -263,7 +262,7 @@ where T: Clone + Default {
     }
 
     pub fn get_buf(&self) -> &[T] {
-        &self.str.buf[0..self.str.pos]
+        &self.str.buf[0..self.str.len]
     }
 }
 

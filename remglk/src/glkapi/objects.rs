@@ -174,7 +174,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
             self.unregister_cb.unwrap()(obj_ptr, self.object_class, disprock);
         }
         self.store.swap_remove(self.store.iter().position(|obj| obj == &obj_glkobj).unwrap());
-        assert_eq!(Arc::strong_count(&obj_glkobj), 1, "Dangling strong reference to obj after it was unregistered");
+        debug_assert_eq!(Arc::strong_count(&obj_glkobj), 1, "Dangling strong reference to obj after it was unregistered");
     }
 }
 

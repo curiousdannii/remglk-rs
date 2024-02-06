@@ -260,7 +260,7 @@ impl WindowOperations for BufferWindow {
         if let Some(val) = style {
             self.set_style(val);
         }
-        for (i, line) in str.lines().enumerate() {
+        for (i, line) in str.split('\n').enumerate() {
             if i > 0 {
                 let textrun = self.last_textrun().clone("");
                 self.content.push(Paragraph::new(textrun));

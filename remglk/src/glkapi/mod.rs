@@ -157,7 +157,8 @@ where S: Default + GlkSystem {
         let mut fixed_filename = String::default();
         for char in filename.chars() {
             match char {
-                '"' | '\\' | '/' | '>' | '<' | ':' | '?' | '*' | char::REPLACEMENT_CHARACTER => {},
+                '"' | '\\' | '/' | '>' | '<' | ':' | '|' | '?' | '*' | char::REPLACEMENT_CHARACTER => {},
+                '.' => break,
                 _ => fixed_filename.push(char),
             };
         }
@@ -459,11 +460,11 @@ where S: Default + GlkSystem {
         self.streams.iterate(str)
     }
 
-    pub fn glk_stream_open_file(&mut self, fileref: &GlkFileRef, mode: u32, rock: u32) -> GlkResult<Option<GlkStream>> {
+    pub fn glk_stream_open_file(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32) -> GlkResult<Option<GlkStream>> {
         self.create_file_stream(fileref, mode, rock, false)
     }
 
-    pub fn glk_stream_open_file_uni(&mut self, fileref: &GlkFileRef, mode: u32, rock: u32) -> GlkResult<Option<GlkStream>> {
+    pub fn glk_stream_open_file_uni(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32) -> GlkResult<Option<GlkStream>> {
         self.create_file_stream(fileref, mode, rock, true)
     }
 
@@ -1034,19 +1035,25 @@ where S: Default + GlkSystem {
         fref_glkobj
     }
 
-    fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: u32, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
+    fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
         let fileref = lock!(fileref);
-        let mode = file_mode(mode)?;
         if mode == FileMode::Read && !self.system.fileref_exists(&fileref.system_fileref) {
             return Ok(None);
         }
 
-        let data: Vec<u8> = if mode == FileMode::Write {
-            vec![]
+        // Read in the data, or create a blank file
+        let data: Option<Vec<u8>> = if mode == FileMode::Write {
+            None
         }
         else {
-            self.system.fileref_read(&fileref.system_fileref)?.to_vec()
+            self.system.fileref_read(&fileref.system_fileref).map(|buf| buf.to_vec())
         };
+        let data: GlkResult<Vec<u8>> = data.map_or_else(|| {
+            let buf = vec![];
+            self.system.fileref_write(&fileref.system_fileref, GlkBuffer::U8(&buf))?;
+            Ok(buf)
+        }, |buf| Ok(buf));
+        let data = data?;
 
         // Create an appopriate stream
         let str = create_stream_from_buffer(data, fileref.binary, mode, uni, &fileref.system_fileref)?;
