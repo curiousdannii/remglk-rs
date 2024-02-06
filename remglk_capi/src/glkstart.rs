@@ -31,7 +31,12 @@ const glkunix_arg_NumberValue: i32 = 4;
 pub enum ArgProcessingResults {
     ErrorMsg(String),
     Msg(String),
-    ProcessedArgs(Vec<CString>),
+    ProcessedArgs((Vec<CString>, LibraryOptions)),
+}
+
+#[derive(Default)]
+pub struct LibraryOptions {
+    pub autoinit: bool,
 }
 
 /** Process the command line arguments */
@@ -51,11 +56,12 @@ pub fn process_args() -> ArgProcessingResults {
 
     enum InnerResult {
         Help,
-        ProcessedArgs(Vec<CString>),
+        ProcessedArgs((Vec<CString>, LibraryOptions)),
         Version,
     }
 
     fn process_args_inner(args: &[String], app_arguments: &Vec<GlkUnixArgument>) -> Result<InnerResult, ArgError> {
+        let mut library_args = LibraryOptions::default();
         let mut processed_args: Vec<CString> = Vec::new();
         let mut push_arg = |arg: &String| {
             processed_args.push(CString::new(arg.as_str()).unwrap());
@@ -112,12 +118,15 @@ pub fn process_args() -> ArgProcessingResults {
             }
 
             // And now to process the library arguments
-            // Except we don't have any! Easy.
+            if arg == "-autoinit" {
+                library_args.autoinit = true;
+                continue;
+            }
 
             return Err(ArgError::UnknownArg(arg.to_string()));
         }
 
-        Ok(InnerResult::ProcessedArgs(processed_args))
+        Ok(InnerResult::ProcessedArgs((processed_args, library_args)))
     }
 
     fn print_usage(app_name: &String, app_arguments: &Vec<GlkUnixArgument>) -> String {
@@ -138,6 +147,8 @@ pub fn process_args() -> ArgProcessingResults {
                 });
             }
         }
+        usage.push_str("library options:
+  -autoinit: use default metrics and support options instead of waiting for an init event.\n");
         usage
     }
 

@@ -145,7 +145,7 @@ pub struct SystemFileRef {
 pub struct TimerEvent {}
 
 /** Screen and font metrics - all potential options */
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub struct Metrics {
     /** Buffer character height */
     pub buffercharheight: Option<f64>,

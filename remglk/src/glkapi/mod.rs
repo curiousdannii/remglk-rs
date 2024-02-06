@@ -848,7 +848,7 @@ where S: Default + GlkSystem {
         self.handle_event(event).unwrap();
     }
 
-    fn handle_event(&mut self, mut event: Event) -> GlkResult<GlkEvent> {
+    pub fn handle_event(&mut self, mut event: Event) -> GlkResult<GlkEvent> {
         if event.gen != self.gen {
             if let EventData::Init(_) = event.data {}
             else {

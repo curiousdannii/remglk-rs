@@ -17,7 +17,9 @@ mod glkstart;
 
 use std::ffi::{c_char, c_int};
 
-use glkapi::{glkapi, glk_exit};
+use remglk::glkapi::protocol::{Event, EventData, InitEvent, Metrics};
+
+use glkapi::{glk_exit, glkapi};
 use glkstart::*;
 
 /** Processed arguments which we give to `glkunix_startup_code` */
@@ -36,7 +38,7 @@ extern "C" {
 #[no_mangle]
 extern "C" fn main() {
     // Process the arguments, and optionally display an error/help message
-    let processed_args = match glkstart::process_args() {
+    let (processed_args, library_args) = match glkstart::process_args() {
         ArgProcessingResults::ErrorMsg(msg) => {
             eprint!("{msg}");
             std::process::exit(1);
@@ -57,7 +59,25 @@ extern "C" fn main() {
     }
 
     // Wait for the initial event with the metrics
-    glkapi().lock().unwrap().get_glkote_init();
+    if library_args.autoinit {
+        glkapi().lock().unwrap().handle_event(Event {
+            data: EventData::Init(InitEvent {
+                metrics: Metrics::default(),
+                support: vec![
+                    "garglktext".to_string(),
+                    "graphics".to_string(),
+                    "graphicswin".to_string(),
+                    "hyperlinks".to_string(),
+                    "timer".to_string(),
+                ],
+            }),
+            gen: 0,
+            partial: None,
+        }).unwrap();
+    }
+    else {
+        glkapi().lock().unwrap().get_glkote_init();
+    }
 
     unsafe{glk_main()};
     glk_exit();
