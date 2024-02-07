@@ -113,9 +113,12 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_cancel_line_event(&mut self, win_glkobj: &GlkWindow) -> GlkResult<GlkEvent> {
-        let win = lock!(win_glkobj);
-        if let Some(TextInputType::Line) = win.input.text_input_type {
-            let partial = self.partial_inputs.as_mut().and_then(|partials| partials.remove(&win.id)).unwrap_or("".to_string());
+        let (id, text_input_type) = {
+            let win = lock!(win_glkobj);
+            (win.id, win.input.text_input_type)
+        };
+        if let Some(TextInputType::Line) = text_input_type {
+            let partial = self.partial_inputs.as_mut().and_then(|partials| partials.remove(&id)).unwrap_or("".to_string());
             // Do we need to drop win here?
             let res = self.handle_line_input(win_glkobj, &partial, None)?;
             Ok(res)
@@ -467,16 +470,16 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stream_open_memory(&mut self, buf: Box<[u8]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
-        let disprock = self.retain_array_callbacks_u8.as_ref().map(|_| {
+        let disprock = if buf.is_empty() {None} else {self.retain_array_callbacks_u8.as_ref().map(|_| {
             self.retain_array(&GlkBuffer::U8(&buf))
-        });
+        })};
         self.create_memory_stream(buf, fmode, rock, disprock)
     }
 
     pub fn glk_stream_open_memory_uni(&mut self, buf: Box<[u32]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
-        let disprock = self.retain_array_callbacks_u8.as_ref().map(|_| {
+        let disprock = if buf.is_empty() {None} else {self.retain_array_callbacks_u8.as_ref().map(|_| {
             self.retain_array(&GlkBuffer::U32(&buf))
-        });
+        })};
         self.create_memory_stream(buf, fmode, rock, disprock)
     }
 
@@ -894,9 +897,16 @@ where S: Default + GlkSystem {
                     let mut win = lock!(win_glkobj);
                     if let Some(TextInputType::Char) = win.input.text_input_type {
                         win.input.text_input_type = None;
-                        let val = if data.value.len() == 1 {
-                            let val = data.value.chars().next().unwrap() as u32;
-                            if !win.uni_char_input && val > MAX_LATIN1 {QUESTION_MARK} else {val}
+                        // We can't simply use the length of value, because it's a UTF-8 byte array
+                        let mut chars = data.value.chars();
+                        let first_char = chars.next().unwrap() as u32;
+                        let val = if chars.next().is_none() {
+                            if !win.uni_char_input && first_char < keycode_Func12 && first_char > MAX_LATIN1 {
+                                QUESTION_MARK
+                            }
+                            else {
+                                first_char
+                            }
                         }
                         else {
                             key_name_to_code(&data.value)

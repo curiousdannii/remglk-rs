@@ -62,7 +62,15 @@ extern "C" fn main() {
     if library_args.autoinit {
         glkapi().lock().unwrap().handle_event(Event {
             data: EventData::Init(InitEvent {
-                metrics: Metrics::default(),
+                metrics: Metrics {
+                    buffercharheight: Some(1.0),
+                    buffercharwidth: Some(1.0),
+                    gridcharheight: Some(1.0),
+                    gridcharwidth: Some(1.0),
+                    height: 50.0,
+                    width: 80.0,
+                    ..Default::default()
+                },
                 support: vec![
                     "garglktext".to_string(),
                     "graphics".to_string(),
