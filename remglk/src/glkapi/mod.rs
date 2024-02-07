@@ -20,7 +20,7 @@ mod windows;
 
 use std::cmp::min;
 use std::mem;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::str;
 use std::time::SystemTime;
 
@@ -305,14 +305,12 @@ where S: Default + GlkSystem {
     pub fn glk_put_buffer_stream<'a>(&mut self, str: &GlkStream, buf: &[u8]) -> GlkResult<'a, ()> {
         let mut str = lock!(str);
         str.put_buffer(&GlkBuffer::U8(buf))?;
-        write_stream!(self, str);
         Ok(())
     }
 
     pub fn glk_put_buffer_stream_uni<'a>(&mut self, str: &GlkStream, buf: &[u32]) -> GlkResult<'a, ()> {
         let mut str = lock!(str);
         str.put_buffer(&GlkBuffer::U32(buf))?;
-        write_stream!(self, str);
         Ok(())
     }
 
@@ -327,14 +325,12 @@ where S: Default + GlkSystem {
     pub fn glk_put_char_stream(&mut self, str: &GlkStream, ch: u8) -> GlkResult<()> {
         let mut str = lock!(str);
         str.put_char(ch as u32)?;
-        write_stream!(self, str);
         Ok(())
     }
 
     pub fn glk_put_char_stream_uni(&mut self, str: &GlkStream, ch: u32) -> GlkResult<()> {
         let mut str = lock!(str);
         str.put_char(ch)?;
-        write_stream!(self, str);
         Ok(())
     }
 
@@ -429,7 +425,9 @@ where S: Default + GlkSystem {
     pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<StreamResultCounts> {
         let mut str = lock!(str_glkobj);
         let res = str.close();
-        write_stream!(self, str);
+        if let Some((fileref, buf)) = stream_to_file_buffer(&mut str) {
+            self.system.fileref_write_buffer(fileref, buf);
+        }
 
         if let Some(disprock) = str.array_disprock {
             match str.deref_mut().deref_mut() {
@@ -718,6 +716,7 @@ where S: Default + GlkSystem {
             WindowType::Grid => TextWindow::<GridWindow>::new(&self.stylehints_grid).into(),
             _ => {return Err(InvalidWindowType);}
         };
+        // TODO: try new_cyclic
         let (win, str) = Window::new(windata, self.windows.next_id(), rock, wintype);
         self.windows.register(&win, rock);
         self.streams.register(&str, 0);
@@ -1019,6 +1018,8 @@ where S: Default + GlkSystem {
 
         // TODO: Autorestore state
 
+        self.flush_file_streams();
+
         Update::State(state)
     }
 
@@ -1036,27 +1037,29 @@ where S: Default + GlkSystem {
     }
 
     fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
-        let fileref = lock!(fileref);
-        if mode == FileMode::Read && !self.system.fileref_exists(&fileref.system_fileref) {
+        let (binary, system_fileref) = {
+            let fileref = lock!(fileref);
+            (fileref.binary, fileref.system_fileref.clone())
+        };
+        if mode == FileMode::Read && !self.system.fileref_exists(&system_fileref) {
             return Ok(None);
         }
 
         // Read in the data, or create a blank file
-        let data: Option<Vec<u8>> = if mode == FileMode::Write {
+        let data = if mode == FileMode::Write {
             None
         }
         else {
-            self.system.fileref_read(&fileref.system_fileref).map(|buf| buf.to_vec())
+            self.system.fileref_read(&system_fileref)
         };
-        let data: GlkResult<Vec<u8>> = data.map_or_else(|| {
-            let buf = vec![];
-            self.system.fileref_write(&fileref.system_fileref, GlkBuffer::U8(&buf))?;
-            Ok(buf)
+        let data: GlkResult<Box<[u8]>> = data.map_or_else(|| {
+            self.system.fileref_write_buffer(&system_fileref, vec![].into_boxed_slice());
+            Ok(vec![].into_boxed_slice())
         }, Ok);
         let data = data?;
 
         // Create an appopriate stream
-        let str = create_stream_from_buffer(data, fileref.binary, mode, uni, &fileref.system_fileref)?;
+        let str = create_stream_from_buffer(data, binary, mode, uni, fileref)?;
 
         if mode == FileMode::WriteAppend {
             let mut str = lock!(str);
@@ -1087,6 +1090,16 @@ where S: Default + GlkSystem {
         Ok(str)
     }
 
+    fn flush_file_streams(&mut self) {
+        for str in self.streams.iter() {
+            let mut str = lock!(str);
+            if let Some((fileref, buf)) = stream_to_file_buffer(&mut str) {
+                self.system.fileref_write_buffer(fileref, buf);
+            }
+        }
+        self.system.flush_writeable_files();
+    }
+
     fn handle_line_input(&mut self, win_glkobj: &GlkWindow, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent> {
         let mut win = lock!(win_glkobj);
         let (request_echo_line_input, mut line_input_buffer) = match &mut win.data {
@@ -1105,7 +1118,6 @@ where S: Default + GlkSystem {
                 let str: GlkStream = str.into();
                 let mut str = lock!(str);
                 str.put_string(&input_linebreak, Some(style_Input))?;
-                write_stream!(self, str);
             }
         }
 
@@ -1365,9 +1377,9 @@ fn colour_code_to_css(colour: u32) -> String {
     format!("#{:6X}", colour & 0xFFFFFF)
 }
 
-fn create_stream_from_buffer(buf: Vec<u8>, binary: bool, mode: FileMode, unicode: bool, fileref: &SystemFileRef) -> GlkResult<'static, GlkStream> {
+fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unicode: bool, fileref: &GlkFileRef) -> GlkResult<'static, GlkStream> {
     let data = match (unicode, binary) {
-        (false, _) => GlkOwnedBuffer::U8(buf.into_boxed_slice()),
+        (false, _) => GlkOwnedBuffer::U8(buf),
         (true, false) => str::from_utf8(&buf)?.into(),
         (true, true) => GlkOwnedBuffer::U32(u8slice_to_u32vec(&buf).into_boxed_slice()),
     };
@@ -1394,4 +1406,22 @@ fn normalise_metrics(metrics: Metrics) -> GlkResult<'static, NormalisedMetrics> 
 
 fn normalise_window_dimension(val: f64) -> usize {
     val.floor().max(0.0) as usize
+}
+
+fn stream_to_file_buffer(str: &mut Stream) -> Option<(&SystemFileRef, Box<[u8]>)> {
+    fn inner_processor<T>(str: &mut FileStream<T>) -> Option<(&SystemFileRef, Box<[u8]>)>
+    where T: Clone + Default, Box<[T]>: GlkArray {
+        if str.changed {
+            str.changed = false;
+            Some((&str.fileref, str.to_file_buffer()))
+        }
+        else {
+            None
+        }
+    }
+    match str {
+        Stream::FileStreamU8(str) => inner_processor(str),
+        Stream::FileStreamU32(str) => inner_processor(str),
+        _ => None,
+    }
 }

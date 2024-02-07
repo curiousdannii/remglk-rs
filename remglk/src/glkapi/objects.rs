@@ -26,6 +26,15 @@ where T: Default {
         }
     }
 
+    pub fn new_cyclic<F>(data_fn: F) -> Self
+    where F: FnOnce(&GlkObjectWeak<T>) -> T {
+        Self {
+            obj: Arc::new_cyclic(|weak| {
+                Mutex::new(GlkObjectMetadata::new(data_fn(weak)))
+            })
+        }
+    }
+
     pub fn as_ptr(&self) -> *const Mutex<GlkObjectMetadata<T>> {
         Arc::as_ptr(self)
     }

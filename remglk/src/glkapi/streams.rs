@@ -233,17 +233,22 @@ where Box<[T]>: GlkArray {
 */
 #[derive(Default)]
 pub struct FileStream<T> {
+    binary: bool,
+    pub changed: bool,
     pub fileref: SystemFileRef,
     str: ArrayBackedStream<T>,
 }
 
 impl<T> FileStream<T>
-where T: Clone + Default {
-    pub fn new(fileref: &SystemFileRef, buf: Box<[T]>, fmode: FileMode) -> FileStream<T> {
+where T: Clone + Default, Box<[T]>: GlkArray {
+    pub fn new(fileref: &GlkFileRef, buf: Box<[T]>, fmode: FileMode) -> FileStream<T> {
         debug_assert!(fmode != FileMode::Read);
+        let fileref = lock!(fileref);
         let str = ArrayBackedStream::new(buf, fmode);
         FileStream {
-            fileref: fileref.clone(),
+            binary: fileref.binary,
+            changed: false,
+            fileref: fileref.system_fileref.clone(),
             str,
         }
     }
@@ -261,8 +266,8 @@ where T: Clone + Default {
         self.str.expand(increase);
     }
 
-    pub fn get_buf(&self) -> &[T] {
-        &self.str.buf[0..self.str.len]
+    pub fn to_file_buffer(&self) -> Box<[u8]> {
+        self.str.buf.to_file_buffer(self.binary, self.str.len)
     }
 }
 
@@ -289,6 +294,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
     }
 
     fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+        self.changed = true;
         if self.str.pos + buf.len() > self.str.len {
             self.expand(buf.len());
         }
@@ -296,6 +302,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
     }
 
     fn put_char(&mut self, ch: u32) -> GlkResult<()> {
+        self.changed = true;
         if self.str.pos == self.str.len {
             self.expand(1);
         }

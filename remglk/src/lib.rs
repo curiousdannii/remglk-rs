@@ -11,7 +11,6 @@ https://github.com/curiousdannii/remglk-rs
 
 pub mod glkapi;
 
-use glkapi::*;
 use glkapi::constants::*;
 use glkapi::protocol::{Event, SystemFileRef, Update};
 
@@ -23,7 +22,8 @@ pub trait GlkSystem {
     fn fileref_exists(&mut self, fileref: &SystemFileRef) -> bool;
     fn fileref_read(&mut self, fileref: &SystemFileRef) -> Option<Box<[u8]>>;
     fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef;
-    fn fileref_write(&mut self, fileref: &SystemFileRef, buf: GlkBuffer) -> GlkResult<()>;
+    fn fileref_write_buffer(&mut self, fileref: &SystemFileRef, buf: Box<[u8]>);
+    fn flush_writeable_files(&mut self);
 
     /** Send an update to GlkOte */
     fn send_glkote_update(&mut self, update: Update);

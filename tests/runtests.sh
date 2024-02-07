@@ -14,8 +14,9 @@ run_test glulxercise.ulx.regtest
 # echo 'Glk tests'
 # echo ' datetimetest'
 # run_test datetimetest.ulx.regtest
-# echo ' extbinaryfile'
-# run_test extbinaryfile.ulx.regtest
+echo ' extbinaryfile'
+run_test extbinaryfile.ulx.regtest
+rm binfile.glkdata
 echo ' externalfile'
 run_test externalfile.ulx.regtest
 rm testfile*

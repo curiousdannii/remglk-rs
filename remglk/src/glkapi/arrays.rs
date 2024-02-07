@@ -141,6 +141,7 @@ pub trait GlkArray {
     fn copy_to_buffer(&self, self_offset: usize, buf: &mut GlkBufferMut, buf_offset: usize, len: usize);
     fn get_u32(&self, index: usize) -> u32;
     fn set_u32(&mut self, index: usize, val: u32);
+    fn to_file_buffer(&self, binary: bool, len: usize) -> Box<[u8]>;
 }
 
 impl GlkArray for Box<[u8]> {
@@ -159,6 +160,10 @@ impl GlkArray for Box<[u8]> {
     fn set_u32(&mut self, index: usize, val: u32) {
         self[index] = if val > MAX_LATIN1 {QUESTION_MARK} else {val} as u8;
     }
+
+    fn to_file_buffer(&self, _binary: bool, len: usize) -> Box<[u8]> {
+        self[..len].to_vec().into_boxed_slice()
+    }
 }
 
 impl GlkArray for Box<[u32]> {
@@ -176,5 +181,14 @@ impl GlkArray for Box<[u32]> {
 
     fn set_u32(&mut self, index: usize, val: u32) {
         self[index] = val;
+    }
+
+    fn to_file_buffer(&self, binary: bool, len: usize) -> Box<[u8]> {
+        if binary {
+            u32slice_to_u8vec(&self[..len]).into_boxed_slice()
+        }
+        else {
+            u32slice_to_string(&self[..len]).into_bytes().into_boxed_slice()
+        }
     }
 }

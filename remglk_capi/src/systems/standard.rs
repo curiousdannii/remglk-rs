@@ -9,6 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use std::collections::HashMap;
 use std::env::temp_dir;
 use std::fs;
 use std::io::{self, BufRead};
@@ -20,6 +21,7 @@ use glkapi::protocol::{Event, SystemFileRef, Update};
 
 #[derive(Default)]
 pub struct StandardSystem {
+    cache: HashMap<String, Box<[u8]>>,
     tempfile_counter: u32,
 }
 
@@ -34,15 +36,22 @@ impl GlkSystem for StandardSystem {
     }
 
     fn fileref_delete(&mut self, fileref: &SystemFileRef) {
+        self.cache.remove(&fileref.filename);
         let _ = fs::remove_file(Path::new(&fileref.filename));
     }
 
     fn fileref_exists(&mut self, fileref: &SystemFileRef) -> bool {
-        Path::new(&fileref.filename).exists()
+        self.cache.contains_key(&fileref.filename) || Path::new(&fileref.filename).exists()
     }
 
     fn fileref_read(&mut self, fileref: &SystemFileRef) -> Option<Box<[u8]>> {
-        fs::read(&fileref.filename).ok().map(|buf| buf.into_boxed_slice())
+        // Check the cache first
+        if let Some(buf) = self.cache.get(&fileref.filename) {
+            Some(buf.clone())
+        }
+        else {
+            fs::read(&fileref.filename).ok().map(|buf| buf.into_boxed_slice())
+        }
     }
 
     fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef {
@@ -56,12 +65,15 @@ impl GlkSystem for StandardSystem {
         }
     }
 
-    fn fileref_write(&mut self, fileref: &SystemFileRef, buf: GlkBuffer) -> GlkResult<()> {
-        // TODO: caching
-        match buf {
-            GlkBuffer::U8(buf) => Ok(fs::write(&fileref.filename, buf)?),
-            GlkBuffer::U32(buf) => Ok(fs::write(&fileref.filename, u32slice_to_u8vec(buf))?)
+    fn fileref_write_buffer(&mut self, fileref: &SystemFileRef, buf: Box<[u8]>) {
+        self.cache.insert(fileref.filename.clone(), buf);
+    }
+
+    fn flush_writeable_files(&mut self) {
+        for (filename, buf) in self.cache.drain() {
+            let _ = fs::write(filename, buf);
         }
+        self.cache.shrink_to(4);
     }
 
     fn get_glkote_event(&mut self) -> Event {

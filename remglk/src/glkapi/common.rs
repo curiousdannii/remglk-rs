@@ -89,21 +89,11 @@ pub(crate) use current_stream;
 
 macro_rules! lock {
     ($str: expr) => {
-        $str.lock().unwrap()
+        // We don't want to actually wait for a Mutex to be unlocked, so call try_lock
+        $str.try_lock().unwrap()
     }
 }
 pub(crate) use lock;
-
-macro_rules! write_stream {
-    ($self: expr, $str: expr) => {
-        match $str.deref().deref() {
-            Stream::FileStreamU8(str) => $self.system.fileref_write(&str.fileref, GlkBuffer::U8(str.get_buf()))?,
-            Stream::FileStreamU32(str) => $self.system.fileref_write(&str.fileref, GlkBuffer::U32(str.get_buf()))?,
-            _ => {},
-        };
-    };
-}
-pub(crate) use write_stream;
 
 // Array & string conversions
 
