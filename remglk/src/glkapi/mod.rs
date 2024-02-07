@@ -24,6 +24,8 @@ use std::ops::DerefMut;
 use std::str;
 use std::time::SystemTime;
 
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
+
 use super::*;
 pub use arrays::*;
 pub use common::*;
@@ -148,6 +150,30 @@ where S: Default + GlkSystem {
         }
     }
 
+    pub fn glk_current_simple_time(factor: u32) -> i32 {
+        datetime_to_simpletime(&Local::now(), factor)
+    }
+
+    pub fn glk_current_time() -> GlkTime {
+        datetime_to_glktime(&Local::now())
+    }
+
+    pub fn glk_date_to_simple_time_local(date: &GlkDate, factor: u32) -> i32 {
+        datetime_to_simpletime(&glkdate_to_datetime(Local, date), factor)
+    }
+
+    pub fn glk_date_to_simple_time_utc(date: &GlkDate, factor: u32) -> i32 {
+        datetime_to_simpletime(&glkdate_to_datetime(Utc, date), factor)
+    }
+
+    pub fn glk_date_to_time_local(date: &GlkDate) -> GlkTime {
+        datetime_to_glktime(&glkdate_to_datetime(Local, date))
+    }
+
+    pub fn glk_date_to_time_utc(date: &GlkDate) -> GlkTime {
+        datetime_to_glktime(&glkdate_to_datetime(Utc, date))
+    }
+
     pub fn glk_exit(&mut self) {
         self.exited = true;
         let update = self.update();
@@ -263,7 +289,7 @@ where S: Default + GlkSystem {
 
             //gestalt_LineTerminators | gestalt_LineTerminatorKey => 1,
 
-            //gestalt_DateTime => 1,
+            gestalt_DateTime => 1,
 
             //gestalt_Sound2 => 1,
 
@@ -423,6 +449,26 @@ where S: Default + GlkSystem {
 
     pub fn glk_set_window(&mut self, win: Option<&GlkWindow>) {
         self.current_stream = win.map(|win| lock!(win).str.clone())
+    }
+
+    pub fn glk_simple_time_to_date_local(time: i32, factor: u32) -> GlkDate {
+        let time: DateTime<Local> = Local.timestamp_millis_opt(time as i64 * 1000 * factor as i64).unwrap();
+        datetime_to_glkdate(&time)
+    }
+
+    pub fn glk_simple_time_to_date_utc(time: i32, factor: u32) -> GlkDate {
+        let time: DateTime<Utc> = Utc.timestamp_millis_opt(time as i64 * 1000 * factor as i64).unwrap();
+        datetime_to_glkdate(&time)
+    }
+
+    pub fn glk_time_to_date_local(time: &GlkTime) -> GlkDate {
+        let time = glktime_to_datetime(Local, time);
+        datetime_to_glkdate(&time)
+    }
+
+    pub fn glk_time_to_date_utc(time: &GlkTime) -> GlkDate {
+        let time = glktime_to_datetime(Utc, time);
+        datetime_to_glkdate(&time)
     }
 
     pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<StreamResultCounts> {
@@ -1352,6 +1398,27 @@ pub struct GlkEvent {
     pub val2: u32,
 }
 
+/** A Glk Time struct */
+#[repr(C)]
+pub struct GlkTime {
+    high_sec: i32,
+    low_sec: u32,
+    microsec: i32,
+}
+
+/** A Glk Date struct */
+#[repr(C)]
+pub struct GlkDate {
+    year: i32,     /* full (four-digit) year */
+    month: i32,    /* 1-12, 1 is January */
+    day: i32,      /* 1-31 */
+    weekday: i32,  /* 0-6, 0 is Sunday */
+    hour: i32,     /* 0-23 */
+    minute: i32,   /* 0-59 */
+    second: i32,   /* 0-59, maybe 60 during a leap second */
+    microsec: i32, /* 0-999999 */
+}
+
 // Retained array callbacks
 pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8) -> DispatchRockPtr;
 pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const u8, DispatchRockPtr);
@@ -1407,6 +1474,65 @@ fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unico
         }
     });
     Ok(str)
+}
+
+fn datetime_to_glkdate<T: TimeZone>(datetime: &DateTime<T>) -> GlkDate {
+    GlkDate {
+        year: datetime.year(),
+        month: datetime.month() as i32,
+        day: datetime.day() as i32,
+        weekday: datetime.weekday().num_days_from_sunday() as i32,
+        hour: datetime.hour() as i32,
+        minute: datetime.minute() as i32,
+        second: datetime.second() as i32,
+        microsec: (datetime.nanosecond() / 1000) as i32,
+    }
+}
+
+fn datetime_to_glktime<T: TimeZone>(time: &DateTime<T>) -> GlkTime {
+    let timestamp = time.timestamp();
+    GlkTime {
+        high_sec: (timestamp >> 32) as i32,
+        low_sec: timestamp as u32,
+        microsec: time.timestamp_subsec_micros() as i32,
+    }
+}
+
+fn datetime_to_simpletime<T: TimeZone>(time: &DateTime<T>, factor: u32) -> i32 {
+    let timestamp = time.timestamp();
+    // Unfortunately we can't simply divide, as we must round to negative infinity
+    if timestamp >= 0 {
+        (timestamp / (factor as i64)) as i32
+    }
+    else {
+        -1 - ((-1 - timestamp) / (factor as i64)) as i32
+    }
+}
+
+fn glkdate_to_datetime<T: TimeZone>(timezone: T, date: &GlkDate) -> DateTime<T> {
+    // We must normalise the date, which is not fun
+    let mut normalised_date = NaiveDate::from_ymd_opt(date.year, 1, 1).unwrap();
+    let months = date.month - 1;
+    if months > 0 {
+        normalised_date = normalised_date.checked_add_months(chrono::Months::new(months as u32)).unwrap();
+    }
+    if months < 0 {
+        normalised_date = normalised_date.checked_sub_months(chrono::Months::new(months as u32)).unwrap();
+    }
+    let mut normalised_date = NaiveDateTime::from(normalised_date).and_utc();
+    let duration = Duration::days(date.day as i64 - 1)
+        + Duration::hours(date.hour as i64)
+        + Duration::minutes(date.minute as i64)
+        + Duration::seconds(date.second as i64)
+        + Duration::nanoseconds(date.microsec as i64 * 1000);
+    normalised_date = normalised_date.checked_add_signed(duration).unwrap();
+    normalised_date.with_timezone(&timezone)
+}
+
+fn glktime_to_datetime<T: TimeZone>(timezone: T, time: &GlkTime) -> DateTime<T> {
+    let timestamp = ((time.high_sec as i64) << 32 | (time.low_sec as i64)) * 1000000 + (time.microsec as i64);
+    let naive = NaiveDateTime::from_timestamp_micros(timestamp).unwrap();
+    naive.and_local_timezone(timezone).unwrap()
 }
 
 fn normalise_metrics(metrics: Metrics) -> GlkResult<'static, NormalisedMetrics> {

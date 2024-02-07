@@ -90,6 +90,39 @@ pub extern "C" fn glk_char_to_upper(val: u32) -> u32 {
 }
 
 #[no_mangle]
+pub extern "C" fn glk_current_simple_time(factor: u32) -> i32 {
+    GlkApi::glk_current_simple_time(factor)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_current_time(time_ptr: *mut GlkTime) {
+    let time = GlkApi::glk_current_time();
+    write_ptr(time_ptr, time);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_date_to_simple_time_local(date_ptr: *const GlkDate, factor: u32) -> i32 {
+    GlkApi::glk_date_to_simple_time_local(unsafe{&(*date_ptr)}, factor)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_date_to_simple_time_utc(date_ptr: *const GlkDate, factor: u32) -> i32 {
+    GlkApi::glk_date_to_simple_time_utc(unsafe{&(*date_ptr)}, factor)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_date_to_time_local(date_ptr: *const GlkDate, time_ptr: *mut GlkTime) {
+    let time = GlkApi::glk_date_to_time_local(unsafe{&(*date_ptr)});
+    write_ptr(time_ptr, time);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_date_to_time_utc(date_ptr: *const GlkDate, time_ptr: *mut GlkTime) {
+    let time = GlkApi::glk_date_to_time_utc(unsafe{&(*date_ptr)});
+    write_ptr(time_ptr, time);
+}
+
+#[no_mangle]
 pub extern "C" fn glk_exit() {
     glkapi().lock().unwrap().glk_exit();
     std::process::exit(0);
@@ -331,6 +364,30 @@ pub extern "C" fn glk_set_style_stream(str: StreamPtr, val: u32) {
 #[no_mangle]
 pub extern "C" fn glk_set_window(win: WindowPtr) {
     glkapi().lock().unwrap().glk_set_window(from_ptr_opt(win).as_ref())
+}
+
+#[no_mangle]
+pub extern "C" fn glk_simple_time_to_date_local(time: i32, factor: u32, date_ptr: *mut GlkDate) {
+    let date = GlkApi::glk_simple_time_to_date_local(time, factor);
+    write_ptr(date_ptr, date);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_simple_time_to_date_utc(time: i32, factor: u32, date_ptr: *mut GlkDate) {
+    let date = GlkApi::glk_simple_time_to_date_utc(time, factor);
+    write_ptr(date_ptr, date);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_time_to_date_local(time_ptr: *const GlkTime, date_ptr: *mut GlkDate) {
+    let date = GlkApi::glk_time_to_date_local(unsafe{&(*time_ptr)});
+    write_ptr(date_ptr, date);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_time_to_date_utc(time_ptr: *const GlkTime, date_ptr: *mut GlkDate) {
+    let date = GlkApi::glk_time_to_date_utc(unsafe{&(*time_ptr)});
+    write_ptr(date_ptr, date);
 }
 
 #[no_mangle]

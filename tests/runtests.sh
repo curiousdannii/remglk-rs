@@ -11,9 +11,9 @@ run_test() {
 echo 'Glulxercise'
 run_test glulxercise.ulx.regtest
 
-# echo 'Glk tests'
-# echo ' datetimetest'
-# run_test datetimetest.ulx.regtest
+echo 'Glk tests'
+echo ' datetimetest'
+run_test datetimetest.ulx.regtest
 echo ' extbinaryfile'
 run_test extbinaryfile.ulx.regtest
 rm binfile.glkdata
