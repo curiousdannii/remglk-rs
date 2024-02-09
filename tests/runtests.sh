@@ -30,10 +30,10 @@ echo ' inputeventtest'
 run_test inputeventtest.ulx.regtest
 echo ' memstreamtest'
 run_test memstreamtest.ulx.regtest
-# echo ' resstreamtest'
-# run_test resstreamtest.gblorb.regtest
-# echo ' startsavetest'
-# run_test startsavetest.gblorb.regtest
+echo ' resstreamtest'
+run_test resstreamtest.gblorb.regtest
+echo ' startsavetest'
+run_test startsavetest.gblorb.regtest
 # echo ' unicasetest'
 # run_test unicasetest.ulx.regtest
 echo ' unicodetest'

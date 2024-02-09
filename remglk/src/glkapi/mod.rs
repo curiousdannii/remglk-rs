@@ -293,7 +293,7 @@ where S: Default + GlkSystem {
 
             //gestalt_Sound2 => 1,
 
-            //gestalt_ResourceStream => 1,
+            gestalt_ResourceStream => 1,
 
             //gestalt_GraphicsCharInput => 1,
 
@@ -527,6 +527,14 @@ where S: Default + GlkSystem {
             self.retain_array(&GlkBuffer::U32(&buf))
         })};
         self.create_memory_stream(buf, fmode, rock, disprock)
+    }
+
+    pub fn glk_stream_open_resource(&mut self, filenum: u32, rock: u32) -> GlkResult<Option<GlkStream>> {
+        self.create_resource_stream(filenum, rock, false)
+    }
+
+    pub fn glk_stream_open_resource_uni(&mut self, filenum: u32, rock: u32) -> GlkResult<Option<GlkStream>> {
+        self.create_resource_stream(filenum, rock, true)
     }
 
     pub fn glk_stream_set_current(&mut self, str: Option<&GlkStream>) {
@@ -876,7 +884,10 @@ where S: Default + GlkSystem {
             data.key = win_keywin.downgrade();
             data.size = size;
 
-            self.rearrange_window(win_glkobj, win.wbox)?;
+            let wbox = win.wbox;
+            drop(keywin);
+            drop(win);
+            self.rearrange_window(win_glkobj, wbox)?;
 
             Ok(())
         }
@@ -1115,7 +1126,7 @@ where S: Default + GlkSystem {
         let data = data?;
 
         // Create an appopriate stream
-        let str = create_stream_from_buffer(data, binary, mode, uni, fileref)?;
+        let str = create_stream_from_buffer(data, binary, mode, uni, Some(fileref))?;
 
         if mode == FileMode::WriteAppend {
             let mut str = lock!(str);
@@ -1144,6 +1155,19 @@ where S: Default + GlkSystem {
         }
         self.streams.register(&str, rock);
         Ok(str)
+    }
+
+    fn create_resource_stream(&mut self, filenum: u32, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
+        let resource = blorb::get_blorb_resource_chunk(filenum);
+        if let Some(resource) = resource {
+            // Create an appopriate stream
+            let str = create_stream_from_buffer(resource.data.into(), resource.binary, FileMode::Read, uni, None)?;
+            self.streams.register(&str, rock);
+            Ok(Some(str))
+        }
+        else {
+            Ok(None)
+        }
     }
 
     fn flush_file_streams(&mut self) {
@@ -1454,7 +1478,7 @@ fn colour_code_to_css(colour: u32) -> String {
     format!("#{:6X}", colour & 0xFFFFFF)
 }
 
-fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unicode: bool, fileref: &GlkFileRef) -> GlkResult<'static, GlkStream> {
+fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unicode: bool, fileref: Option<&GlkFileRef>) -> GlkResult<'static, GlkStream> {
     let data = match (unicode, binary) {
         (false, _) => GlkOwnedBuffer::U8(buf),
         (true, false) => str::from_utf8(&buf)?.into(),
@@ -1469,8 +1493,8 @@ fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unico
     }
     else {
         match data {
-            GlkOwnedBuffer::U8(buf) => FileStream::<u8>::new(fileref, buf, mode).into(),
-            GlkOwnedBuffer::U32(buf) => FileStream::<u32>::new(fileref, buf, mode).into(),
+            GlkOwnedBuffer::U8(buf) => FileStream::<u8>::new(fileref.unwrap(), buf, mode).into(),
+            GlkOwnedBuffer::U32(buf) => FileStream::<u32>::new(fileref.unwrap(), buf, mode).into(),
         }
     });
     Ok(str)

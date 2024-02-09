@@ -454,6 +454,18 @@ pub extern "C" fn glk_stream_open_memory_uni(buf: BufferMutU32, len: u32, fmode:
 }
 
 #[no_mangle]
+pub extern "C" fn glk_stream_open_resource(filenum: u32, rock: u32) -> StreamPtr {
+    let result = glkapi().lock().unwrap().glk_stream_open_resource(filenum, rock);
+    to_owned_opt(result.unwrap())
+}
+
+#[no_mangle]
+pub extern "C" fn glk_stream_open_resource_uni(filenum: u32, rock: u32) -> StreamPtr {
+    let result = glkapi().lock().unwrap().glk_stream_open_resource_uni(filenum, rock);
+    to_owned_opt(result.unwrap())
+}
+
+#[no_mangle]
 pub extern "C" fn glk_stream_set_current(str: StreamPtr) {
     glkapi().lock().unwrap().glk_stream_set_current(from_ptr_opt(str).as_ref())
 }
