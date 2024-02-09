@@ -285,9 +285,11 @@ where S: Default + GlkSystem {
 
             //gestalt_UnicodeNorm => 1,
 
-            //gestalt_LineInputEcho => 1,
+            gestalt_LineInputEcho => 1,
 
-            //gestalt_LineTerminators | gestalt_LineTerminatorKey => 1,
+            gestalt_LineTerminators => 1,
+
+            gestalt_LineTerminatorKey => (val == keycode_Escape || (keycode_Func12..=keycode_Func1).contains(&val)) as u32,
 
             gestalt_DateTime => 1,
 
@@ -429,6 +431,13 @@ where S: Default + GlkSystem {
         GlkEvent::default()
     }
 
+    pub fn glk_set_echo_line_event(win: &GlkWindow, val: u32) {
+        let mut win = lock!(win);
+        if let WindowData::Buffer(data) = &mut win.data {
+            data.data.echo_line_input = val > 0;
+        }
+    }
+
     pub fn glk_set_hyperlink(&self, val: u32) -> GlkResult<()> {
         GlkApi::<S>::glk_set_hyperlink_stream(current_stream!(self), val);
         Ok(())
@@ -445,6 +454,11 @@ where S: Default + GlkSystem {
 
     pub fn glk_set_style_stream(str: &GlkStream, val: u32) {
         lock!(str).set_style(val);
+    }
+
+    pub fn glk_set_terminators_line_event(win: &GlkWindow, keycodes: Vec<TerminatorCode>) {
+        let mut win = lock!(win);
+        win.input.terminators = keycodes;
     }
 
     pub fn glk_set_window(&mut self, win: Option<&GlkWindow>) {
@@ -997,7 +1011,7 @@ where S: Default + GlkSystem {
                 if let Some(win_glkobj) = self.windows.get_by_id(data.window) {
                     let text_input_type = lock!(win_glkobj).input.text_input_type;
                     if let Some(TextInputType::Line) = text_input_type {
-                        glkevent = self.handle_line_input(&win_glkobj, &data.value, None)?;
+                        glkevent = self.handle_line_input(&win_glkobj, &data.value, data.terminator)?;
                     }
                 }
             },

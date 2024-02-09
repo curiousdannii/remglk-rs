@@ -339,6 +339,11 @@ pub extern "C" fn glk_select_poll(ev_ptr: *mut GlkEvent) {
 }
 
 #[no_mangle]
+pub extern "C" fn glk_set_echo_line_event(win: WindowPtr, val: u32) {
+    GlkApi::glk_set_echo_line_event(&from_ptr(win), val);
+}
+
+#[no_mangle]
 pub extern "C" fn glk_set_hyperlink(val: u32) {
     glkapi().lock().unwrap().glk_set_hyperlink(val).ok();
 }
@@ -359,6 +364,12 @@ pub extern "C" fn glk_set_style(val: u32) {
 #[no_mangle]
 pub extern "C" fn glk_set_style_stream(str: StreamPtr, val: u32) {
     GlkApi::glk_set_style_stream(&from_ptr(str), val);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_set_terminators_line_event(win: WindowPtr, keycodes_ptr: *mut TerminatorCode, count: u32) {
+    let terminators = glk_buffer(keycodes_ptr, count);
+    GlkApi::glk_set_terminators_line_event(&from_ptr(win), terminators.to_vec());
 }
 
 #[no_mangle]

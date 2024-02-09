@@ -71,8 +71,9 @@ pub const keycode_Func11: u32 = 0xffffffe5;
 pub const keycode_Func12: u32 = 0xffffffe4;
 // The last keycode is always (0x100000000 - keycode_MAXVAL)
 pub const keycode_MAXVAL: u32 = 28;
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
 #[repr(C)]
+#[serde(rename_all = "lowercase")]
 pub enum TerminatorCode {
     Escape = -8,
     Func1 = -17,

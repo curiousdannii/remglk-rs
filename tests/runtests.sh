@@ -28,6 +28,8 @@ rm testfile*
 # run_test imagetest.gblorb.regtest
 echo ' inputeventtest'
 run_test inputeventtest.ulx.regtest
+echo ' inputfeaturetest'
+run_test inputfeaturetest.ulx.regtest
 echo ' memstreamtest'
 run_test memstreamtest.ulx.regtest
 echo ' resstreamtest'

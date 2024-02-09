@@ -98,7 +98,7 @@ pub struct InitEvent {
 #[derive(Deserialize)]
 pub struct LineEvent {
     /* Terminator key */
-    //pub terminator: Option<TerminatorCode>,
+    pub terminator: Option<TerminatorCode>,
     /** Line input */
     pub value: String,
     /** Window ID */
@@ -637,7 +637,8 @@ pub struct InputUpdate {
     #[serde(skip_serializing_if = "Not::not")]
     pub mouse: bool,
     /* Line input terminators */
-    //pub terminators: Option<Vec<TerminatorCode>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub terminators: Vec<TerminatorCode>,
     /** Textual input type */
     #[serde(rename = "type")]
     #[serde(skip_serializing_if = "Option::is_none")]
