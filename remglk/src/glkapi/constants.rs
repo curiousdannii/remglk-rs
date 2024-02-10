@@ -237,8 +237,9 @@ pub const fileusage_SavedGame: u32 = 0x01;
 pub const fileusage_Transcript: u32 = 0x02;
 pub const fileusage_InputRecord: u32 = 0x03;
 pub const fileusage_TypeMask: u32 = 0x0f;
-#[derive(Clone, Copy, Default, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Default, Deserialize, PartialEq, Serialize)]
 #[repr(C)]
+#[serde(rename_all = "lowercase")]
 pub enum FileType {
     #[default]
     Data = 0,
@@ -270,8 +271,9 @@ pub const filemode_Write: u32 = 0x01;
 pub const filemode_Read: u32 = 0x02;
 pub const filemode_ReadWrite: u32 = 0x03;
 pub const filemode_WriteAppend: u32 = 0x05;
-#[derive(Clone, Copy, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, Hash, PartialEq, Serialize)]
 #[repr(C)]
+#[serde(rename_all = "lowercase")]
 pub enum FileMode {
     Write = 0x01,
     #[default]

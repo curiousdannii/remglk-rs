@@ -8,8 +8,12 @@ run_test() {
     python regtest.py -E RUST_BACKTRACE=1 -i "./glulxe/glulxe" -r -t ${2:-10} $1 || ((FAILURES++))
 }
 
-echo 'Glulxercise'
+echo 'Glulx tests'
+echo ' Glulxercise'
 run_test glulxercise.ulx.regtest
+echo ' advent'
+run_test advent.ulx.regtest
+rm adventtest.glksave
 
 echo 'Glk tests'
 echo ' datetimetest'

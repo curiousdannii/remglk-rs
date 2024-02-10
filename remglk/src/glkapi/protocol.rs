@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::ops::Not;
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 use super::*;
 
@@ -130,7 +130,14 @@ pub struct SpecialEvent {
     /** Response type */
     pub response: String,
     /** Event value (file reference from Dialog) */
-    pub value: Option<SystemFileRef>,
+    pub value: Option<FileRefResponse>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum FileRefResponse {
+    String(String),
+    Fref(SystemFileRef),
 }
 
 #[derive(Clone, Default, Deserialize)]
@@ -138,7 +145,6 @@ pub struct SystemFileRef {
     pub content: Option<String>,
     pub filename: String,
     pub gameid: Option<String>,
-    // TODO: do we need null here?
     pub usage: Option<FileType>,
 }
 
@@ -424,7 +430,8 @@ pub struct StateUpdate {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_margin_bg: Option<String>,
     /* Special input */
-    //pub specialinput: Option<SpecialInput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub specialinput: Option<SpecialInput>,
     // TODO: do we need a null here?
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timer: Option<u32>,
@@ -692,6 +699,7 @@ impl InputUpdate {
     }
 }
 
+#[derive(Default, Serialize)]
 pub struct SpecialInput {
     /** File mode */
     pub filemode: FileMode,
@@ -699,6 +707,13 @@ pub struct SpecialInput {
     pub filetype: FileType,
     /** Game ID */
     pub gameid: Option<String>,
+    #[serde(rename = "type")]
+    #[serde(serialize_with = "emit_fileref_prompt")]
+    pub specialtype: (),
+}
+
+fn emit_fileref_prompt<S: Serializer>(_: &(), s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str("fileref_prompt")
 }
 
 /** Updates to window (new windows, or changes to their arrangements) */

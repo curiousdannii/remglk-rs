@@ -139,7 +139,7 @@ pub extern "C" fn glk_fileref_create_by_name(usage: u32, filename_ptr: *const i8
 #[no_mangle]
 pub extern "C" fn glk_fileref_create_by_prompt(usage: u32, fmode: FileMode, rock: u32) -> FileRefPtr {
     let result = glkapi().lock().unwrap().glk_fileref_create_by_prompt(usage, fmode, rock);
-    to_owned_opt(result)
+    to_owned_opt(result.unwrap())
 }
 
 #[no_mangle]

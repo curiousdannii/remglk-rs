@@ -56,6 +56,7 @@ where S: Default + GlkSystem {
     pub retain_array_callbacks_u8: Option<RetainArrayCallbacks<u8>>,
     pub retain_array_callbacks_u32: Option<RetainArrayCallbacks<u32>>,
     root_window: Option<GlkWindowWeak>,
+    special: Option<SpecialInput>,
     pub streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
     stylehints_grid: WindowStyles,
@@ -183,20 +184,7 @@ where S: Default + GlkSystem {
 
     pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
         let filetype = file_type(usage & fileusage_TypeMask);
-        // Clean the filename
-        let mut fixed_filename = String::default();
-        for char in filename.chars() {
-            match char {
-                '"' | '\\' | '/' | '>' | '<' | ':' | '|' | '?' | '*' | char::REPLACEMENT_CHARACTER => {},
-                '.' => break,
-                _ => fixed_filename.push(char),
-            };
-        }
-        if fixed_filename.is_empty() {
-            fixed_filename = "null".to_string();
-        }
-        fixed_filename.push_str(filetype_suffix(filetype));
-        self.create_fileref(fixed_filename, rock, usage, None)
+        self.create_fileref(clean_filename(filename, filetype), rock, usage, None)
     }
 
     // For glkunix_stream_open_pathname
@@ -204,8 +192,27 @@ where S: Default + GlkSystem {
         self.create_fileref(filename, rock, usage, None)
     }
 
-    pub fn glk_fileref_create_by_prompt(&mut self, _usage: u32, _fmode: FileMode, _rock: u32) -> Option<GlkFileRef> {
-        unimplemented!()
+    pub fn glk_fileref_create_by_prompt(&mut self, usage: u32, fmode: FileMode, rock: u32) -> GlkResult<Option<GlkFileRef>> {
+        let filetype = file_type(usage & fileusage_TypeMask);
+        self.special = Some(SpecialInput {
+            filemode: fmode,
+            filetype,
+            // TODO: gameid
+            gameid: None,
+            ..Default::default()
+        });
+        let update = self.update();
+        self.system.send_glkote_update(update);
+        let event = self.system.get_glkote_event();
+        let res = self.handle_event(event)?;
+        if let Some(fref) = res.fref {
+            let (filename, fref) = match fref {
+                FileRefResponse::String(filename) => (filename, None),
+                FileRefResponse::Fref(fref) => (fref.filename.clone(), Some(fref)),
+            };
+            return Ok(Some(self.create_fileref(clean_filename(filename, filetype), rock, usage, fref)));
+        }
+        Ok(None)
     }
 
     pub fn glk_fileref_create_from_fileref(&mut self, usage: u32, fileref: &GlkFileRef, rock: u32) -> GlkFileRef {
@@ -1015,8 +1022,6 @@ where S: Default + GlkSystem {
         }
         self.gen += 1;
 
-        // TODO: special event handling
-
         self.partial_inputs = event.partial.take();
 
         let mut glkevent = GlkEvent::default();
@@ -1113,6 +1118,7 @@ where S: Default + GlkSystem {
                             win: Some(win_glkobj.clone()),
                             val1: data.x,
                             val2: data.y,
+                            ..Default::default()
                         };
                     }
                 }
@@ -1125,8 +1131,11 @@ where S: Default + GlkSystem {
                 }
             },
 
-            EventData::Special(_) => {
-                unimplemented!()
+            EventData::Special(data) => {
+                glkevent = GlkEvent {
+                    fref: data.value,
+                    ..Default::default()
+                }
             },
 
             EventData::Timer(_) => {
@@ -1176,7 +1185,7 @@ where S: Default + GlkSystem {
 
         // TODO: Page BG colour
 
-        // TODO: special input
+        state.specialinput = mem::take(&mut self.special);
 
         // Timer
         if self.timer.last_interval != self.timer.interval {
@@ -1348,6 +1357,7 @@ where S: Default + GlkSystem {
             win: Some(win_glkobj.clone()),
             val1: src.len() as u32,
             val2: termkey.map_or(0, |termkey| termkey as u32),
+            ..Default::default()
         })
     }
 
@@ -1546,6 +1556,7 @@ where S: Default + GlkSystem {
 #[derive(Default)]
 pub struct GlkEvent {
     pub evtype: GlkEventType,
+    pub fref: Option<FileRefResponse>,
     pub win: Option<GlkWindow>,
     pub val1: u32,
     pub val2: u32,
@@ -1602,6 +1613,22 @@ struct TimerData {
     interval: u32,
     last_interval: u32,
     started: Option<SystemTime>,
+}
+
+fn clean_filename(filename: String, filetype: FileType) -> String {
+    let mut fixed_filename = String::default();
+        for char in filename.chars() {
+            match char {
+                '"' | '\\' | '/' | '>' | '<' | ':' | '|' | '?' | '*' | char::REPLACEMENT_CHARACTER => {},
+                '.' => break,
+                _ => fixed_filename.push(char),
+            };
+        }
+        if fixed_filename.is_empty() {
+            fixed_filename = "null".to_string();
+        }
+        fixed_filename.push_str(filetype_suffix(filetype));
+        fixed_filename
 }
 
 fn colour_code_to_css(colour: u32) -> String {
