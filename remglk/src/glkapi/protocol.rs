@@ -11,6 +11,7 @@ https://github.com/curiousdannii/remglk-rs
 
 use std::collections::HashMap;
 use std::ops::Not;
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -478,7 +479,7 @@ pub struct BufferWindowContentUpdate {
 }
 
 /** A buffer window paragraph */
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 pub struct BufferWindowParagraphUpdate {
     /** Append to last input */
     #[serde(skip_serializing_if = "Not::not")]
@@ -491,17 +492,28 @@ pub struct BufferWindowParagraphUpdate {
     pub flowbreak: bool,
 }
 
+impl BufferWindowParagraphUpdate {
+    pub fn new(textrun: TextRun) -> Self {
+        BufferWindowParagraphUpdate {
+            content: vec![LineData::TextRun(textrun)],
+            ..Default::default()
+        }
+    }
+}
+
 /** Graphics window content update */
 #[derive(Serialize)]
 pub struct GraphicsWindowContentUpdate {
     /** Window ID */
     pub id: u32,
     /** Operations */
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub draw: Vec<GraphicsWindowOperation>,
 }
 
 /** Graphics window operation */
 #[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
 #[serde(tag = "special")]
 pub enum GraphicsWindowOperation {
     Fill(FillOperation),
@@ -510,8 +522,7 @@ pub enum GraphicsWindowOperation {
 }
 
 /** Fill operation */
-#[derive(Serialize)]
-#[serde(rename = "fill")]
+#[derive(Default, Serialize)]
 pub struct FillOperation {
     /** CSS color */
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -522,33 +533,27 @@ pub struct FillOperation {
     pub width: Option<u32>,
     /** X coordinate */
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub x: Option<u32>,
+    pub x: Option<i32>,
     /** Y coordinate */
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub  y: Option<u32>,
+    pub y: Option<i32>,
 }
 
 /** Image operation */
 #[derive(Serialize)]
-#[serde(rename = "image")]
 pub struct ImageOperation {
     pub height: u32,
     /** Image number (from Blorb or similar) */
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub image: Option<u32>,
+    pub image: u32,
     pub width: u32,
-    /** Image URL */
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
     /** X position */
-    pub x: u32,
+    pub x: i32,
     /** Y position */
-    pub  y: u32,
+    pub y: i32,
 }
 
 /** Setcolor operation */
 #[derive(Serialize)]
-#[serde(rename = "setcolor")]
 pub struct SetColorOperation {
     /** CSS color */
     pub color: String,
@@ -584,7 +589,7 @@ pub enum LineData {
 #[derive(Clone, Serialize)]
 pub struct BufferWindowImage {
     /* Image alignment */
-    //pub alignment: Option<BufferWindowImageAlignment>,
+    pub alignment: BufferWindowImageAlignment,
     /** Image alt text */
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alttext: Option<String>,
@@ -593,12 +598,8 @@ pub struct BufferWindowImage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hyperlink: Option<u32>,
     /** Image number */
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub image: Option<u32>,
+    pub image: u32,
     pub width: u32,
-    /** Image URL */
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
 }
 
 /** Text run */
@@ -606,14 +607,45 @@ pub struct BufferWindowImage {
 pub struct TextRun {
     /** Additional CSS styles */
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub css_styles: Option<CSSProperties>,
+    pub css_styles: Option<Arc<Mutex<CSSProperties>>>,
     /** Hyperlink value */
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hyperlink: Option<u32>,
     /** Run style */
-    pub style: String,
+    #[serde(serialize_with = "serialize_style_name")]
+    pub style: u32,
     /** Run content */
     pub text: String,
+}
+
+impl TextRun {
+    pub fn new(text: &str) -> Self {
+        TextRun {
+            text: text.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /** Clone a text run, sharing CSS */
+    pub fn clone(&self, text: &str) -> Self {
+        TextRun {
+            css_styles: self.css_styles.as_ref().cloned(),
+            hyperlink: self.hyperlink,
+            style: self.style,
+            text: text.to_string(),
+        }
+    }
+}
+
+// Two TextRuns are considered equal if everything except their text matches...
+impl PartialEq for TextRun {
+    fn eq(&self, other: &Self) -> bool {
+        self.hyperlink == other.hyperlink && self.style == other.style && match (&self.css_styles, &other.css_styles) {
+            (Some(self_styles), Some(other_styles)) => Arc::ptr_eq(self_styles, other_styles),
+            (None, None) => true,
+            _ => false,
+        }
+    }
 }
 
 /** Windows with active input */
@@ -723,8 +755,6 @@ pub enum CSSValue {
 */
 pub type WindowStyles = HashMap<String, CSSProperties>;
 
-#[derive(Copy, Clone, PartialEq)]
-pub enum BufferWindowImageAlignment {InlineCenter,InlineDown, InlineUp, MarginLeft, MarginRight}
 #[derive(Copy, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TextInputType {Char, Line}

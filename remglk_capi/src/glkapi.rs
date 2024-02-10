@@ -230,6 +230,27 @@ pub extern "C" fn glk_get_line_stream_uni(str: StreamPtr, buf: BufferMutU32, len
 }
 
 #[no_mangle]
+pub extern "C" fn glk_image_draw(win: WindowPtr, image: u32, val1: i32, val2: i32) -> u32 {
+    GlkApi::glk_image_draw(&from_ptr(win), image, val1, val2)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_image_draw_scaled(win: WindowPtr, image: u32, val1: i32, val2: i32, width: u32, height: u32) -> u32 {
+    GlkApi::glk_image_draw_scaled(&from_ptr(win), image, val1, val2, width, height)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_image_get_info(image: u32, width_ptr: *mut u32, height_ptr: *mut u32) -> u32 {
+    let res = GlkApi::glk_image_get_info(image);
+    if let Some(info) = res {
+        write_ptr(height_ptr, info.height);
+        write_ptr(width_ptr, info.width);
+        return 1;
+    }
+    0
+}
+
+#[no_mangle]
 pub extern "C" fn glk_put_buffer(buf: BufferU8, len: u32) {
     glkapi().lock().unwrap().glk_put_buffer(glk_buffer(buf, len)).ok();
 }
@@ -522,6 +543,21 @@ pub extern "C" fn glk_window_close(win: WindowPtr, result_ptr: *mut StreamResult
 }
 
 #[no_mangle]
+pub extern "C" fn glk_window_erase_rect(win: WindowPtr, left: i32, top: i32, width: u32, height: u32) {
+    GlkApi::glk_window_erase_rect(&from_ptr(win), left, top, width, height).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_fill_rect(win: WindowPtr, colour: u32, left: i32, top: i32, width: u32, height: u32) {
+    GlkApi::glk_window_fill_rect(&from_ptr(win), colour, left, top, width, height).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_flow_break(win: WindowPtr) {
+    GlkApi::glk_window_flow_break(&from_ptr(win));
+}
+
+#[no_mangle]
 pub extern "C" fn glk_window_get_arrangement(win: WindowPtr, method_ptr: *mut u32, size_ptr: *mut u32, keywin_ptr: WindowPtrMut) {
     let (method, size, keywin) = GlkApi::glk_window_get_arrangement(&from_ptr(win)).unwrap();
     write_ptr(method_ptr, method);
@@ -605,6 +641,11 @@ pub extern "C" fn glk_window_open(splitwin: WindowPtr, method: u32, size: u32, w
 #[no_mangle]
 pub extern "C" fn glk_window_set_arrangement(win: WindowPtr, method: u32, size: u32, keywin: WindowPtr) {
     glkapi().lock().unwrap().glk_window_set_arrangement(&from_ptr(win), method, size, from_ptr_opt(keywin).as_ref()).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn glk_window_set_background_color(win: WindowPtr, colour: u32) {
+    GlkApi::glk_window_set_background_color(&from_ptr(win), colour).unwrap();
 }
 
 #[no_mangle]

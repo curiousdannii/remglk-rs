@@ -20,12 +20,12 @@ rm binfile.glkdata
 echo ' externalfile'
 run_test externalfile.ulx.regtest
 rm testfile*
-# echo ' graphwintest'
+echo ' graphwintest'
 # TODO: support refresh
-# run_test graphwintest.gblorb.regtest
-# echo ' imagetest'
+run_test graphwintest.gblorb.regtest
+echo ' imagetest'
 # TODO: support refresh
-# run_test imagetest.gblorb.regtest
+run_test imagetest.gblorb.regtest
 echo ' inputeventtest'
 run_test inputeventtest.ulx.regtest
 echo ' inputfeaturetest'

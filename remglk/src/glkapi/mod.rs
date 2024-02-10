@@ -28,6 +28,7 @@ use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, Time
 
 use super::*;
 pub use arrays::*;
+use blorb::*;
 pub use common::*;
 pub use GlkApiError::*;
 use constants::*;
@@ -269,17 +270,21 @@ where S: Default + GlkSystem {
                 char::from_u32(val).map(|ch| if ch.is_control() {gestalt_CharOutput_CannotPrint} else {gestalt_CharOutput_ExactPrint}).unwrap_or(gestalt_CharOutput_CannotPrint)
             },
 
-            gestalt_MouseInput | gestalt_Timer => self.support.timers as u32,
+            gestalt_MouseInput => (val == wintype_TextGrid || (self.support.graphics && val == wintype_Graphics)) as u32,
 
-            //gestalt_Graphics | gestalt_DrawImage => 1,
+            gestalt_Timer => self.support.timers as u32,
+
+            gestalt_Graphics | gestalt_GraphicsTransparency | gestalt_GraphicsCharInput => self.support.graphics as u32,
+
+            gestalt_DrawImage => (self.support.graphics && (val == wintype_Graphics || val == wintype_TextBuffer)) as u32,
 
             //gestalt_Sound | gestalt_SoundVolume | gestalt_SoundNotify => 1,
 
-            gestalt_Hyperlinks | gestalt_HyperlinkInput => self.support.hyperlinks as u32,
+            gestalt_Hyperlinks => self.support.hyperlinks as u32,
+
+            gestalt_HyperlinkInput => (self.support.hyperlinks && (val == wintype_TextBuffer || val == wintype_TextGrid))  as u32,
 
             //gestalt_SoundMusic => 1,
-
-            //gestalt_GraphicsTransparency => 1,
 
             gestalt_Unicode => 1,
 
@@ -297,9 +302,9 @@ where S: Default + GlkSystem {
 
             gestalt_ResourceStream => 1,
 
-            //gestalt_GraphicsCharInput => 1,
+            //gestalt_GarglkText => self.support.garglktext as u32,
 
-            //gestalt_GarglkText => 1,
+            gestalt_Stylehints => self.support.garglktext as u32,
 
             _ => 0,
         }
@@ -327,6 +332,32 @@ where S: Default + GlkSystem {
 
     pub fn glk_get_line_stream_uni<'a>(str: &GlkStream, buf: &mut [u32]) -> GlkResult<'a, u32> {
         lock!(str).get_line(&mut GlkBufferMut::U32(buf))
+    }
+
+    pub fn glk_image_draw(win: &GlkWindow, image: u32, val1: i32, val2: i32) -> u32 {
+        let info = get_image_info(image);
+        if let Some(info) = info {
+            let height = info.height;
+            let width = info.width;
+            GlkApi::<S>::draw_image(win, info, height, val1, val2, width)
+        }
+        else {
+            0
+        }
+    }
+
+    pub fn glk_image_draw_scaled(win: &GlkWindow, image: u32, val1: i32, val2: i32, width: u32, height: u32) -> u32 {
+        let info = get_image_info(image);
+        if let Some(info) = info {
+            GlkApi::<S>::draw_image(win, info, height, val1, val2, width)
+        }
+        else {
+            0
+        }
+    }
+
+    pub fn glk_image_get_info(image: u32) -> Option<ImageInfo> {
+        get_image_info(image)
     }
 
     pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<()> {
@@ -680,6 +711,47 @@ where S: Default + GlkSystem {
         res
     }
 
+    pub fn glk_window_erase_rect(win: &GlkWindow, left: i32, top: i32, width: u32, height: u32) -> GlkResult<()> {
+        let mut win = lock!(win);
+        if let WindowData::Graphics(data) = &mut win.data {
+            data.draw.push(GraphicsWindowOperation::Fill(FillOperation {
+                color: None,
+                height: Some(height),
+                x: Some(left),
+                y: Some(top),
+                width: Some(width),
+            }));
+            Ok(())
+        }
+        else {
+            Err(NotGraphicsWindow)
+        }
+    }
+
+    pub fn glk_window_fill_rect(win: &GlkWindow, colour: u32, left: i32, top: i32, width: u32, height: u32) -> GlkResult<()> {
+        let mut win = lock!(win);
+        if let WindowData::Graphics(data) = &mut win.data {
+            data.draw.push(GraphicsWindowOperation::Fill(FillOperation {
+                color: Some(colour_code_to_css(colour)),
+                height: Some(height),
+                x: Some(left),
+                y: Some(top),
+                width: Some(width),
+            }));
+            Ok(())
+        }
+        else {
+            Err(NotGraphicsWindow)
+        }
+    }
+
+    pub fn glk_window_flow_break(win: &GlkWindow) {
+        let mut win = lock!(win);
+        if let WindowData::Buffer(data) = &mut win.data {
+            data.data.set_flow_break();
+        }
+    }
+
     pub fn glk_window_get_arrangement(win: &GlkWindow) -> GlkResult<(u32, u32, GlkWindow)> {
         let win = lock!(win);
         if let WindowData::Pair(data) = &win.data {
@@ -783,7 +855,7 @@ where S: Default + GlkSystem {
         let windata = match wintype {
             WindowType::Blank => BlankWindow {}.into(),
             WindowType::Buffer => TextWindow::<BufferWindow>::new(&self.stylehints_buffer).into(),
-            // Todo: graphics
+            WindowType::Graphics => GraphicsWindow::default().into(),
             WindowType::Grid => TextWindow::<GridWindow>::new(&self.stylehints_grid).into(),
             _ => {return Err(InvalidWindowType);}
         };
@@ -910,6 +982,19 @@ where S: Default + GlkSystem {
         }
     }
 
+    pub fn glk_window_set_background_color(win: &GlkWindow, colour: u32) -> GlkResult<()> {
+        let mut win = lock!(win);
+        if let WindowData::Graphics(data) = &mut win.data {
+            data.draw.push(GraphicsWindowOperation::SetColor(SetColorOperation {
+                color: colour_code_to_css(colour),
+            }));
+            Ok(())
+        }
+        else {
+            Err(NotGraphicsWindow)
+        }
+    }
+
     pub fn glk_window_set_echo_stream(win: &GlkWindow, str: Option<&GlkStream>) {
         lock!(win).echostr = str.map(|str| str.downgrade());
     }
@@ -940,6 +1025,8 @@ where S: Default + GlkSystem {
                 self.metrics = normalise_metrics(data.metrics)?;
                 for support in data.support {
                     match support.as_ref() {
+                        "garglktext" => self.support.garglktext = true,
+                        "graphics" => self.support.graphics = true,
                         "hyperlinks" => self.support.hyperlinks = true,
                         "timer" => self.support.timers = true,
                         _ => {},
@@ -1172,7 +1259,7 @@ where S: Default + GlkSystem {
     }
 
     fn create_resource_stream(&mut self, filenum: u32, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
-        let resource = blorb::get_blorb_resource_chunk(filenum);
+        let resource = get_blorb_resource_chunk(filenum);
         if let Some(resource) = resource {
             // Create an appopriate stream
             let str = create_stream_from_buffer(resource.data.into(), resource.binary, FileMode::Read, uni, None)?;
@@ -1181,6 +1268,34 @@ where S: Default + GlkSystem {
         }
         else {
             Ok(None)
+        }
+    }
+
+    fn draw_image(win: &GlkWindow, info: ImageInfo, height: u32, val1: i32, val2: i32, width: u32) -> u32 {
+        let mut win = lock!(win);
+        match &mut win.data {
+            WindowData::Buffer(data) => {
+                data.data.put_image(BufferWindowImage {
+                    alignment: image_alignment(val1),
+                    alttext: None,
+                    height,
+                    image: info.image,
+                    hyperlink: None,
+                    width,
+                });
+                1
+            },
+            WindowData::Graphics(data) => {
+                data.draw.push(GraphicsWindowOperation::Image(ImageOperation {
+                    height,
+                    image: info.image,
+                    width,
+                    x: val1,
+                    y: val2,
+                }));
+                1
+            },
+            _ => 0,
         }
     }
 
@@ -1476,6 +1591,8 @@ pub struct StreamResultCounts {
 
 #[derive(Default)]
 struct SupportedFeatures {
+    garglktext: bool,
+    graphics: bool,
     hyperlinks: bool,
     timers: bool,
 }
@@ -1489,7 +1606,7 @@ struct TimerData {
 
 fn colour_code_to_css(colour: u32) -> String {
     // Uppercase colours are required by RegTest
-    format!("#{:6X}", colour & 0xFFFFFF)
+    format!("#{:06X}", colour & 0xFFFFFF)
 }
 
 fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unicode: bool, fileref: Option<&GlkFileRef>) -> GlkResult<'static, GlkStream> {

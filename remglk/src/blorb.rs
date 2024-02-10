@@ -11,6 +11,7 @@ https://github.com/curiousdannii/remglk-rs
 
 #![allow(non_upper_case_globals)]
 
+use std::ffi::c_char;
 use std::mem::MaybeUninit;
 use std::slice;
 
@@ -44,14 +45,32 @@ struct BlorbChunk {
 }
 type BlorbChunkPtr = *mut BlorbChunk;
 
-extern "C" {
-    fn giblorb_get_resource_map() -> BlorbMapPtr;
-    fn giblorb_load_resource(map: BlorbMapPtr, method: u32, res: BlorbChunkPtr, usage: u32, resnum: u32) -> u32;
-}
-
 pub struct ResourceChunk {
     pub binary: bool,
     pub data: &'static [u8],
+}
+
+/** Image information */
+#[repr(C)]
+struct ImageInfoC {
+    chunktype: u32,
+    width: u32,
+    height: u32,
+    alttext: *const c_char,
+}
+type ImageInfoPtr = *mut ImageInfoC;
+
+#[derive(Debug)]
+pub struct ImageInfo {
+    pub height: u32,
+    pub image: u32,
+    pub width: u32,
+}
+
+extern "C" {
+    fn giblorb_get_resource_map() -> BlorbMapPtr;
+    fn giblorb_load_image_info(map: BlorbMapPtr, resnum: u32, res: ImageInfoPtr) -> u32;
+    fn giblorb_load_resource(map: BlorbMapPtr, method: u32, res: BlorbChunkPtr, usage: u32, resnum: u32) -> u32;
 }
 
 pub fn get_blorb_resource_chunk(filenum: u32) -> Option<ResourceChunk> {
@@ -77,5 +96,23 @@ pub fn get_blorb_resource_chunk(filenum: u32) -> Option<ResourceChunk> {
     Some(ResourceChunk {
         binary,
         data: unsafe {slice::from_raw_parts(chunk.data, chunk.length as usize)},
+    })
+}
+
+pub fn get_image_info(image: u32) -> Option<ImageInfo> {
+    let map = unsafe{giblorb_get_resource_map()};
+    if map.is_null() {
+        return None;
+    }
+    let mut info = MaybeUninit::uninit();
+    let res = unsafe{giblorb_load_image_info(map, image, info.as_mut_ptr())};
+    if res > 0 {
+        return None;
+    }
+    let info = unsafe {info.assume_init()};
+    Some(ImageInfo {
+        height: info.height,
+        image,
+        width: info.width,
     })
 }

@@ -213,14 +213,14 @@ where T: Default + WindowOperations {
 
 pub struct BufferWindow {
     cleared: bool,
-    content: Vec<Paragraph>,
+    content: Vec<BufferWindowParagraphUpdate>,
     pub echo_line_input: bool,
 }
 
 impl BufferWindow {
     fn clear_content(&mut self, new: Option<&TextRun>) {
         let new = new.unwrap_or_else(|| self.last_textrun()).clone("");
-        self.content = vec![Paragraph {
+        self.content = vec![BufferWindowParagraphUpdate {
             append: true,
             content: vec![LineData::TextRun(new)],
             flowbreak: false,
@@ -228,12 +228,20 @@ impl BufferWindow {
     }
 
     /** If the last textrun isn't empty, then add a new one, ready for its styles to be modified */
-    fn clone_last_textrun(&mut self) {
+    fn clone_last_textrun(&mut self, force: bool) {
         let last_textrun = self.last_textrun();
-        if !last_textrun.text.is_empty() {
+        if force || !last_textrun.text.is_empty() {
             let new = last_textrun.clone("");
             self.content.last_mut().unwrap().content.push(LineData::TextRun(new));
         }
+    }
+
+    pub fn put_image(&mut self, mut image: BufferWindowImage) {
+        image.hyperlink = self.last_textrun().hyperlink;
+        self.clone_last_textrun(true);
+        let content = &mut self.content.last_mut().unwrap();
+        let last_par = &mut content.content;
+        last_par.insert(last_par.len() - 1, LineData::Image(image));
     }
 
     /** Return the last textrun, which must exist, and actually be a textrun not an image */
@@ -244,7 +252,7 @@ impl BufferWindow {
         }
     }
 
-    fn _set_flow_break(&mut self) {
+    pub fn set_flow_break(&mut self) {
         self.content.last_mut().unwrap().flowbreak = true;
     }
 }
@@ -263,7 +271,7 @@ impl WindowOperations for BufferWindow {
         for (i, line) in str.split('\n').enumerate() {
             if i > 0 {
                 let textrun = self.last_textrun().clone("");
-                self.content.push(Paragraph::new(textrun));
+                self.content.push(BufferWindowParagraphUpdate::new(textrun));
             }
             self.last_textrun().text.push_str(line);
         }
@@ -275,7 +283,7 @@ impl WindowOperations for BufferWindow {
     fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
         if let Some(css_styles) = &self.last_textrun().css_styles {
             if css_styles.lock().unwrap().get(name) != val {
-                self.clone_last_textrun();
+                self.clone_last_textrun(false);
                 set_css(&mut self.last_textrun().css_styles, name, val);
             }
         }
@@ -284,14 +292,14 @@ impl WindowOperations for BufferWindow {
     fn set_hyperlink(&mut self, val: u32) {
         let val = if val > 0 {Some(val)} else {None};
         if self.last_textrun().hyperlink != val {
-            self.clone_last_textrun();
+            self.clone_last_textrun(false);
             self.last_textrun().hyperlink = val;
         }
     }
 
     fn set_style(&mut self, val: u32) {
         if self.last_textrun().style != val {
-            self.clone_last_textrun();
+            self.clone_last_textrun(false);
             self.last_textrun().style = val;
         }
     }
@@ -303,7 +311,7 @@ impl WindowOperations for BufferWindow {
         // Exclude empty text runs
         for par in self.content.iter_mut() {
             par.content = cleanup_paragraph_styles(par.content.drain(..).filter(|line| match line {
-                LineData::_Image(_) => true,
+                LineData::Image(_) => true,
                 LineData::TextRun(textrun) => !textrun.text.is_empty(),
             }).collect());
         }
@@ -311,7 +319,7 @@ impl WindowOperations for BufferWindow {
         if self.cleared || self.content.len() > 1 || !self.content[0].content.is_empty() {
             let mut content_update = BufferWindowContentUpdate {
                 base: TextualWindowUpdate::new(update.id),
-                text: self.content.drain(..).map(|par| par.into()).collect(),
+                text: mem::take(&mut self.content),
             };
             if self.cleared {
                 content_update.base.clear = true;
@@ -329,104 +337,8 @@ impl Default for BufferWindow {
     fn default() -> Self {
         BufferWindow {
             cleared: true,
-            content: vec![Paragraph::new(TextRun::default())],
+            content: vec![BufferWindowParagraphUpdate::new(TextRun::default())],
             echo_line_input: true,
-        }
-    }
-}
-
-/** A modified version of BufferWindowParagraphUpdate that always has content */
-#[derive(Default)]
-struct Paragraph {
-    append: bool,
-    content: Vec<LineData>,
-    flowbreak: bool,
-}
-
-impl Paragraph {
-    fn new(textrun: TextRun) -> Self {
-        Paragraph {
-            content: vec![LineData::TextRun(textrun)],
-            ..Default::default()
-        }
-    }
-}
-
-impl From<Paragraph> for BufferWindowParagraphUpdate {
-    fn from(par: Paragraph) -> Self {
-        BufferWindowParagraphUpdate {
-            append: par.append,
-            content: port_line_data(par.content),
-            flowbreak: par.flowbreak,
-        }
-    }
-}
-
-#[derive(Clone)]
-enum LineData {
-    //StylePair(String, String),
-    _Image(BufferWindowImage),
-    TextRun(TextRun),
-}
-
-impl From<LineData> for protocol::LineData {
-    fn from(ld: LineData) -> Self {
-        match ld {
-            LineData::_Image(image) => protocol::LineData::Image(image),
-            LineData::TextRun(tr) => protocol::LineData::TextRun(tr.into()),
-        }
-    }
-}
-
-fn port_line_data(lines: Vec<LineData>) -> Vec<protocol::LineData> {
-    lines.into_iter().map(|ld| ld.into()).collect()
-}
-
-#[derive(Clone, Default)]
-struct TextRun {
-    pub css_styles: Option<Arc<Mutex<CSSProperties>>>,
-    pub hyperlink: Option<u32>,
-    pub style: u32,
-    pub text: String,
-}
-
-impl TextRun {
-    pub fn new(text: &str) -> Self {
-        TextRun {
-            text: text.to_string(),
-            ..Default::default()
-        }
-    }
-
-    /** Clone a text run, sharing CSS */
-    pub fn clone(&self, text: &str) -> Self {
-        TextRun {
-            css_styles: self.css_styles.as_ref().cloned(),
-            hyperlink: self.hyperlink,
-            style: self.style,
-            text: text.to_string(),
-        }
-    }
-}
-
-// Two TextRuns are considered equal if everything except their text matches...
-impl PartialEq for TextRun {
-    fn eq(&self, other: &Self) -> bool {
-        self.hyperlink == other.hyperlink && self.style == other.style && match (&self.css_styles, &other.css_styles) {
-            (Some(self_styles), Some(other_styles)) => Arc::ptr_eq(self_styles, other_styles),
-            (None, None) => true,
-            _ => false,
-        }
-    }
-}
-
-impl From<TextRun> for protocol::TextRun {
-    fn from(textrun: TextRun) -> Self {
-        protocol::TextRun {
-            css_styles: textrun.css_styles.map(|textrun| textrun.lock().unwrap().clone()),
-            hyperlink: textrun.hyperlink,
-            style: style_name(textrun.style).to_string(),
-            text: textrun.text,
         }
     }
 }
@@ -439,7 +351,28 @@ pub struct GraphicsWindow {
     pub width: usize,
 }
 
-impl WindowOperations for GraphicsWindow {}
+impl WindowOperations for GraphicsWindow {
+    fn clear(&mut self) {
+        self.draw = self.draw.drain(..).filter(|op| {
+            matches!(op, GraphicsWindowOperation::SetColor(_))
+        }).collect();
+        self.draw.reverse();
+        self.draw.shrink_to(1);
+        self.draw.push(GraphicsWindowOperation::Fill(FillOperation::default()));
+    }
+
+    fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
+        if !self.draw.is_empty() {
+            update.content = Some(ContentUpdate::Graphics(GraphicsWindowContentUpdate {
+                id: update.id,
+                draw: mem::take(&mut self.draw),
+            }));
+        }
+        update.size.graphheight = Some(self.height as u32);
+        update.size.graphwidth = Some(self.width as u32);
+        update
+    }
+}
 
 #[derive(Default)]
 pub struct GridWindow {
@@ -562,7 +495,7 @@ impl WindowOperations for GridWindow {
                         acc
                     }).into_iter().map(LineData::TextRun).collect();
                     Some(GridWindowLine {
-                        content: port_line_data(cleanup_paragraph_styles(content)),
+                        content: cleanup_paragraph_styles(content),
                         line: i as u32,
                     })
                 }).collect(),

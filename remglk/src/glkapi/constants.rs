@@ -11,7 +11,7 @@ https://github.com/curiousdannii/remglk-rs
 
 #![allow(non_upper_case_globals)]
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 use super::*;
 
@@ -43,6 +43,7 @@ pub const gestalt_Sound2: u32 = 21;
 pub const gestalt_ResourceStream: u32 = 22;
 pub const gestalt_GraphicsCharInput: u32 = 23;
 pub const gestalt_GarglkText: u32 = 0x1100;
+pub const gestalt_Stylehints: u32 = 0x1101;
 
 pub const keycode_Unknown: u32 = 0xffffffff;
 pub const keycode_Left: u32 = 0xfffffffe;
@@ -172,6 +173,11 @@ pub fn style_name(style: u32) -> &'static str {
         style_User2 => "user2",
         _ => "normal",
     }
+}
+pub fn serialize_style_name<S>(style: &u32, s: S) -> Result<S::Ok, S::Error>
+where S: Serializer {
+    let res = style_name(*style);
+    s.serialize_str(res)
 }
 
 pub const wintype_AllTypes: u32 = 0;
@@ -349,6 +355,28 @@ pub const imagealign_InlineDown: u32 = 2;
 pub const imagealign_InlineCenter: u32 = 3;
 pub const imagealign_MarginLeft: u32 = 4;
 pub const imagealign_MarginRight: u32 = 5;
+#[derive(Clone, Copy, Default, PartialEq, Serialize)]
+#[repr(C)]
+#[serde(rename_all = "lowercase")]
+pub enum BufferWindowImageAlignment {
+    #[default]
+    InlineUp = 1,
+    InlineDown,
+    InlineCenter,
+    MarginLeft,
+    MarginRight,
+}
+
+pub fn image_alignment(val: i32) -> BufferWindowImageAlignment {
+    match val {
+        1 => BufferWindowImageAlignment::InlineUp,
+        2 => BufferWindowImageAlignment::InlineDown,
+        3 => BufferWindowImageAlignment::InlineCenter,
+        4 => BufferWindowImageAlignment::MarginLeft,
+        5 => BufferWindowImageAlignment::MarginRight,
+        _ => BufferWindowImageAlignment::InlineUp,
+    }
+}
 
 pub const zcolor_Default: u32 = 0xffffffff;
 pub const zcolor_Current: u32 = 0xfffffffe;
