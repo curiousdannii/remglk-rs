@@ -25,6 +25,7 @@ use std::str;
 use std::time::SystemTime;
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
+use unicode_normalization::UnicodeNormalization;
 
 use super::*;
 pub use arrays::*;
@@ -78,34 +79,42 @@ where S: Default + GlkSystem {
 
     // The Glk API
 
+    pub fn glk_buffer_canon_decompose_uni(buf: &mut [u32], initlen: usize) -> usize {
+        let res = u32slice_to_string(&buf[..initlen]).nfd().map(|ch| ch as u32).collect::<Vec<u32>>();
+        write_common_buffer(&res, buf)
+    }
+
+    pub fn glk_buffer_canon_normalize_uni(buf: &mut [u32], initlen: usize) -> usize {
+        let res = u32slice_to_string(&buf[..initlen]).nfc().map(|ch| ch as u32).collect::<Vec<u32>>();
+        write_common_buffer(&res, buf)
+    }
+
     pub fn glk_buffer_to_lower_case_uni(buf: &mut [u32], initlen: usize) -> usize {
         let res = str_to_u32vec(&u32slice_to_string(&buf[..initlen]).to_lowercase());
-        let len = res.len();
-        let act_len = min(len, buf.len());
-        buf[..act_len].copy_from_slice(&res[..act_len]);
-        len
+        write_common_buffer(&res, buf)
     }
 
     pub fn glk_buffer_to_title_case_uni(buf: &mut [u32], initlen: usize, lowerrest: bool) -> usize {
-        let mut res = str_to_u32vec(&u32slice_to_string(&buf[0..1]).to_uppercase());
+        let titlecase = unicode_case_mapping::to_titlecase(char::from_u32(buf[0]).unwrap());
+        let mut res = vec![if titlecase[0] > 0 {titlecase[0]} else {buf[0]}];
+        if titlecase[1] > 0 {
+            res.push(titlecase[1]);
+        }
+        if titlecase[2] > 0 {
+            res.push(titlecase[2]);
+        }
         if lowerrest {
             res.append(&mut str_to_u32vec(&u32slice_to_string(&buf[1..initlen]).to_lowercase()));
         }
         else {
             res.extend_from_slice(&buf[1..initlen]);
         }
-        let len = res.len();
-        let act_len = min(len, buf.len());
-        buf[..act_len].copy_from_slice(&res[..act_len]);
-        len
+        write_common_buffer(&res, buf)
     }
 
     pub fn glk_buffer_to_upper_case_uni(buf: &mut [u32], initlen: usize) -> usize {
         let res = str_to_u32vec(&u32slice_to_string(&buf[..initlen]).to_uppercase());
-        let len = res.len();
-        let act_len = min(len, buf.len());
-        buf[..act_len].copy_from_slice(&res[..act_len]);
-        len
+        write_common_buffer(&res, buf)
     }
 
     pub fn glk_cancel_char_event(win: &GlkWindow) {
@@ -295,7 +304,7 @@ where S: Default + GlkSystem {
 
             gestalt_Unicode => 1,
 
-            //gestalt_UnicodeNorm => 1,
+            gestalt_UnicodeNorm => 1,
 
             gestalt_LineInputEcho => 1,
 

@@ -44,6 +44,16 @@ pub fn glkapi() -> &'static Mutex<GlkApi> {
 // TODO: error handling!
 
 #[no_mangle]
+pub extern "C" fn glk_buffer_canon_decompose_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
+    GlkApi::glk_buffer_canon_decompose_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
+}
+
+#[no_mangle]
+pub extern "C" fn glk_buffer_canon_normalize_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
+    GlkApi::glk_buffer_canon_normalize_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
+}
+
+#[no_mangle]
 pub extern "C" fn glk_buffer_to_lower_case_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
     GlkApi::glk_buffer_to_lower_case_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
 }

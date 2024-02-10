@@ -40,8 +40,8 @@ echo ' resstreamtest'
 run_test resstreamtest.gblorb.regtest
 echo ' startsavetest'
 run_test startsavetest.gblorb.regtest
-# echo ' unicasetest'
-# run_test unicasetest.ulx.regtest
+echo ' unicasetest'
+run_test unicasetest.ulx.regtest
 echo ' unicodetest'
 run_test unicodetest.ulx.regtest
 echo ' windowtest'
