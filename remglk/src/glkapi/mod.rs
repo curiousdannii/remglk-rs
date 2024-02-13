@@ -219,7 +219,7 @@ where S: Default + GlkSystem {
                 FileRefResponse::String(filename) => (filename, None),
                 FileRefResponse::Fref(fref) => (fref.filename.clone(), Some(fref)),
             };
-            return Ok(Some(self.create_fileref(clean_filename(filename, filetype), rock, usage, fref)));
+            return Ok(Some(self.create_fileref(filename, rock, usage, fref)));
         }
         Ok(None)
     }
@@ -607,7 +607,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stylehint_clear(&mut self, wintype: WindowType, style: u32, hint: u32) {
-        let selector = format!("{}.Style_{}", if hint == stylehint_Justification {"div"} else {"span"}, style_name(style));
+        let selector = format!(".Style_{}{}", style_name(style), if hint == stylehint_Justification {"_par"} else {""});
         let remove_styles = |stylehints: &mut WindowStyles| {
             if stylehints.contains_key(&selector) {
                 let props = stylehints.get_mut(&selector).unwrap();
@@ -644,7 +644,7 @@ where S: Default + GlkSystem {
         };
 
         let stylehints = if wintype == WindowType::Buffer {&mut self.stylehints_buffer} else {&mut self.stylehints_grid};
-        let selector = format!("{}.Style_{}", if hint == stylehint_Justification {"div"} else {"span"}, style_name(style));
+        let selector = format!(".Style_{}{}", style_name(style), if hint == stylehint_Justification {"_par"} else {""});
 
         #[allow(non_upper_case_globals)]
         let css_value = match hint {

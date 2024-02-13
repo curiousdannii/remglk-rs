@@ -13,7 +13,7 @@ echo ' Glulxercise'
 run_test glulxercise.ulx.regtest
 echo ' advent'
 run_test advent.ulx.regtest
-rm adventtest.glksave
+rm adventtest
 
 echo 'Glk tests'
 echo ' datetimetest'
