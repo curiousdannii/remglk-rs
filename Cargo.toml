@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "emscripten_em_js",
     "remglk",
     "remglk_capi",
 ]

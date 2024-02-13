@@ -1,0 +1,19 @@
+[package]
+name = "emscripten_em_js"
+version = "0.1.0"
+edition = "2021"
+
+authors = ["Dannii Willis <curiousdannii@gmail.com>"]
+description = "Rust versions of the Emscripten EM_JS and EM_ASYNC_JS macros"
+homepage = "https://github.com/curiousdannii/remglk-rs"
+license = "MIT"
+repository = "https://github.com/curiousdannii/remglk-rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0.35"
+syn = {version="2.0.48", features=["full"]}

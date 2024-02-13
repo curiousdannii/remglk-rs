@@ -19,6 +19,15 @@ use super::*;
 use remglk::GlkSystem;
 use glkapi::protocol::{Event, SystemFileRef, Update};
 
+pub type GlkApi = glkapi::GlkApi<StandardSystem>;
+
+pub fn glkapi() -> &'static Mutex<GlkApi> {
+    static GLKAPI: OnceLock<Mutex<GlkApi>> = OnceLock::new();
+    GLKAPI.get_or_init(|| {
+        Mutex::new(GlkApi::new(StandardSystem::default()))
+    })
+}
+
 #[derive(Default)]
 pub struct StandardSystem {
     cache: HashMap<String, Box<[u8]>>,

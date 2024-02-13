@@ -29,17 +29,15 @@ pub type StreamPtr = *const Mutex<GlkObjectMetadata<Stream>>;
 pub type WindowPtr = *const Mutex<GlkObjectMetadata<Window>>;
 type WindowPtrMut = *mut Mutex<GlkObjectMetadata<Window>>;
 
-#[path = "systems/standard.rs"]
-mod standard;
-use standard::StandardSystem;
-type GlkApi = glkapi::GlkApi<StandardSystem>;
+#[cfg(target_os = "emscripten")]
+#[path = "systems/emglken.rs"]
+mod system;
 
-pub fn glkapi() -> &'static Mutex<GlkApi> {
-    static GLKAPI: OnceLock<Mutex<GlkApi>> = OnceLock::new();
-    GLKAPI.get_or_init(|| {
-        Mutex::new(GlkApi::new(StandardSystem::default()))
-    })
-}
+#[cfg(not(target_os = "emscripten"))]
+#[path = "systems/standard.rs"]
+mod system;
+
+pub use system::{glkapi, GlkApi};
 
 // TODO: error handling!
 
