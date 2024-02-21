@@ -85,7 +85,7 @@ impl GlkSystem for StandardSystem {
         self.cache.shrink_to(4);
     }
 
-    fn get_glkote_event(&mut self) -> Event {
+    fn get_glkote_event(&mut self) -> Option<Event> {
         // Read a line from stdin
         let stdin = io::stdin();
         for line in stdin.lock().lines() {
@@ -94,9 +94,9 @@ impl GlkSystem for StandardSystem {
                 continue;
             }
             let event: Event = serde_json::from_str(&data).unwrap();
-            return event;
+            return Some(event);
         }
-        unreachable!()
+        None
     }
 
     fn send_glkote_update(&mut self, update: Update) {

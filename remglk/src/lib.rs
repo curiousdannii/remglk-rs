@@ -29,5 +29,5 @@ pub trait GlkSystem {
     /** Send an update to GlkOte */
     fn send_glkote_update(&mut self, update: Update);
     /** Get an event from GlkOte */
-    fn get_glkote_event(&mut self) -> Event;
+    fn get_glkote_event(&mut self) -> Option<Event>;
 }

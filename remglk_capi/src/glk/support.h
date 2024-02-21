@@ -4,9 +4,9 @@
 #include "gi_dispa.h"
 #include "glkstart.h"
 
-extern gidispatch_rock_t gidispatch_get_objrock_fileref(void *obj);
-extern gidispatch_rock_t gidispatch_get_objrock_stream(void *obj);
-extern gidispatch_rock_t gidispatch_get_objrock_window(void *obj);
+extern void gidispatch_get_objrock_fileref(void *obj, gidispatch_rock_t *rock_ptr);
+extern void gidispatch_get_objrock_stream(void *obj, gidispatch_rock_t *rock_ptr);
+extern void gidispatch_get_objrock_window(void *obj, gidispatch_rock_t *rock_ptr);
 
 glkunix_argumentlist_t *glkunix_arguments_addr(void);
 

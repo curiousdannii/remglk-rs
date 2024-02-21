@@ -10,12 +10,8 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::collections::HashMap;
-use std::env::temp_dir;
-use std::fs;
-use std::io::{self, BufRead};
-use std::path::Path;
 
-use emscripten_em_js::em_js;
+//use emscripten_em_js::em_js;
 
 use super::*;
 use remglk::GlkSystem;
@@ -32,8 +28,7 @@ pub fn glkapi() -> &'static Mutex<GlkApi> {
 
 #[derive(Default)]
 pub struct EmglkenSystem {
-    cache: HashMap<String, Box<[u8]>>,
-    tempfile_counter: u32,
+    _cache: HashMap<String, Box<[u8]>>,
 }
 
 impl GlkSystem for EmglkenSystem {
@@ -46,23 +41,23 @@ impl GlkSystem for EmglkenSystem {
         }
     }
 
-    fn fileref_delete(&mut self, fileref: &SystemFileRef) {
+    fn fileref_delete(&mut self, _fileref: &SystemFileRef) {
         unimplemented!()
     }
 
-    fn fileref_exists(&mut self, fileref: &SystemFileRef) -> bool {
+    fn fileref_exists(&mut self, _fileref: &SystemFileRef) -> bool {
         unimplemented!()
     }
 
-    fn fileref_read(&mut self, fileref: &SystemFileRef) -> Option<Box<[u8]>> {
+    fn fileref_read(&mut self, _fileref: &SystemFileRef) -> Option<Box<[u8]>> {
         unimplemented!()
     }
 
-    fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef {
+    fn fileref_temporary(&mut self, _filetype: FileType) -> SystemFileRef {
         unimplemented!()
     }
 
-    fn fileref_write_buffer(&mut self, fileref: &SystemFileRef, buf: Box<[u8]>) {
+    fn fileref_write_buffer(&mut self, _fileref: &SystemFileRef, _buf: Box<[u8]>) {
         unimplemented!()
     }
 
@@ -70,11 +65,11 @@ impl GlkSystem for EmglkenSystem {
         unimplemented!()
     }
 
-    fn get_glkote_event(&mut self) -> Event {
+    fn get_glkote_event(&mut self) -> Option<Event> {
         unimplemented!()
     }
 
-    fn send_glkote_update(&mut self, update: Update) {
+    fn send_glkote_update(&mut self, _update: Update) {
         unimplemented!()
     }
 }

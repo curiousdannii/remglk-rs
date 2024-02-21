@@ -14,13 +14,19 @@ https://github.com/curiousdannii/remglk-rs
 #include "support.h"
 
 gidispatch_rock_t gidispatch_get_objrock(void *obj, glui32 objclass) {
+    gidispatch_rock_t rock;
     switch (objclass) {
         case gidisp_Class_Fileref:
-            return gidispatch_get_objrock_fileref(obj);
+            gidispatch_get_objrock_fileref(obj, &rock);
+            return rock;
         case gidisp_Class_Stream:
-            return gidispatch_get_objrock_stream(obj);
+            gidispatch_get_objrock_stream(obj, &rock);
+            return rock;
         case gidisp_Class_Window:
-            return gidispatch_get_objrock_window(obj);
+            gidispatch_get_objrock_window(obj, &rock);
+            return rock;
+        default:
+            __builtin_unreachable();
     }
 }
 

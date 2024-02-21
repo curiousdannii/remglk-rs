@@ -196,8 +196,8 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
 /** Contains the private metadata we keep in each object store */
 #[derive(Default)]
 pub struct GlkObjectMetadata<T> {
-    pub array_disprock: Option<DispatchRockPtr>,
-    pub disprock: Option<DispatchRockPtr>,
+    pub array_disprock: Option<DispatchRock>,
+    pub disprock: Option<DispatchRock>,
     /** The ID, used in the GlkOte protocol */
     pub id: u32,
     obj: T,
@@ -241,14 +241,20 @@ impl<T> DerefMut for GlkObjectMetadata<T> {
 /** A dispatch rock, which could be anything (*not* the same as a normal Glk rock) */
 // See for explanation https://stackoverflow.com/a/38315613/2854284
 #[repr(C)]
-pub struct DispatchRock {
+pub struct DispatchRockPtr {
     _data: [u8; 0],
     _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
-pub type DispatchRockPtr = *const DispatchRock;
 
-pub type DispatchRegisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32) -> DispatchRockPtr;
-pub type DispatchUnregisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32, DispatchRockPtr);
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub union DispatchRock {
+    num: u32,
+    ptr: *const DispatchRockPtr,
+}
+
+pub type DispatchRegisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32) -> DispatchRock;
+pub type DispatchUnregisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32, DispatchRock);
 
 pub trait GlkObjectClass {
     fn get_object_class_id() -> u32;

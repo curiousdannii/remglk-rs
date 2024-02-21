@@ -213,13 +213,18 @@ where S: Default + GlkSystem {
         let update = self.update();
         self.system.send_glkote_update(update);
         let event = self.system.get_glkote_event();
-        let res = self.handle_event(event)?;
-        if let Some(fref) = res.fref {
-            let (filename, fref) = match fref {
-                FileRefResponse::String(filename) => (filename, None),
-                FileRefResponse::Fref(fref) => (fref.filename.clone(), Some(fref)),
-            };
-            return Ok(Some(self.create_fileref(filename, rock, usage, fref)));
+        if let Some(event) = event {
+            let res = self.handle_event(event)?;
+            if let Some(fref) = res.fref {
+                let (filename, fref) = match fref {
+                    FileRefResponse::String(filename) => (filename, None),
+                    FileRefResponse::Fref(fref) => (fref.filename.clone(), Some(fref)),
+                };
+                return Ok(Some(self.create_fileref(filename, rock, usage, fref)));
+            }
+        }
+        else {
+            self.glk_exit();
         }
         Ok(None)
     }
@@ -455,7 +460,13 @@ where S: Default + GlkSystem {
         let update = self.update();
         self.system.send_glkote_update(update);
         let event = self.system.get_glkote_event();
-        self.handle_event(event)
+        if let Some(event) = event {
+            self.handle_event(event)
+        }
+        else {
+            self.glk_exit();
+            Ok(GlkEvent::default())
+        }
     }
 
     pub fn glk_select_poll(&mut self) -> GlkEvent {
@@ -1019,7 +1030,12 @@ where S: Default + GlkSystem {
 
     pub fn get_glkote_init(&mut self) {
         let event = self.system.get_glkote_event();
-        self.handle_event(event).unwrap();
+        if let Some(event) = event {
+            self.handle_event(event).unwrap();
+        }
+        else {
+            self.glk_exit();
+        }
     }
 
     pub fn handle_event(&mut self, mut event: Event) -> GlkResult<GlkEvent> {
@@ -1257,7 +1273,7 @@ where S: Default + GlkSystem {
         Ok(Some(str))
     }
 
-    fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32, disprock: Option<DispatchRockPtr>) -> GlkResult<GlkStream>
+    fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<GlkStream>
     where Stream: From<ArrayBackedStream<T>> {
         if fmode == FileMode::WriteAppend {
             return Err(IllegalFilemode);
@@ -1545,14 +1561,14 @@ where S: Default + GlkSystem {
         Ok(())
     }
 
-    pub fn retain_array(&self, buf: &GlkBuffer) -> DispatchRockPtr {
+    pub fn retain_array(&self, buf: &GlkBuffer) -> DispatchRock {
         match buf {
             GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr()),
             GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Iu".as_ptr()),
         }
     }
 
-    pub fn unretain_array(&self, buf: GlkOwnedBuffer, disprock: DispatchRockPtr) {
+    pub fn unretain_array(&self, buf: GlkOwnedBuffer, disprock: DispatchRock) {
         let len = buf.len() as u32;
         match buf {
             GlkOwnedBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, "&+#!Cn".as_ptr(), disprock),
@@ -1593,8 +1609,8 @@ pub struct GlkDate {
 }
 
 // Retained array callbacks
-pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8) -> DispatchRockPtr;
-pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const u8, DispatchRockPtr);
+pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8) -> DispatchRock;
+pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const u8, DispatchRock);
 
 pub struct RetainArrayCallbacks<T> {
     pub retain: RetainArrayCallback<T>,
@@ -1708,7 +1724,7 @@ fn glkdate_to_datetime<T: TimeZone>(timezone: T, date: &GlkDate) -> DateTime<T> 
         normalised_date = normalised_date.checked_add_months(chrono::Months::new(months as u32)).unwrap();
     }
     if months < 0 {
-        normalised_date = normalised_date.checked_sub_months(chrono::Months::new(months as u32)).unwrap();
+        normalised_date = normalised_date.checked_sub_months(chrono::Months::new((-months) as u32)).unwrap();
     }
     let mut normalised_date = NaiveDateTime::from(normalised_date).and_utc();
     let duration = Duration::days(date.day as i64 - 1)
