@@ -20,6 +20,7 @@ use glkapi::protocol::{Event, SystemFileRef, Update};
 extern "C" {
     fn emglken_fileref_exists(filename_ptr: *const u8, filename_len: usize) -> bool;
     fn emglken_fileref_read(filename_ptr: *const u8, filename_len: usize, buffer: &mut EmglkenBuffer) -> bool;
+    fn emglken_get_glkote_event(buffer: &mut EmglkenBuffer);
 }
 
 #[repr(C)]
@@ -72,7 +73,7 @@ impl GlkSystem for EmglkenSystem {
             };
             let result = unsafe {emglken_fileref_read(fileref.filename.as_ptr(), fileref.filename.len(), &mut buf)};
             if result {
-                return unsafe {Some(Box::from_raw(slice::from_raw_parts_mut(buf.ptr, buf.len)))};
+                return Some(buffer_to_boxed_slice(&buf));
             }
             None
         }
@@ -91,10 +92,21 @@ impl GlkSystem for EmglkenSystem {
     }
 
     fn get_glkote_event(&mut self) -> Option<Event> {
-        unimplemented!()
+        let mut buf = EmglkenBuffer {
+            ptr: ptr::null_mut(),
+            len: 0,
+        };
+        unsafe {emglken_get_glkote_event(&mut buf)};
+        let data = buffer_to_boxed_slice(&buf);
+        let event: Event = serde_json::from_slice(&data).unwrap();
+        return Some(event);
     }
 
     fn send_glkote_update(&mut self, _update: Update) {
         unimplemented!()
     }
+}
+
+fn buffer_to_boxed_slice(buffer: &EmglkenBuffer) -> Box<[u8]> {
+    unsafe {Box::from_raw(slice::from_raw_parts_mut(buffer.ptr, buffer.len))}
 }

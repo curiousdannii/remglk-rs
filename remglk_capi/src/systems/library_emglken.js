@@ -18,15 +18,29 @@ addToLibrary({
         return false
     },
 
+    emglken_fileref_read__deps: ['$writeBuffer'],
     emglken_fileref_read(filename_ptr, filename_len, buffer) {
         const name = UTF8ToString(filename_ptr, filename_len)
         if (name === storyfile_name) {
-            const ptr = _malloc(storyfile_data.length)
-            HEAP8.set(storyfile_data, ptr)
-            {{{ makeSetValue('buffer', 0, 'ptr', 'i32') }}}
-            {{{ makeSetValue('buffer', 4, 'storyfile_data.length', 'i32') }}}
+            writeBuffer(buffer, storyfile_data)
             return true
         }
         return false
     },
+
+    emglken_get_glkote_event__async: true,
+    emglken_get_glkote_event__deps: ['$writeBuffer'],
+    emglken_get_glkote_event(buffer) {
+        return Asyncify.handleAsync(async () => {
+            await new Promise(resolve => { glkote_event_ready = resolve })
+            writeBuffer(buffer, glkote_event_data)
+        })
+    },
+
+    $writeBuffer(buffer, data) {
+        const ptr = _malloc(data.length)
+        HEAP8.set(data, ptr)
+        {{{ makeSetValue('buffer', 0, 'ptr', 'i32') }}}
+        {{{ makeSetValue('buffer', 4, 'data.length', 'i32') }}}
+    }
 })

@@ -9,6 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex, Weak};
 
@@ -128,8 +129,8 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         obj.id = self.counter;
         obj.rock = rock;
         self.counter += 1;
-        if let Some(register_cb) = self.register_cb {
-            obj.disprock = Some(register_cb(obj_ptr, self.object_class));
+        if let Some(_) = self.register_cb {
+            obj.disprock = Some(self.register_callback(obj_ptr, self.object_class));
         }
         match self.first.as_ref() {
             None => {
@@ -147,13 +148,19 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         };
     }
 
+    fn register_callback(&self, obj_ptr: *const Mutex<GlkObjectMetadata<T>>, object_class: u32) -> DispatchRock {
+        let mut disprock: MaybeUninit<DispatchRock> = MaybeUninit::uninit();
+        self.register_cb.unwrap()(obj_ptr, object_class, disprock.as_mut_ptr());
+        unsafe {disprock.assume_init()}
+    }
+
     pub fn set_callbacks(&mut self, register_cb: DispatchRegisterCallback<T>, unregister_cb: DispatchUnregisterCallback<T>) {
         self.register_cb = Some(register_cb);
         self.unregister_cb = Some(unregister_cb);
         for obj in self.store.iter() {
             let obj_ptr = obj.as_ptr();
             let mut obj = obj.lock().unwrap();
-            obj.disprock = Some(register_cb(obj_ptr, self.object_class));
+            obj.disprock = Some(self.register_callback(obj_ptr, self.object_class));
         }
     }
 
@@ -253,7 +260,8 @@ pub union DispatchRock {
     ptr: *const DispatchRockPtr,
 }
 
-pub type DispatchRegisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32) -> DispatchRock;
+// The WASM ABI means that we can't return a DispatchRock, so it must be set through an out parameter
+pub type DispatchRegisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32, *mut DispatchRock);
 pub type DispatchUnregisterCallback<T> = fn(*const Mutex<GlkObjectMetadata<T>>, u32, DispatchRock);
 
 pub trait GlkObjectClass {
