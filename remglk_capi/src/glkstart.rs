@@ -40,8 +40,8 @@ pub struct LibraryOptions {
 }
 
 /** Process the command line arguments */
-// I didn't really want to reimplement the Zarf's logic, but none of the Rust argument parsing libraries really seem to do what we want.
-pub fn process_args() -> ArgProcessingResults {
+// I didn't really want to reimplement Zarf's logic, but none of the Rust argument parsing libraries really seem to do what we want.
+pub fn process_args(args: Vec<String>) -> ArgProcessingResults {
     #[derive(Error, Debug)]
     pub enum ArgError {
         #[error("{0} must be followed by a value")]
@@ -152,7 +152,6 @@ pub fn process_args() -> ArgProcessingResults {
         usage
     }
 
-    let args: Vec<String> = env::args().collect();
     let app_arguments = unsafe {glkunix_arguments()};
     match process_args_inner(&args, &app_arguments) {
         Ok(InnerResult::Help) => ArgProcessingResults::Msg(print_usage(&args[0], &app_arguments)),

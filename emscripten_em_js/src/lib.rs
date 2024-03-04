@@ -9,7 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-//! em_js!() declares a Javascript function. It is largely similar to the Emscripten macro `EM_JS`.
+//! em_js!{} declares a Javascript function. It is largely similar to the Emscripten macro `EM_JS`.
 //! 
 //! ```c
 //! EM_JS(int, add, (int x, int y), {
@@ -22,26 +22,28 @@ https://github.com/curiousdannii/remglk-rs
 //! raw string.
 //! 
 //! ```
-//! em_js!(fn add(x: i32, y: i32) -> i32 { r#"
+//! em_js!{fn add(x: i32, y: i32) -> i32 { r#"
 //!     return x + y;
-//! "# })
+//! "# }}
 //! ```
 //! 
 //! You may also declare async functions. Unlike in Emscripten where you would use the `EM_ASYNC_JS`
 //! macro, these use the same macro, just declare the function as `async`:
 //! 
 //! ```
-//! em_js!(async fn add(x: i32, y: i32) -> i32 { r#"
+//! em_js!{async fn add(x: i32, y: i32) -> i32 { r#"
 //!     return x + y;
-//! "# })
+//! "# }}
 //! ```
 //! 
 //! Supported types:
 //! 
-//! | Type  | Input | Output |
-//! |-------|-------|--------|
-//! | [f64] | Y     | Y      |
-//! | [i32] | Y     | Y      |
+//! | Type    | Input | Output |
+//! |---------|-------|--------|
+//! | pointer | Y     | ?      |
+//! | [f64]   | Y     | Y      |
+//! | [i32]   | Y     | Y      |
+//! | [usize] | Y     | Y      |
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
@@ -49,7 +51,7 @@ use syn::{Block, Expr, FnArg, ItemFn, Lit, Pat, Stmt, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 
-/** em_js!() declares a Javascript function. It is largely similar to the Emscripten macro `EM_JS`.
+/** em_js!{} declares a Javascript function. It is largely similar to the Emscripten macro `EM_JS`.
  * 
  * For examples, and supported types, see [the module documentation](crate).
 */
@@ -61,7 +63,9 @@ pub fn em_js(input: TokenStream) -> TokenStream {
     let js_name = format_ident!("__em_js__{}{}", if parsed.sig.asyncness.is_some() {"__asyncjs__"} else {""}, name);
     let inputs = parsed.sig.inputs;
     let output = parsed.sig.output;
-    let body = format!("({})<::>{{{}}}", rust_args_to_c(&inputs), get_body_str(parsed.block.as_ref()));
+    let body = format!("({})<::>{{{}}}\0", rust_args_to_c(&inputs), get_body_str(parsed.block.as_ref()));
+    let body = body.as_bytes();
+    let body_len = body.len();
     
     let result = quote! {
         extern "C" {
@@ -69,13 +73,11 @@ pub fn em_js(input: TokenStream) -> TokenStream {
             pub fn #name(#inputs) #output;
         }
 
-        #[link_section = ".em_js"]
+        #[link_section = "em_js"]
         #[no_mangle]
         #[used]
-        static #js_name: &str = #body;
+        static #js_name: [u8; #body_len] = [#(#body),*];
     };
-
-    // Do I need to manually emit bytes? https://github.com/rust-lang/rust/issues/70239
 
     result.into()
 }
@@ -98,17 +100,18 @@ fn rust_args_to_c(args: &Punctuated<FnArg, Comma>) -> String {
                 &name.ident
             }
             else {
-                unreachable!();
+                unreachable!("name: as_ref()");
             };
-            let rust_type = if let Type::Path(path) = arg.ty.as_ref() {
-                path.path.segments.first().unwrap().ident.to_string()
-            }
-            else {
-                unreachable!();
+            let rust_type = match arg.ty.as_ref() {
+                Type::Path(path) => path.path.segments.first().unwrap().ident.to_string(),
+                Type::Ptr(_) => "*".to_owned(),
+                _ => panic!("unsupported rust_type: as_ref(), {:?}", arg.ty.as_ref()),
             };
             let c_type = match rust_type.as_str() {
+                "*" => "int",
                 "f64" => "double",
                 "i32" => "int",
+                "usize" => "int",
                 other => panic!("unsupported argument type: {}", other),
             };
             format!("{} {}", c_type, name)

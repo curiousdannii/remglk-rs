@@ -62,7 +62,7 @@ where S: Default + GlkSystem {
     stylehints_buffer: WindowStyles,
     stylehints_grid: WindowStyles,
     support: SupportedFeatures,
-    system: S,
+    pub system: S,
     timer: TimerData,
     pub windows: GlkObjectStore<Window>,
     windows_changed: bool,

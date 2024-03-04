@@ -15,7 +15,7 @@ mod dispatch;
 mod glkapi;
 mod glkstart;
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, CStr};
 
 use remglk::glkapi::protocol::{Event, EventData, InitEvent, Metrics};
 
@@ -34,11 +34,17 @@ extern "C" {
     fn glkunix_startup_code(data: &GlkUnixArguments) -> c_int;
 }
 
-/** Glk libraries are weird because they define `main`, rather than the eventual app that is linked against them. So control starts here, and then returns to the app when `glk_main` is called. */
+/// Glk libraries are weird because they define `main`, rather than the eventual app that is linked against them. So control starts here, and then returns to the app when `glk_main` is called.
+///
+/// We must manually process the args instead of using `env::args`, because of this limitation in WASM: https://github.com/rust-lang/rust/issues/121883
 #[no_mangle]
-extern "C" fn main() {
+extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
     // Process the arguments, and optionally display an error/help message
-    let (processed_args, library_args) = match glkstart::process_args() {
+    let args: Vec<String> = (0..argc)
+        .map(|i| unsafe {CStr::from_ptr(*argv.add(i as usize))}.to_str().unwrap().to_owned())
+        .collect();
+
+    let (processed_args, library_args) = match glkstart::process_args(args) {
         ArgProcessingResults::ErrorMsg(msg) => {
             eprint!("{msg}");
             std::process::exit(1);
@@ -89,4 +95,5 @@ extern "C" fn main() {
 
     unsafe{glk_main()};
     glk_exit();
+    0
 }
