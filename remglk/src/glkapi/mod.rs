@@ -1566,12 +1566,20 @@ where S: Default + GlkSystem {
         match buf {
             GlkBuffer::U8(buf) => {
                 let mut disprock: MaybeUninit<DispatchRock> = MaybeUninit::uninit();
-                (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr(), disprock.as_mut_ptr());
-                unsafe {disprock.assume_init()}
+                (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, b"&+#!Cn\0".as_ptr(), disprock.as_mut_ptr());
+                let disprock_ptr = disprock.as_mut_ptr();
+                let disprock = unsafe {disprock.assume_init()};
+                println!("retain_array {:?} {:?} {}", buf.as_ptr(), disprock_ptr, unsafe { std::mem::transmute::<DispatchRock, usize>(disprock) });
+                extern "C" {
+                    fn print_disprock(disprock: DispatchRock);
+                }
+                unsafe {print_disprock(disprock)};
+                disprock
             },
             GlkBuffer::U32(buf) => {
                 let mut disprock: MaybeUninit<DispatchRock> = MaybeUninit::uninit();
-                (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Iu".as_ptr(), disprock.as_mut_ptr());
+                (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, b"&+#!Iu\0".as_ptr(), disprock.as_mut_ptr());
+                println!("retain_array {:?} {}", buf.as_ptr(), unsafe { std::mem::transmute::<DispatchRock, usize>(disprock.assume_init()) });
                 unsafe {disprock.assume_init()}
             },
         }
@@ -1580,8 +1588,14 @@ where S: Default + GlkSystem {
     pub fn unretain_array(&self, buf: GlkOwnedBuffer, disprock: DispatchRock) {
         let len = buf.len() as u32;
         match buf {
-            GlkOwnedBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, "&+#!Cn".as_ptr(), disprock),
-            GlkOwnedBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, "&+#!Iu".as_ptr(), disprock),
+            GlkOwnedBuffer::U8(buf) => {
+                println!("unretain_array {:?} {}", buf.as_ptr(), unsafe { std::mem::transmute::<DispatchRock, usize>(disprock) });
+                (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, b"&+#!Cn\0".as_ptr(), disprock)
+            },
+            GlkOwnedBuffer::U32(buf) => {
+                println!("unretain_array {:?} {}", buf.as_ptr(), unsafe { std::mem::transmute::<DispatchRock, usize>(disprock) });
+                (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, b"&+#!Iu\0".as_ptr(), disprock)
+            },
         };
     }
 }

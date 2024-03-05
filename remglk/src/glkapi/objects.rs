@@ -129,7 +129,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         obj.id = self.counter;
         obj.rock = rock;
         self.counter += 1;
-        if let Some(_) = self.register_cb {
+        if self.register_cb.is_some() {
             obj.disprock = Some(self.register_callback(obj_ptr, self.object_class));
         }
         match self.first.as_ref() {
