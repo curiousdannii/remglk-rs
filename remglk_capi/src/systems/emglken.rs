@@ -24,6 +24,7 @@ extern "C" {
     fn emglken_fileref_exists(fref_ptr: *const u8, fref_len: usize) -> bool;
     fn emglken_fileref_read(fref_ptr: *const u8, fref_len: usize, buffer: *mut EmglkenBuffer) -> bool;
     fn emglken_fileref_temporary(filetype: FileType, buffer: *mut EmglkenBuffer);
+    fn emglken_fileref_write_buffer(fref_ptr: *const u8, fref_len: usize, buf_ptr: *const u8, buf_len: usize);
     fn emglken_get_glkote_event(buffer: *mut EmglkenBuffer);
     fn emglken_send_glkote_update(update_ptr: *const u8, update_len: usize);
 }
@@ -60,6 +61,7 @@ impl GlkSystem for EmglkenSystem {
 
     fn fileref_delete(&mut self, fileref: &SystemFileRef) {
         self.cache.remove(&fileref);
+        // TODO: cache the json inside the SystemFileRef?
         let json = serde_json::to_string(&fileref).unwrap();
         unsafe {emglken_fileref_delete(json.as_ptr(), json.len())};
     }
@@ -98,8 +100,9 @@ impl GlkSystem for EmglkenSystem {
     }
 
     fn flush_writeable_files(&mut self) {
-        for (_filename, _buf) in self.cache.drain() {
-            unimplemented!()
+        for (fileref, buf) in self.cache.drain() {
+            let json = serde_json::to_string(&fileref).unwrap();
+            unsafe {emglken_fileref_write_buffer(json.as_ptr(), json.len(), buf.as_ptr(), buf.len())};
         }
         self.cache.shrink_to(4);
     }

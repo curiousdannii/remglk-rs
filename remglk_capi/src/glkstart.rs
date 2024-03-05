@@ -205,7 +205,7 @@ pub extern "C" fn glkunix_stream_open_pathname(filename_ptr: *const i8, textmode
     let mut glkapi = glkapi().lock().unwrap();
     let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
     let filename = filename_cstr.to_string_lossy().to_string();
-    let fileref = glkapi.glk_fileref_create_by_name_uncleaned(filemode_Read | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename, rock);
+    let fileref = glkapi.glk_fileref_create_by_name_uncleaned(fileusage_Data | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename, rock);
     let str = glkapi.glk_stream_open_file(&fileref, FileMode::Read, rock).unwrap().unwrap();
     glkapi.glk_fileref_destroy(fileref);
     to_owned(str)
