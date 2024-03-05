@@ -237,14 +237,16 @@ pub const fileusage_SavedGame: u32 = 0x01;
 pub const fileusage_Transcript: u32 = 0x02;
 pub const fileusage_InputRecord: u32 = 0x03;
 pub const fileusage_TypeMask: u32 = 0x0f;
-#[derive(Clone, Copy, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[repr(C)]
 #[serde(rename_all = "lowercase")]
 pub enum FileType {
     #[default]
     Data = 0,
+    #[serde(rename="save")]
     SavedGame,
     Transcript,
+    #[serde(rename="command")]
     InputRecord,
 }
 pub fn file_type(filetype: u32) -> FileType {

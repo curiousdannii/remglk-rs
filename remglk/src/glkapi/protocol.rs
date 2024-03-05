@@ -140,7 +140,7 @@ pub enum FileRefResponse {
     Fref(SystemFileRef),
 }
 
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct SystemFileRef {
     pub content: Option<String>,
     pub filename: String,
