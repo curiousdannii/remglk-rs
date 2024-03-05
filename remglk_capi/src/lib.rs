@@ -62,6 +62,7 @@ extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
         args: processed_args.iter().map(|arg| arg.as_ptr()).collect::<Vec<*const c_char>>().as_ptr(),
     })} == 0 {
         glk_exit();
+        return 0;
     }
 
     // Wait for the initial event with the metrics

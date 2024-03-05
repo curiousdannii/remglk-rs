@@ -10,7 +10,7 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::collections::HashMap;
-use std::env::temp_dir;
+use std::env;
 use std::fs;
 use std::io::{self, BufRead};
 use std::path::Path;
@@ -66,7 +66,7 @@ impl GlkSystem for StandardSystem {
     fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef {
         let filename = format!("remglktempfile-{}", self.tempfile_counter);
         self.tempfile_counter += 1;
-        let path = temp_dir().join(filename);
+        let path = env::temp_dir().join(filename);
         SystemFileRef {
             filename: path.to_str().unwrap().to_string(),
             usage: Some(filetype),
@@ -103,5 +103,9 @@ impl GlkSystem for StandardSystem {
         // Send the update
         let output = serde_json::to_string(&update).unwrap();
         println!("{}", output);
+    }
+
+    fn working_directory() -> std::path::PathBuf {
+        env::current_dir().unwrap()
     }
 }

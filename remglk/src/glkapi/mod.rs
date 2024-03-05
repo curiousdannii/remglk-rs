@@ -21,6 +21,7 @@ mod windows;
 use std::cmp::min;
 use std::mem;
 use std::ops::DerefMut;
+use std::path;
 use std::str;
 use std::time::SystemTime;
 
@@ -66,6 +67,7 @@ where S: Default + GlkSystem {
     timer: TimerData,
     pub windows: GlkObjectStore<Window>,
     windows_changed: bool,
+    pub working_directory: path::PathBuf,
 }
 
 impl<S> GlkApi<S>
@@ -73,6 +75,7 @@ where S: Default + GlkSystem {
     pub fn new(system: S) -> Self {
         GlkApi {
             system,
+            working_directory: S::working_directory(),
             ..Default::default()
         }
     }
@@ -189,16 +192,18 @@ where S: Default + GlkSystem {
         self.exited = true;
         let update = self.update();
         self.system.send_glkote_update(update);
+        // TODO: remove once we're no longer using glkote-term
+        self.system.send_glkote_update(Update::Exit);
     }
 
     pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
         let filetype = file_type(usage & fileusage_TypeMask);
-        self.create_fileref(clean_filename(filename, filetype), rock, usage, None)
+        self.create_fileref(FileRefResponse::Name(clean_filename(filename, filetype)), rock, usage)
     }
 
     // For glkunix_stream_open_pathname
     pub fn glk_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
-        self.create_fileref(filename, rock, usage, None)
+        self.create_fileref(FileRefResponse::Name(filename), rock, usage)
     }
 
     pub fn glk_fileref_create_by_prompt(&mut self, usage: u32, fmode: FileMode, rock: u32) -> GlkResult<Option<GlkFileRef>> {
@@ -216,11 +221,7 @@ where S: Default + GlkSystem {
         if let Some(event) = event {
             let res = self.handle_event(event)?;
             if let Some(fref) = res.fref {
-                let (filename, fref) = match fref {
-                    FileRefResponse::String(filename) => (filename, None),
-                    FileRefResponse::Fref(fref) => (fref.filename.clone(), Some(fref)),
-                };
-                return Ok(Some(self.create_fileref(filename, rock, usage, fref)));
+                return Ok(Some(self.create_fileref(fref, rock, usage)));
             }
         }
         else {
@@ -231,13 +232,13 @@ where S: Default + GlkSystem {
 
     pub fn glk_fileref_create_from_fileref(&mut self, usage: u32, fileref: &GlkFileRef, rock: u32) -> GlkFileRef {
         let fileref = lock!(fileref);
-        self.create_fileref(fileref.system_fileref.filename.clone(), rock, usage, None)
+        self.create_fileref(FileRefResponse::Fref(fileref.system_fileref.clone()), rock, usage)
     }
 
     pub fn glk_fileref_create_temp(&mut self, usage: u32, rock: u32) -> GlkFileRef {
         let filetype = file_type(usage & fileusage_TypeMask);
         let system_fileref = self.system.fileref_temporary(filetype);
-        self.create_fileref(system_fileref.filename.clone(), rock, usage, Some(system_fileref))
+        self.create_fileref(FileRefResponse::Fref(system_fileref), rock, usage)
     }
 
     pub fn glk_fileref_delete_file(&mut self, fileref: &GlkFileRef) {
@@ -1227,10 +1228,15 @@ where S: Default + GlkSystem {
 
     // Internal functions
 
-    fn create_fileref(&mut self, filename: String, rock: u32, usage: u32, system_fileref: Option<SystemFileRef>) -> GlkFileRef {
-        let system_fileref = system_fileref.unwrap_or_else(|| {
-            self.system.fileref_construct(filename, file_type(usage & fileusage_TypeMask), None)
-        });
+    fn create_fileref(&mut self, fileref: FileRefResponse, rock: u32, usage: u32) -> GlkFileRef {
+        let mut system_fileref = match fileref {
+            FileRefResponse::Name(filename) => self.system.fileref_construct(filename, file_type(usage & fileusage_TypeMask), None),
+            FileRefResponse::Fref(fref) => fref,
+        };
+
+        // Set all paths relative to the working directory.
+        let path = self.working_directory.join(system_fileref.filename);
+        system_fileref.filename = path.to_str().unwrap().to_owned();
 
         let fref = FileRef::new(system_fileref, usage);
         let fref_glkobj = GlkObject::new(fref);

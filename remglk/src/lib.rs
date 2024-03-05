@@ -12,6 +12,8 @@ https://github.com/curiousdannii/remglk-rs
 pub mod blorb;
 pub mod glkapi;
 
+use std::path::PathBuf;
+
 use glkapi::constants::*;
 use glkapi::protocol::{Event, SystemFileRef, Update};
 
@@ -30,4 +32,6 @@ pub trait GlkSystem {
     fn send_glkote_update(&mut self, update: Update);
     /** Get an event from GlkOte */
     fn get_glkote_event(&mut self) -> Option<Event>;
+
+    fn working_directory() -> PathBuf;
 }

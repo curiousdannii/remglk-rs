@@ -136,7 +136,7 @@ pub struct SpecialEvent {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum FileRefResponse {
-    String(String),
+    Name(String),
     Fref(SystemFileRef),
 }
 
@@ -392,6 +392,8 @@ impl From<Metrics> for GlkResult<'static, NormalisedMetrics> {
 #[serde(tag = "type")]
 pub enum Update {
     Error(ErrorUpdate),
+    // TODO: remove once we're no longer using glkote-term
+    Exit,
     Pass(PassUpdate),
     Retry(RetryUpdate),
     #[serde(rename = "update")]

@@ -11,6 +11,7 @@ https://github.com/curiousdannii/remglk-rs
 
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
+use std::path::PathBuf;
 use std::slice;
 
 use serde::de::DeserializeOwned;
@@ -117,6 +118,11 @@ impl GlkSystem for EmglkenSystem {
         // Send the update
         let json = serde_json::to_string(&update).unwrap();
         unsafe {emglken_send_glkote_update(json.as_ptr(), json.len())};
+    }
+
+    fn working_directory() -> PathBuf {
+        // TODO: do something better here when we can do it reliably in both Node and browser
+        PathBuf::new()
     }
 }
 

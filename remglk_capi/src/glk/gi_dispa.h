@@ -9,6 +9,8 @@
     distributed under the MIT license; see the "LICENSE" file.
 */
 
+#include <stdint.h>
+
 /* These constants define the classes of opaque objects. It's a bit ugly
     to put them in this header file, since more classes may be added in
     the future. But if you find yourself stuck with an obsolete version
@@ -52,6 +54,8 @@ typedef struct gidispatch_intconst_struct {
 typedef union glk_objrock_union {
     glui32 num;
     void *ptr;
+    // Add a u64 dummy variant to work around https://github.com/rust-lang/rust/issues/121408
+    int64_t dummy_variant;
 } gidispatch_rock_t;
 
 /* The following functions are part of the Glk library itself, not the dispatch

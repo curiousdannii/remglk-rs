@@ -13,6 +13,7 @@ https://github.com/curiousdannii/remglk-rs
 
 use std::env;
 use std::ffi::{c_char, c_int, CStr, CString};
+use std::path;
 use std::slice;
 use std::str;
 
@@ -197,6 +198,14 @@ unsafe fn glkunix_arguments() -> Vec<GlkUnixArgument> {
             desc: CStr::from_ptr(arg.desc).to_str().expect("glkunix_arguments: has a non-UTF-8-safe description").into(),
         })
         .collect()
+}
+
+#[no_mangle]
+pub extern "C" fn glkunix_set_base_file(filename_ptr: *const c_char) {
+    let filename = unsafe {CStr::from_ptr(filename_ptr)}.to_str().unwrap();
+    let mut path = path::PathBuf::from(filename);
+    path.pop();
+    glkapi().lock().unwrap().working_directory = path;
 }
 
 #[no_mangle]
