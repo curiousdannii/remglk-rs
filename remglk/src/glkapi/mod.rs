@@ -20,7 +20,6 @@ mod windows;
 
 use std::cmp::min;
 use std::mem;
-use mem::MaybeUninit;
 use std::ops::DerefMut;
 use std::str;
 use std::time::SystemTime;
@@ -1564,24 +1563,16 @@ where S: Default + GlkSystem {
 
     pub fn retain_array(&self, buf: &GlkBuffer) -> DispatchRock {
         match buf {
-            GlkBuffer::U8(buf) => {
-                let mut disprock: MaybeUninit<DispatchRock> = MaybeUninit::uninit();
-                (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Cn".as_ptr(), disprock.as_mut_ptr());
-                unsafe {disprock.assume_init()}
-            },
-            GlkBuffer::U32(buf) => {
-                let mut disprock: MaybeUninit<DispatchRock> = MaybeUninit::uninit();
-                (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, "&+#!Iu".as_ptr(), disprock.as_mut_ptr());
-                unsafe {disprock.assume_init()}
-            },
+            GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, b"&+#!Cn\0".as_ptr()),
+            GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, b"&+#!Iu\0".as_ptr()),
         }
     }
 
     pub fn unretain_array(&self, buf: GlkOwnedBuffer, disprock: DispatchRock) {
         let len = buf.len() as u32;
         match buf {
-            GlkOwnedBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, "&+#!Cn".as_ptr(), disprock),
-            GlkOwnedBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, "&+#!Iu".as_ptr(), disprock),
+            GlkOwnedBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, b"&+#!Cn\0".as_ptr(), disprock),
+            GlkOwnedBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, b"&+#!Iu\0".as_ptr(), disprock),
         };
     }
 }
@@ -1618,8 +1609,7 @@ pub struct GlkDate {
 }
 
 // Retained array callbacks
-// The WASM ABI means that we can't return a DispatchRock, so it must be set through an out parameter
-pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8, *mut DispatchRock);
+pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8) -> DispatchRock;
 pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const u8, DispatchRock);
 
 pub struct RetainArrayCallbacks<T> {

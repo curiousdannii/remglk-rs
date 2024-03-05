@@ -37,6 +37,13 @@ addToLibrary({
         })
     },
 
+    emglken_send_glkote_update(update_ptr, update_len) {
+        const update = UTF8ToString(update_ptr, update_len)
+        const obj = JSON.parse(update)
+        // TODO: Store the usage of a fileref prompt request?
+        GlkOte.update(obj)
+    },
+
     $writeBuffer(buffer, data) {
         const ptr = _malloc(data.length)
         HEAP8.set(data, ptr)
