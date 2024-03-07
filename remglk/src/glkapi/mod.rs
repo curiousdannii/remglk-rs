@@ -1738,10 +1738,10 @@ fn glkdate_to_datetime<T: TimeZone>(timezone: T, date: &GlkDate) -> DateTime<T> 
         normalised_date = normalised_date.checked_sub_months(chrono::Months::new((-months) as u32)).unwrap();
     }
     let mut normalised_date = NaiveDateTime::from(normalised_date).and_utc();
-    let duration = Duration::days(date.day as i64 - 1)
-        + Duration::hours(date.hour as i64)
-        + Duration::minutes(date.minute as i64)
-        + Duration::seconds(date.second as i64)
+    let duration = Duration::try_days(date.day as i64 - 1).unwrap()
+        + Duration::try_hours(date.hour as i64).unwrap()
+        + Duration::try_minutes(date.minute as i64).unwrap()
+        + Duration::try_seconds(date.second as i64).unwrap()
         + Duration::nanoseconds(date.microsec as i64 * 1000);
     normalised_date = normalised_date.checked_add_signed(duration).unwrap();
     normalised_date.with_timezone(&timezone)
@@ -1749,7 +1749,7 @@ fn glkdate_to_datetime<T: TimeZone>(timezone: T, date: &GlkDate) -> DateTime<T> 
 
 fn glktime_to_datetime<T: TimeZone>(timezone: T, time: &GlkTime) -> DateTime<T> {
     let timestamp = ((time.high_sec as i64) << 32 | (time.low_sec as i64)) * 1000000 + (time.microsec as i64);
-    let naive = NaiveDateTime::from_timestamp_micros(timestamp).unwrap();
+    let naive = DateTime::from_timestamp_micros(timestamp).unwrap().naive_utc();
     naive.and_local_timezone(timezone).unwrap()
 }
 
