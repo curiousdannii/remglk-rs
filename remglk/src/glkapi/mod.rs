@@ -555,13 +555,12 @@ where S: Default + GlkSystem {
             self.system.fileref_write_buffer(fileref, buf);
         }
 
-        if let Some(disprock) = str.array_disprock {
-            match str.deref_mut().deref_mut() {
-                Stream::ArrayBackedU8(str) => self.unretain_array(GlkOwnedBuffer::U8(str.take_buffer()), disprock),
-                Stream::ArrayBackedU32(str) => self.unretain_array(GlkOwnedBuffer::U32(str.take_buffer()), disprock),
-                _ => unreachable!("Only ArrayBacked streams should have an array_disprock"),
-            };
-        }
+        let disprock = str.array_disprock;
+        match str.deref_mut().deref_mut() {
+            Stream::ArrayBackedU8(str) => self.unretain_array(GlkOwnedBuffer::U8(str.take_buffer()), disprock),
+            Stream::ArrayBackedU32(str) => self.unretain_array(GlkOwnedBuffer::U32(str.take_buffer()), disprock),
+            _ => {},
+        };
 
         drop(str);
         self.streams.unregister(str_glkobj);
@@ -1382,9 +1381,7 @@ where S: Default + GlkSystem {
         let mut dest_unowned: GlkBufferMut = (&mut line_input_buffer).into();
         set_buffer(&src_unowned, 0, &mut dest_unowned, 0, len);
 
-        if let Some(disprock) = win.array_disprock {
-            self.unretain_array(line_input_buffer, disprock);
-        }
+        self.unretain_array(line_input_buffer, win.array_disprock);
 
         win.input.text_input_type = None;
 
@@ -1501,12 +1498,18 @@ where S: Default + GlkSystem {
         self.windows_changed = true;
         let mut win = lock!(win_glkobj);
 
-        if let Some(disprock) = win.array_disprock {
-            match &mut win.data {
-                WindowData::Buffer(data) => self.unretain_array(data.line_input_buffer.take().unwrap(), disprock),
-                WindowData::Grid(data) => self.unretain_array(data.line_input_buffer.take().unwrap(), disprock),
-                _ => {},
-            }
+        match &mut win.data {
+            WindowData::Buffer(data) => {
+                if let Some(buf) = data.line_input_buffer.take() {
+                    self.unretain_array(buf, win.array_disprock);
+                }
+            },
+            WindowData::Grid(data) => {
+                if let Some(buf) = data.line_input_buffer.take() {
+                    self.unretain_array(buf, win.array_disprock);
+                }
+            },
+            _ => {},
         }
 
         if let WindowData::Pair(data) = &win.data {
@@ -1579,11 +1582,22 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn unretain_array(&self, buf: GlkOwnedBuffer, disprock: DispatchRock) {
+    /** Unretain an array, or leak if no callbacks setup */
+    pub fn unretain_array(&self, buf: GlkOwnedBuffer, disprock: Option<DispatchRock>) {
         let len = buf.len() as u32;
         match buf {
-            GlkOwnedBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, b"&+#!Cn\0".as_ptr(), disprock),
-            GlkOwnedBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(Box::leak(buf).as_ptr(), len, b"&+#!Iu\0".as_ptr(), disprock),
+            GlkOwnedBuffer::U8(buf) => {
+                let leaked_buf = Box::leak(buf);
+                if let Some(disprock) = disprock {
+                    (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(leaked_buf.as_ptr(), len, b"&+#!Cn\0".as_ptr(), disprock);
+                }
+            },
+            GlkOwnedBuffer::U32(buf) => {
+                let leaked_buf = Box::leak(buf);
+                if let Some(disprock) = disprock {
+                    (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(leaked_buf.as_ptr(), len, b"&+#!Iu\0".as_ptr(), disprock);
+                }
+            },
         };
     }
 }
