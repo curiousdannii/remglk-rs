@@ -20,7 +20,7 @@ mod windows;
 
 use std::cmp::min;
 use std::mem;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::path;
 use std::str;
 use std::time::SystemTime;
@@ -546,6 +546,10 @@ where S: Default + GlkSystem {
 
     pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<StreamResultCounts> {
         let mut str = lock!(str_glkobj);
+        if matches!(str.deref().deref(), Stream::Window(_)) {
+            return Err(GlkApiError::CannotCloseWindowStream);
+        }
+
         let res = str.close();
         if let Some((fileref, buf)) = stream_to_file_buffer(&mut str) {
             self.system.fileref_write_buffer(fileref, buf);
@@ -561,7 +565,7 @@ where S: Default + GlkSystem {
 
         drop(str);
         self.streams.unregister(str_glkobj);
-        res
+        Ok(res)
     }
 
     pub fn glk_stream_get_current(&self) -> Option<GlkStream> {
@@ -689,13 +693,14 @@ where S: Default + GlkSystem {
 
         let str = Into::<GlkStream>::into(&win.str);
         let res = lock!(str).close();
+        drop(str);
 
         let root_win = self.root_window.as_ref().unwrap();
         if root_win.as_ptr() == win_ptr {
             // Close the root window, which means all windows
-            let root_win = Into::<GlkWindow>::into(root_win);
             self.root_window = None;
-            self.remove_window(root_win, true);
+            drop(win);
+            self.remove_window(win_glkobj, true);
         }
         else {
             let parent_win_glkobj = Into::<GlkWindow>::into(win.parent.as_ref().unwrap());
@@ -736,7 +741,7 @@ where S: Default + GlkSystem {
             self.remove_window(parent_win_glkobj, false);
         }
 
-        res
+        Ok(res)
     }
 
     pub fn glk_window_erase_rect(win: &GlkWindow, left: i32, top: i32, width: u32, height: u32) -> GlkResult<()> {

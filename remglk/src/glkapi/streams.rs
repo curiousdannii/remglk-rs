@@ -45,11 +45,11 @@ impl GlkObjectClass for Stream {
 
 #[enum_dispatch(Stream)]
 pub trait StreamOperations {
-    fn close(&self) -> GlkResult<StreamResultCounts> {
-        Ok(StreamResultCounts {
+    fn close(&self) -> StreamResultCounts {
+        StreamResultCounts {
             read_count: 0,
             write_count: self.write_count() as u32,
-        })
+        }
     }
     fn get_buffer(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<u32> {Ok(0)}
     fn get_char(&mut self, _uni: bool) -> GlkResult<i32> {Ok(-1)}
@@ -116,11 +116,11 @@ impl<T> ArrayBackedStream<T> {
 
 impl<T> StreamOperations for ArrayBackedStream<T>
 where Box<[T]>: GlkArray {
-    fn close(&self) -> GlkResult<StreamResultCounts> {
-        Ok(StreamResultCounts {
+    fn close(&self) -> StreamResultCounts {
+        StreamResultCounts {
             read_count: self.read_count as u32,
             write_count: self.write_count as u32,
-        })
+        }
     }
 
     fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
@@ -273,7 +273,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
 
 impl<T> StreamOperations for FileStream<T>
 where T: Clone + Default, Box<[T]>: GlkArray {
-    fn close(&self) -> GlkResult<StreamResultCounts> {
+    fn close(&self) -> StreamResultCounts {
         self.str.close()
     }
 
@@ -367,10 +367,6 @@ impl WindowStream {
 }
 
 impl StreamOperations for WindowStream {
-    fn close(&self) -> GlkResult<StreamResultCounts> {
-        Err(CannotCloseWindowStream)
-    }
-
     fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
         let win: GlkWindow = (&self.win).into();
         let mut win = win.lock().unwrap();
