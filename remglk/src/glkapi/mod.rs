@@ -192,8 +192,6 @@ where S: Default + GlkSystem {
         self.exited = true;
         let update = self.update();
         self.system.send_glkote_update(update);
-        // TODO: remove once we're no longer using glkote-term
-        self.system.send_glkote_update(Update::Exit);
     }
 
     pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
