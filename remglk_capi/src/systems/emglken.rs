@@ -18,14 +18,13 @@ use serde::de::DeserializeOwned;
 
 use super::*;
 use remglk::GlkSystem;
-use glkapi::protocol::{Event, SystemFileRef, Update};
+use glkapi::protocol::{Event, Update};
 
 extern "C" {
-    fn emglken_fileref_delete(fref_ptr: *const u8, fref_len: usize);
-    fn emglken_fileref_exists(fref_ptr: *const u8, fref_len: usize) -> bool;
-    fn emglken_fileref_read(fref_ptr: *const u8, fref_len: usize, buffer: *mut EmglkenBuffer) -> bool;
-    fn emglken_fileref_temporary(filetype: FileType, buffer: *mut EmglkenBuffer);
-    fn emglken_fileref_write_buffer(fref_ptr: *const u8, fref_len: usize, buf_ptr: *const u8, buf_len: usize);
+    fn emglken_file_delete(path_ptr: *const u8, path_len: usize);
+    fn emglken_file_exists(path_ptr: *const u8, path_len: usize) -> bool;
+    fn emglken_file_read(path_ptr: *const u8, path_len: usize, buffer: *mut EmglkenBuffer) -> bool;
+    fn emglken_file_write_buffer(path_ptr: *const u8, path_len: usize, buf_ptr: *const u8, buf_len: usize);
     fn emglken_get_glkote_event(buffer: *mut EmglkenBuffer);
     fn emglken_send_glkote_update(update_ptr: *const u8, update_len: usize);
 }
@@ -47,42 +46,29 @@ pub fn glkapi() -> &'static Mutex<GlkApi> {
 
 #[derive(Default)]
 pub struct EmglkenSystem {
-    cache: HashMap<SystemFileRef, Box<[u8]>>,
+    cache: HashMap<String, Box<[u8]>>,
 }
 
 impl GlkSystem for EmglkenSystem {
-    fn fileref_construct(&mut self, filename: String, filetype: FileType, gameid: Option<String>) -> SystemFileRef {
-        SystemFileRef {
-            filename,
-            gameid,
-            usage: Some(filetype),
-            ..Default::default()
+    fn file_delete(&mut self, path: &str) {
+        self.cache.remove(path);
+        unsafe {emglken_file_delete(path.as_ptr(), path.len())};
+    }
+
+    fn file_exists(&mut self, path: &str) -> bool {
+        self.cache.contains_key(path) || {
+            unsafe {emglken_file_exists(path.as_ptr(), path.len())}
         }
     }
 
-    fn fileref_delete(&mut self, fileref: &SystemFileRef) {
-        self.cache.remove(&fileref);
-        // TODO: cache the json inside the SystemFileRef?
-        let json = serde_json::to_string(&fileref).unwrap();
-        unsafe {emglken_fileref_delete(json.as_ptr(), json.len())};
-    }
-
-    fn fileref_exists(&mut self, fileref: &SystemFileRef) -> bool {
-        self.cache.contains_key(&fileref) || {
-            let json = serde_json::to_string(&fileref).unwrap();
-            unsafe {emglken_fileref_exists(json.as_ptr(), json.len())}
-        }
-    }
-
-    fn fileref_read(&mut self, fileref: &SystemFileRef) -> Option<Box<[u8]>> {
+    fn file_read(&mut self, path: &str) -> Option<Box<[u8]>> {
         // Check the cache first
-        if let Some(buf) = self.cache.get(&fileref) {
+        if let Some(buf) = self.cache.get(path) {
             Some(buf.clone())
         }
         else {
             let mut buf: MaybeUninit<EmglkenBuffer> = MaybeUninit::uninit();
-            let json = serde_json::to_string(&fileref).unwrap();
-            let result = unsafe {emglken_fileref_read(json.as_ptr(), json.len(), buf.as_mut_ptr())};
+            let result = unsafe {emglken_file_read(path.as_ptr(), path.len(), buf.as_mut_ptr())};
             if result {
                 return Some(buffer_to_boxed_slice(buf));
             }
@@ -90,20 +76,13 @@ impl GlkSystem for EmglkenSystem {
         }
     }
 
-    fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef {
-        let mut buf: MaybeUninit<EmglkenBuffer> = MaybeUninit::uninit();
-        unsafe {emglken_fileref_temporary(filetype, buf.as_mut_ptr())};
-        buffer_to_protocol_struct(buf)
-    }
-
-    fn fileref_write_buffer(&mut self, fileref: &SystemFileRef, buf: Box<[u8]>) {
-        self.cache.insert(fileref.clone(), buf);
+    fn file_write_buffer(&mut self, path: &str, buf: Box<[u8]>) {
+        self.cache.insert(path.to_string(), buf);
     }
 
     fn flush_writeable_files(&mut self) {
-        for (fileref, buf) in self.cache.drain() {
-            let json = serde_json::to_string(&fileref).unwrap();
-            unsafe {emglken_fileref_write_buffer(json.as_ptr(), json.len(), buf.as_ptr(), buf.len())};
+        for (path, buf) in self.cache.drain() {
+            unsafe {emglken_file_write_buffer(path.as_ptr(), path.len(), buf.as_ptr(), buf.len())};
         }
         self.cache.shrink_to(4);
     }
@@ -120,9 +99,20 @@ impl GlkSystem for EmglkenSystem {
         unsafe {emglken_send_glkote_update(json.as_ptr(), json.len())};
     }
 
-    fn working_directory() -> PathBuf {
+    fn get_folders() -> Folders {
         // TODO: do something better here when we can do it reliably in both Node and browser
-        PathBuf::new()
+        Folders {
+            storyfile: PathBuf::new(),
+            temp: PathBuf::new(),
+            working: PathBuf::new(),
+        }
+    }
+
+    fn set_base_file(folders: &mut Folders, path: String) {
+        // This really needs to move to the JS layer, as it depends on the Dialog backend
+        let mut path = PathBuf::from(path);
+        path.pop();
+        folders.storyfile = path;
     }
 }
 

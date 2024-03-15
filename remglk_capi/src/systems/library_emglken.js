@@ -22,13 +22,15 @@ const EMGLKEN_JS = {
         const seekmode_End = 2
     `,
 
-    emglken_fileref_delete(fref_ptr, fref_len) {
-        const fref = JSON.parse(UTF8ToString(fref_ptr, fref_len))
+    emglken_file_delete(path_ptr, path_len) {
+        const path = UTF8ToString(path_ptr, path_len)
+        const fref = {filename: path}
         Dialog.file_remove_ref(fref)
     },
 
-    emglken_fileref_exists(fref_ptr, fref_len) {
-        const fref = JSON.parse(UTF8ToString(fref_ptr, fref_len))
+    emglken_file_exists(path_ptr, path_len) {
+        const path = UTF8ToString(path_ptr, path_len)
+        const fref = {filename: path}
         if (fref.filename === storyfile_name) {
             return true
         }
@@ -37,8 +39,9 @@ const EMGLKEN_JS = {
         }
     },
 
-    emglken_fileref_read(fref_ptr, fref_len, buffer) {
-        const fref = JSON.parse(UTF8ToString(fref_ptr, fref_len))
+    emglken_file_read(path_ptr, path_len, buffer) {
+        const path = UTF8ToString(path_ptr, path_len)
+        const fref = {filename: path}
         let data
         if (fref.filename === storyfile_name) {
             data = storyfile_data
@@ -64,13 +67,9 @@ const EMGLKEN_JS = {
         return false
     },
 
-    emglken_fileref_temporary(filetype, buffer) {
-        let fref = Dialog.file_construct_temp_ref(FILETYPES[filetype])
-        writeBufferJSON(buffer, fref)
-    },
-
-    emglken_fileref_write_buffer(fref_ptr, fref_len, buf_ptr, buf_len) {
-        const fref = JSON.parse(UTF8ToString(fref_ptr, fref_len))
+    emglken_file_write_buffer(path_ptr, path_len, buf_ptr, buf_len) {
+        const path = UTF8ToString(path_ptr, path_len)
+        const fref = {filename: path}
         const buffer = HEAP8.subarray(buf_ptr, buf_ptr + buf_len)
         if (Dialog.streaming) {
             const fstream = Dialog.file_fopen(filemode_Write, fref)

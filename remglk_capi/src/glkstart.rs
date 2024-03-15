@@ -13,7 +13,6 @@ https://github.com/curiousdannii/remglk-rs
 
 use std::env;
 use std::ffi::{c_char, c_int, CStr, CString};
-use std::path;
 use std::slice;
 use std::str;
 
@@ -202,10 +201,8 @@ unsafe fn glkunix_arguments() -> Vec<GlkUnixArgument> {
 
 #[no_mangle]
 pub extern "C" fn glkunix_set_base_file(filename_ptr: *const c_char) {
-    let filename = unsafe {CStr::from_ptr(filename_ptr)}.to_str().unwrap();
-    let mut path = path::PathBuf::from(filename);
-    path.pop();
-    glkapi().lock().unwrap().working_directory = path;
+    let path = unsafe {CStr::from_ptr(filename_ptr)}.to_str().unwrap().to_owned();
+    glkapi().lock().unwrap().glkunix_set_base_file(path);
 }
 
 #[no_mangle]
@@ -214,7 +211,7 @@ pub extern "C" fn glkunix_stream_open_pathname(filename_ptr: *const i8, textmode
     let mut glkapi = glkapi().lock().unwrap();
     let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
     let filename = filename_cstr.to_string_lossy().to_string();
-    let fileref = glkapi.glk_fileref_create_by_name_uncleaned(fileusage_Data | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename, rock);
+    let fileref = glkapi.glkunix_fileref_create_by_name_uncleaned(fileusage_Data | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename, rock);
     let str = glkapi.glk_stream_open_file(&fileref, FileMode::Read, rock).unwrap().unwrap();
     glkapi.glk_fileref_destroy(fileref);
     to_owned(str)

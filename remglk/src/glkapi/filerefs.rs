@@ -16,14 +16,14 @@ pub type GlkFileRef = GlkObject<FileRef>;
 #[derive(Default)]
 pub struct FileRef {
     pub binary: bool,
-    pub system_fileref: SystemFileRef,
+    pub path: String,
 }
 
 impl FileRef {
-    pub fn new(system_fileref: SystemFileRef, usage: u32) -> Self {
+    pub fn new(path: String, usage: u32) -> Self {
         FileRef {
             binary: (usage & fileusage_TextMode) == 0,
-            system_fileref,
+            path,
         }
     }
 }

@@ -13,11 +13,11 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, BufRead};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::*;
 use remglk::GlkSystem;
-use glkapi::protocol::{Event, SystemFileRef, Update};
+use glkapi::protocol::{Event, Update};
 
 pub type GlkApi = glkapi::GlkApi<StandardSystem>;
 
@@ -31,51 +31,30 @@ pub fn glkapi() -> &'static Mutex<GlkApi> {
 #[derive(Default)]
 pub struct StandardSystem {
     cache: HashMap<String, Box<[u8]>>,
-    tempfile_counter: u32,
 }
 
 impl GlkSystem for StandardSystem {
-    fn fileref_construct(&mut self, filename: String, filetype: FileType, gameid: Option<String>) -> SystemFileRef {
-        SystemFileRef {
-            filename,
-            gameid,
-            usage: Some(filetype),
-            ..Default::default()
-        }
+    fn file_delete(&mut self, path: &str) {
+        self.cache.remove(path);
+        let _ = fs::remove_file(Path::new(path));
     }
 
-    fn fileref_delete(&mut self, fileref: &SystemFileRef) {
-        self.cache.remove(&fileref.filename);
-        let _ = fs::remove_file(Path::new(&fileref.filename));
+    fn file_exists(&mut self, path: &str) -> bool {
+        self.cache.contains_key(path) || Path::new(path).exists()
     }
 
-    fn fileref_exists(&mut self, fileref: &SystemFileRef) -> bool {
-        self.cache.contains_key(&fileref.filename) || Path::new(&fileref.filename).exists()
-    }
-
-    fn fileref_read(&mut self, fileref: &SystemFileRef) -> Option<Box<[u8]>> {
+    fn file_read(&mut self, path: &str) -> Option<Box<[u8]>> {
         // Check the cache first
-        if let Some(buf) = self.cache.get(&fileref.filename) {
+        if let Some(buf) = self.cache.get(path) {
             Some(buf.clone())
         }
         else {
-            fs::read(&fileref.filename).ok().map(|buf| buf.into_boxed_slice())
+            fs::read(path).ok().map(|buf| buf.into_boxed_slice())
         }
     }
 
-    fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef {
-        let filename = format!("remglktempfile-{}", self.tempfile_counter);
-        self.tempfile_counter += 1;
-        let path = env::temp_dir().join(filename);
-        SystemFileRef {
-            filename: path.to_str().unwrap().to_string(),
-            usage: Some(filetype),
-            ..Default::default()
-        }
-    }
-
-    fn fileref_write_buffer(&mut self, fileref: &SystemFileRef, buf: Box<[u8]>) {
-        self.cache.insert(fileref.filename.clone(), buf);
+    fn file_write_buffer(&mut self, path: &str, buf: Box<[u8]>) {
+        self.cache.insert(path.to_string(), buf);
     }
 
     fn flush_writeable_files(&mut self) {
@@ -105,7 +84,18 @@ impl GlkSystem for StandardSystem {
         println!("{}", output);
     }
 
-    fn working_directory() -> std::path::PathBuf {
-        env::current_dir().unwrap()
+    fn get_folders() -> Folders {
+        Folders {
+            storyfile: env::current_dir().unwrap(),
+            temp: env::temp_dir(),
+            working: env::current_dir().unwrap(),
+        }
+    }
+
+    fn set_base_file(folders: &mut Folders, path: String) {
+        let mut path = PathBuf::from(path);
+        path.pop();
+        folders.storyfile = path.clone();
+        folders.working = path;
     }
 }

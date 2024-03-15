@@ -136,16 +136,17 @@ pub struct SpecialEvent {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum FileRefResponse {
-    Name(String),
+    Path(String),
     Fref(SystemFileRef),
 }
 
+/** SystemFileRefs aren't used internally, but may be returned from `glk_fileref_create_by_prompt` */
 #[derive(Clone, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct SystemFileRef {
-    pub content: Option<String>,
+    //pub content: Option<String>,
     pub filename: String,
-    pub gameid: Option<String>,
-    pub usage: Option<FileType>,
+    //pub gameid: Option<String>,
+    //pub usage: Option<FileType>,
 }
 
 #[derive(Deserialize)]

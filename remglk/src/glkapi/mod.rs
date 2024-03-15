@@ -21,7 +21,6 @@ mod windows;
 use std::cmp::min;
 use std::mem;
 use std::ops::{Deref, DerefMut};
-use std::path;
 use std::str;
 use std::time::SystemTime;
 
@@ -52,6 +51,7 @@ where S: Default + GlkSystem {
     current_stream: Option<GlkStreamWeak>,
     exited: bool,
     pub filerefs: GlkObjectStore<FileRef>,
+    pub folders: Folders,
     gen: u32,
     metrics: NormalisedMetrics,
     partial_inputs: PartialInputs,
@@ -64,18 +64,18 @@ where S: Default + GlkSystem {
     stylehints_grid: WindowStyles,
     support: SupportedFeatures,
     pub system: S,
+    tempfile_counter: u32,
     timer: TimerData,
     pub windows: GlkObjectStore<Window>,
     windows_changed: bool,
-    pub working_directory: path::PathBuf,
 }
 
 impl<S> GlkApi<S>
 where S: Default + GlkSystem {
     pub fn new(system: S) -> Self {
         GlkApi {
+            folders: S::get_folders(),
             system,
-            working_directory: S::working_directory(),
             ..Default::default()
         }
     }
@@ -190,18 +190,15 @@ where S: Default + GlkSystem {
 
     pub fn glk_exit(&mut self) {
         self.exited = true;
+        self.delete_temp_files();
         let update = self.update();
         self.system.send_glkote_update(update);
     }
 
     pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
         let filetype = file_type(usage & fileusage_TypeMask);
-        self.create_fileref(FileRefResponse::Name(clean_filename(filename, filetype)), rock, usage)
-    }
-
-    // For glkunix_stream_open_pathname
-    pub fn glk_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
-        self.create_fileref(FileRefResponse::Name(filename), rock, usage)
+        let path = self.folders.working.join(clean_filename(filename, filetype)).to_str().unwrap().to_owned();
+        self.create_fileref(path, rock, usage)
     }
 
     pub fn glk_fileref_create_by_prompt(&mut self, usage: u32, fmode: FileMode, rock: u32) -> GlkResult<Option<GlkFileRef>> {
@@ -219,7 +216,12 @@ where S: Default + GlkSystem {
         if let Some(event) = event {
             let res = self.handle_event(event)?;
             if let Some(fref) = res.fref {
-                return Ok(Some(self.create_fileref(fref, rock, usage)));
+                let filename = match fref {
+                    FileRefResponse::Fref(fref) => fref.filename,
+                    FileRefResponse::Path(path) => path,
+                };
+                let path = self.folders.working.join(clean_filename(filename, filetype)).to_str().unwrap().to_owned();
+                return Ok(Some(self.create_fileref(path, rock, usage)));
             }
         }
         else {
@@ -230,18 +232,18 @@ where S: Default + GlkSystem {
 
     pub fn glk_fileref_create_from_fileref(&mut self, usage: u32, fileref: &GlkFileRef, rock: u32) -> GlkFileRef {
         let fileref = lock!(fileref);
-        self.create_fileref(FileRefResponse::Fref(fileref.system_fileref.clone()), rock, usage)
+        self.create_fileref(fileref.path.clone(), rock, usage)
     }
 
     pub fn glk_fileref_create_temp(&mut self, usage: u32, rock: u32) -> GlkFileRef {
-        let filetype = file_type(usage & fileusage_TypeMask);
-        let system_fileref = self.system.fileref_temporary(filetype);
-        self.create_fileref(FileRefResponse::Fref(system_fileref), rock, usage)
+        let path = self.temp_file_path(self.tempfile_counter);
+        self.tempfile_counter += 1;
+        self.create_fileref(path, rock, usage)
     }
 
     pub fn glk_fileref_delete_file(&mut self, fileref: &GlkFileRef) {
         let fileref = lock!(fileref);
-        self.system.fileref_delete(&fileref.system_fileref);
+        self.system.file_delete(&fileref.path);
     }
 
     pub fn glk_fileref_destroy(&mut self, fileref: GlkFileRef) {
@@ -250,7 +252,7 @@ where S: Default + GlkSystem {
 
     pub fn glk_fileref_does_file_exist(&mut self, fileref: &GlkFileRef) -> bool {
         let fileref = lock!(fileref);
-        self.system.fileref_exists(&fileref.system_fileref)
+        self.system.file_exists(&fileref.path)
     }
 
     pub fn glk_fileref_get_rock(fileref: &GlkFileRef) -> GlkResult<u32> {
@@ -550,7 +552,7 @@ where S: Default + GlkSystem {
 
         let res = str.close();
         if let Some((fileref, buf)) = stream_to_file_buffer(&mut str) {
-            self.system.fileref_write_buffer(fileref, buf);
+            self.system.file_write_buffer(fileref, buf);
         }
 
         let disprock = str.array_disprock;
@@ -1029,6 +1031,17 @@ where S: Default + GlkSystem {
         lock!(win).echostr = str.map(|str| str.downgrade());
     }
 
+    // Extensions
+
+    pub fn glkunix_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
+        let path = self.folders.storyfile.join(filename).to_str().unwrap().to_owned();
+        self.create_fileref(path, rock, usage)
+    }
+
+    pub fn glkunix_set_base_file(&mut self, path: String) {
+        S::set_base_file(&mut self.folders, path);
+    }
+
     // The GlkOte protocol functions
 
     pub fn get_glkote_init(&mut self) {
@@ -1230,28 +1243,19 @@ where S: Default + GlkSystem {
 
     // Internal functions
 
-    fn create_fileref(&mut self, fileref: FileRefResponse, rock: u32, usage: u32) -> GlkFileRef {
-        let mut system_fileref = match fileref {
-            FileRefResponse::Name(filename) => self.system.fileref_construct(filename, file_type(usage & fileusage_TypeMask), None),
-            FileRefResponse::Fref(fref) => fref,
-        };
-
-        // Set all paths relative to the working directory.
-        let path = self.working_directory.join(system_fileref.filename);
-        system_fileref.filename = path.to_str().unwrap().to_owned();
-
-        let fref = FileRef::new(system_fileref, usage);
+    fn create_fileref(&mut self, path: String, rock: u32, usage: u32) -> GlkFileRef {
+        let fref = FileRef::new(path, usage);
         let fref_glkobj = GlkObject::new(fref);
         self.filerefs.register(&fref_glkobj, rock);
         fref_glkobj
     }
 
     fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
-        let (binary, system_fileref) = {
+        let (binary, path) = {
             let fileref = lock!(fileref);
-            (fileref.binary, fileref.system_fileref.clone())
+            (fileref.binary, fileref.path.clone())
         };
-        if mode == FileMode::Read && !self.system.fileref_exists(&system_fileref) {
+        if mode == FileMode::Read && !self.system.file_exists(&path) {
             return Ok(None);
         }
 
@@ -1260,10 +1264,10 @@ where S: Default + GlkSystem {
             None
         }
         else {
-            self.system.fileref_read(&system_fileref)
+            self.system.file_read(&path)
         };
         let data: GlkResult<Box<[u8]>> = data.map_or_else(|| {
-            self.system.fileref_write_buffer(&system_fileref, vec![].into_boxed_slice());
+            self.system.file_write_buffer(&path, vec![].into_boxed_slice());
             Ok(vec![].into_boxed_slice())
         }, Ok);
         let data = data?;
@@ -1313,6 +1317,13 @@ where S: Default + GlkSystem {
         }
     }
 
+    fn delete_temp_files(&mut self) {
+        for file_num in 0..self.tempfile_counter {
+            let path = self.temp_file_path(file_num);
+            self.system.file_delete(&path);
+        }
+    }
+
     fn draw_image(win: &GlkWindow, info: ImageInfo, height: u32, val1: i32, val2: i32, width: u32) -> u32 {
         let mut win = lock!(win);
         match &mut win.data {
@@ -1345,7 +1356,7 @@ where S: Default + GlkSystem {
         for str in self.streams.iter() {
             let mut str = lock!(str);
             if let Some((fileref, buf)) = stream_to_file_buffer(&mut str) {
-                self.system.fileref_write_buffer(fileref, buf);
+                self.system.file_write_buffer(fileref, buf);
             }
         }
         self.system.flush_writeable_files();
@@ -1580,6 +1591,11 @@ where S: Default + GlkSystem {
         }
     }
 
+    fn temp_file_path(&self, file_num: u32) -> String {
+        let filename = format!("remglktempfile-{}", file_num);
+        self.folders.temp.join(filename).to_str().unwrap().to_owned()
+    }
+
     /** Unretain an array, or leak if no callbacks setup */
     pub fn unretain_array(&self, buf: GlkOwnedBuffer, disprock: Option<DispatchRock>) {
         let len = buf.len() as u32;
@@ -1598,6 +1614,13 @@ where S: Default + GlkSystem {
             },
         };
     }
+}
+
+#[derive(Default)]
+pub struct Folders {
+    pub storyfile: PathBuf,
+    pub temp: PathBuf,
+    pub working: PathBuf,
 }
 
 /** A Glk event */
@@ -1774,12 +1797,12 @@ fn normalise_window_dimension(val: f64) -> usize {
     val.floor().max(0.0) as usize
 }
 
-fn stream_to_file_buffer(str: &mut Stream) -> Option<(&SystemFileRef, Box<[u8]>)> {
-    fn inner_processor<T>(str: &mut FileStream<T>) -> Option<(&SystemFileRef, Box<[u8]>)>
+fn stream_to_file_buffer(str: &mut Stream) -> Option<(&str, Box<[u8]>)> {
+    fn inner_processor<T>(str: &mut FileStream<T>) -> Option<(&str, Box<[u8]>)>
     where T: Clone + Default, Box<[T]>: GlkArray {
         if str.changed {
             str.changed = false;
-            Some((&str.fileref, str.to_file_buffer()))
+            Some((&str.path, str.to_file_buffer()))
         }
         else {
             None

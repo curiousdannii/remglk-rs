@@ -235,7 +235,7 @@ where Box<[T]>: GlkArray {
 pub struct FileStream<T> {
     binary: bool,
     pub changed: bool,
-    pub fileref: SystemFileRef,
+    pub path: String,
     str: ArrayBackedStream<T>,
 }
 
@@ -248,7 +248,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
         FileStream {
             binary: fileref.binary,
             changed: false,
-            fileref: fileref.system_fileref.clone(),
+            path: fileref.path.clone(),
             str,
         }
     }

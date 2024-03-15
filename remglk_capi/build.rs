@@ -18,5 +18,5 @@ fn main() {
         .file("src/glk/support.c")
         .warnings(false)
         .compile("miniglk");
-    println!("cargo:rerun-if-changed=src/");
+    println!("cargo:rerun-if-changed=src/glk/");
 }

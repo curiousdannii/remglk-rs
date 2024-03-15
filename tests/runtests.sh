@@ -13,7 +13,6 @@ echo ' Glulxercise'
 run_test glulxercise.ulx.regtest
 echo ' advent'
 run_test advent.ulx.regtest
-rm adventtest
 
 echo 'Glk tests'
 echo ' datetimetest'
@@ -23,7 +22,6 @@ run_test extbinaryfile.ulx.regtest
 rm binfile.glkdata
 echo ' externalfile'
 run_test externalfile.ulx.regtest
-rm testfile*
 echo ' graphwintest'
 # TODO: support refresh
 run_test graphwintest.gblorb.regtest
@@ -46,5 +44,7 @@ echo ' unicodetest'
 run_test unicodetest.ulx.regtest
 echo ' windowtest'
 run_test windowtest.ulx.regtest
+
+rm *.glk*
 
 exit $FAILURES

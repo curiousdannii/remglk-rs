@@ -14,18 +14,16 @@ pub mod glkapi;
 
 use std::path::PathBuf;
 
-use glkapi::constants::*;
-use glkapi::protocol::{Event, SystemFileRef, Update};
+use glkapi::Folders;
+use glkapi::protocol::{Event, Update};
 
 /** Glk's access to the operating system */
 pub trait GlkSystem {
-    // Fileref functions
-    fn fileref_construct(&mut self, filename: String, filetype: FileType, gameid: Option<String>) -> SystemFileRef;
-    fn fileref_delete(&mut self, fileref: &SystemFileRef);
-    fn fileref_exists(&mut self, fileref: &SystemFileRef) -> bool;
-    fn fileref_read(&mut self, fileref: &SystemFileRef) -> Option<Box<[u8]>>;
-    fn fileref_temporary(&mut self, filetype: FileType) -> SystemFileRef;
-    fn fileref_write_buffer(&mut self, fileref: &SystemFileRef, buf: Box<[u8]>);
+    // File functions
+    fn file_delete(&mut self, path: &str);
+    fn file_exists(&mut self, path: &str) -> bool;
+    fn file_read(&mut self, path: &str) -> Option<Box<[u8]>>;
+    fn file_write_buffer(&mut self, path: &str, buf: Box<[u8]>);
     fn flush_writeable_files(&mut self);
 
     /** Send an update to GlkOte */
@@ -33,5 +31,6 @@ pub trait GlkSystem {
     /** Get an event from GlkOte */
     fn get_glkote_event(&mut self) -> Option<Event>;
 
-    fn working_directory() -> PathBuf;
+    fn get_folders() -> Folders;
+    fn set_base_file(folders: &mut Folders, path: String);
 }
