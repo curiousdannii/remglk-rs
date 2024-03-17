@@ -84,15 +84,15 @@ impl GlkSystem for StandardSystem {
         println!("{}", output);
     }
 
-    fn get_folders() -> Folders {
-        Folders {
+    fn get_directories() -> Directories {
+        Directories {
             storyfile: env::current_dir().unwrap(),
             temp: env::temp_dir(),
             working: env::current_dir().unwrap(),
         }
     }
 
-    fn set_base_file(folders: &mut Folders, path: String) {
+    fn set_base_file(folders: &mut Directories, path: String) {
         let mut path = PathBuf::from(path);
         path.pop();
         folders.storyfile = path.clone();

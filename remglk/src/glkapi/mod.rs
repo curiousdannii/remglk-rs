@@ -51,7 +51,7 @@ where S: Default + GlkSystem {
     current_stream: Option<GlkStreamWeak>,
     exited: bool,
     pub filerefs: GlkObjectStore<FileRef>,
-    pub folders: Folders,
+    pub dirs: Directories,
     gen: u32,
     metrics: NormalisedMetrics,
     partial_inputs: PartialInputs,
@@ -74,7 +74,7 @@ impl<S> GlkApi<S>
 where S: Default + GlkSystem {
     pub fn new(system: S) -> Self {
         GlkApi {
-            folders: S::get_folders(),
+            dirs: S::get_directories(),
             system,
             ..Default::default()
         }
@@ -197,7 +197,7 @@ where S: Default + GlkSystem {
 
     pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
         let filetype = file_type(usage & fileusage_TypeMask);
-        let path = self.folders.working.join(clean_filename(filename, filetype)).to_str().unwrap().to_owned();
+        let path = self.dirs.working.join(clean_filename(filename, filetype)).to_str().unwrap().to_owned();
         self.create_fileref(path, rock, usage)
     }
 
@@ -220,7 +220,7 @@ where S: Default + GlkSystem {
                     FileRefResponse::Fref(fref) => fref.filename,
                     FileRefResponse::Path(path) => path,
                 };
-                let path = self.folders.working.join(clean_filename(filename, filetype)).to_str().unwrap().to_owned();
+                let path = self.dirs.working.join(clean_filename(filename, filetype)).to_str().unwrap().to_owned();
                 return Ok(Some(self.create_fileref(path, rock, usage)));
             }
         }
@@ -1034,12 +1034,12 @@ where S: Default + GlkSystem {
     // Extensions
 
     pub fn glkunix_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
-        let path = self.folders.storyfile.join(filename).to_str().unwrap().to_owned();
+        let path = self.dirs.storyfile.join(filename).to_str().unwrap().to_owned();
         self.create_fileref(path, rock, usage)
     }
 
     pub fn glkunix_set_base_file(&mut self, path: String) {
-        S::set_base_file(&mut self.folders, path);
+        S::set_base_file(&mut self.dirs, path);
     }
 
     // The GlkOte protocol functions
@@ -1593,7 +1593,7 @@ where S: Default + GlkSystem {
 
     fn temp_file_path(&self, file_num: u32) -> String {
         let filename = format!("remglktempfile-{}", file_num);
-        self.folders.temp.join(filename).to_str().unwrap().to_owned()
+        self.dirs.temp.join(filename).to_str().unwrap().to_owned()
     }
 
     /** Unretain an array, or leak if no callbacks setup */
@@ -1617,7 +1617,7 @@ where S: Default + GlkSystem {
 }
 
 #[derive(Default)]
-pub struct Folders {
+pub struct Directories {
     pub storyfile: PathBuf,
     pub temp: PathBuf,
     pub working: PathBuf,

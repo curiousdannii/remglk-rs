@@ -14,6 +14,7 @@ use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use std::slice;
 
+use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use super::*;
@@ -25,14 +26,10 @@ extern "C" {
     fn emglken_file_exists(path_ptr: *const u8, path_len: usize) -> bool;
     fn emglken_file_read(path_ptr: *const u8, path_len: usize, buffer: *mut EmglkenBuffer) -> bool;
     fn emglken_file_write_buffer(path_ptr: *const u8, path_len: usize, buf_ptr: *const u8, buf_len: usize);
+    fn emglken_get_dirs(buffer: *mut EmglkenBuffer);
     fn emglken_get_glkote_event(buffer: *mut EmglkenBuffer);
     fn emglken_send_glkote_update(update_ptr: *const u8, update_len: usize);
-}
-
-#[repr(C)]
-pub struct EmglkenBuffer {
-    pub ptr: *mut u8,
-    pub len: usize,
+    fn emglken_set_storyfile_dir(path_ptr: *const u8, path_len: usize, buffer: *mut EmglkenBuffer);
 }
 
 pub type GlkApi = glkapi::GlkApi<EmglkenSystem>;
@@ -99,21 +96,40 @@ impl GlkSystem for EmglkenSystem {
         unsafe {emglken_send_glkote_update(json.as_ptr(), json.len())};
     }
 
-    fn get_folders() -> Folders {
-        // TODO: do something better here when we can do it reliably in both Node and browser
-        Folders {
-            storyfile: PathBuf::new(),
-            temp: PathBuf::new(),
-            working: PathBuf::new(),
+    fn get_directories() -> Directories {
+        let mut buf: MaybeUninit<EmglkenBuffer> = MaybeUninit::uninit();
+        unsafe {emglken_get_dirs(buf.as_mut_ptr())};
+        let dirs: EmglkenDirectories = buffer_to_protocol_struct(buf);
+        Directories {
+            storyfile: PathBuf::from(dirs.storyfile),
+            temp: PathBuf::from(dirs.temp),
+            working: PathBuf::from(dirs.working),
         }
     }
 
-    fn set_base_file(folders: &mut Folders, path: String) {
-        // This really needs to move to the JS layer, as it depends on the Dialog backend
+    fn set_base_file(dirs: &mut Directories, path: String) {
         let mut path = PathBuf::from(path);
         path.pop();
-        folders.storyfile = path;
+        let path = path.to_str().unwrap();
+        let mut buf: MaybeUninit<EmglkenBuffer> = MaybeUninit::uninit();
+        unsafe {emglken_set_storyfile_dir(path.as_ptr(), path.len(), buf.as_mut_ptr())};
+        let emglken_dirs: EmglkenDirectories = buffer_to_protocol_struct(buf);
+        dirs.storyfile = PathBuf::from(emglken_dirs.storyfile);
+        dirs.working = PathBuf::from(emglken_dirs.working);
     }
+}
+
+#[repr(C)]
+pub struct EmglkenBuffer {
+    pub ptr: *mut u8,
+    pub len: usize,
+}
+
+#[derive(Deserialize)]
+struct EmglkenDirectories {
+    pub storyfile: String,
+    pub temp: String,
+    pub working: String,
 }
 
 fn buffer_to_boxed_slice(buffer: MaybeUninit<EmglkenBuffer>) -> Box<[u8]> {

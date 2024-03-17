@@ -14,7 +14,7 @@ pub mod glkapi;
 
 use std::path::PathBuf;
 
-use glkapi::Folders;
+use glkapi::Directories;
 use glkapi::protocol::{Event, Update};
 
 /** Glk's access to the operating system */
@@ -31,6 +31,6 @@ pub trait GlkSystem {
     /** Get an event from GlkOte */
     fn get_glkote_event(&mut self) -> Option<Event>;
 
-    fn get_folders() -> Folders;
-    fn set_base_file(folders: &mut Folders, path: String);
+    fn get_directories() -> Directories;
+    fn set_base_file(folders: &mut Directories, path: String);
 }

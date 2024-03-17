@@ -25,9 +25,6 @@ const EMGLKEN_JS = {
     emglken_file_exists(path_ptr, path_len) {
         return Asyncify.handleAsync(async () => {
             const path = UTF8ToString(path_ptr, path_len)
-            if (path === storyfile_name) {
-                return true
-            }
             return Dialog.exists(path)
         })
     },
@@ -36,13 +33,7 @@ const EMGLKEN_JS = {
     emglken_file_read(path_ptr, path_len, buffer) {
         return Asyncify.handleAsync(async () => {
             const path = UTF8ToString(path_ptr, path_len)
-            let data
-            if (path === storyfile_name) {
-                data = storyfile_data
-            }
-            else {
-                data = await Dialog.read(path)
-            }
+            const data = await Dialog.read(path)
             if (data) {
                 writeBuffer(buffer, data)
                 return true
@@ -55,6 +46,11 @@ const EMGLKEN_JS = {
         const path = UTF8ToString(path_ptr, path_len)
         const data = HEAP8.subarray(buf_ptr, buf_ptr + buf_len)
         Dialog.write(path, data)
+    },
+
+    emglken_get_dirs(buffer) {
+        const dirs = Dialog.get_dirs()
+        writeBufferJSON(buffer, dirs)
     },
 
     emglken_get_glkote_event__async: true,
@@ -71,6 +67,13 @@ const EMGLKEN_JS = {
     emglken_send_glkote_update(update_ptr, update_len) {
         const obj = JSON.parse(UTF8ToString(update_ptr, update_len))
         GlkOte.update(obj)
+    },
+
+    emglken_set_storyfile_dir(path_ptr, path_len, buffer) {
+        const path = UTF8ToString(path_ptr, path_len)
+        Dialog.set_storyfile_dir(path)
+        const dirs = Dialog.get_dirs()
+        writeBufferJSON(buffer, dirs)
     },
 
     $writeBuffer(buffer, data) {
