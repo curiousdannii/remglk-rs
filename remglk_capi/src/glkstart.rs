@@ -200,6 +200,15 @@ unsafe fn glkunix_arguments() -> Vec<GlkUnixArgument> {
 }
 
 #[no_mangle]
+pub extern "C" fn glkunix_fileref_create_by_name_uncleaned(usage: u32, filename_ptr: *const i8, rock: u32) -> FileRefPtr {
+    let mut glkapi = glkapi().lock().unwrap();
+    let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
+    let filename = filename_cstr.to_string_lossy().to_string();
+    let fileref = glkapi.glkunix_fileref_create_by_name_uncleaned(usage, filename, rock);
+    to_owned(fileref)
+}
+
+#[no_mangle]
 pub extern "C" fn glkunix_set_base_file(filename_ptr: *const c_char) {
     let path = unsafe {CStr::from_ptr(filename_ptr)}.to_str().unwrap().to_owned();
     glkapi().lock().unwrap().glkunix_set_base_file(path);
@@ -207,12 +216,16 @@ pub extern "C" fn glkunix_set_base_file(filename_ptr: *const c_char) {
 
 #[no_mangle]
 pub extern "C" fn glkunix_stream_open_pathname(filename_ptr: *const i8, textmode: u32, rock: u32) -> StreamPtr {
-    // Remglk banned this from being used except during glkunix_startup_code, but I don't think that's really necessary
+    glkunix_stream_open_pathname_gen(filename_ptr, 0, textmode, rock)
+}
+
+#[no_mangle]
+pub extern "C" fn glkunix_stream_open_pathname_gen(filename_ptr: *const i8, writemode: u32, textmode: u32, rock: u32) -> StreamPtr {
+    // Remglk says this can only be called during glkunix_startup_code, but I don't think that's really necessary
+    let fileref = glkunix_fileref_create_by_name_uncleaned(fileusage_Data | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename_ptr, 0);
+    let fileref = reclaim(fileref);
     let mut glkapi = glkapi().lock().unwrap();
-    let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
-    let filename = filename_cstr.to_string_lossy().to_string();
-    let fileref = glkapi.glkunix_fileref_create_by_name_uncleaned(fileusage_Data | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename, rock);
-    let str = glkapi.glk_stream_open_file(&fileref, FileMode::Read, rock).unwrap().unwrap();
+    let str = glkapi.glk_stream_open_file(&fileref, if writemode > 0 {FileMode::Write} else {FileMode::Read}, rock).unwrap().unwrap();
     glkapi.glk_fileref_destroy(fileref);
     to_owned(str)
 }

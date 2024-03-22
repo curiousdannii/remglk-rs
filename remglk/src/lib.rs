@@ -12,8 +12,6 @@ https://github.com/curiousdannii/remglk-rs
 pub mod blorb;
 pub mod glkapi;
 
-use std::path::PathBuf;
-
 use glkapi::Directories;
 use glkapi::protocol::{Event, Update};
 
@@ -32,5 +30,5 @@ pub trait GlkSystem {
     fn get_glkote_event(&mut self) -> Option<Event>;
 
     fn get_directories() -> Directories;
-    fn set_base_file(folders: &mut Directories, path: String);
+    fn set_base_file(dirs: &mut Directories, path: String);
 }

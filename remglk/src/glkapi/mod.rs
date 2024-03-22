@@ -21,6 +21,7 @@ mod windows;
 use std::cmp::min;
 use std::mem;
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::str;
 use std::time::SystemTime;
 
@@ -1034,7 +1035,7 @@ where S: Default + GlkSystem {
     // Extensions
 
     pub fn glkunix_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
-        let path = self.dirs.storyfile.join(filename).to_str().unwrap().to_owned();
+        let path = self.dirs.system_cwd.join(filename).to_str().unwrap().to_owned();
         self.create_fileref(path, rock, usage)
     }
 
@@ -1619,6 +1620,7 @@ where S: Default + GlkSystem {
 #[derive(Default)]
 pub struct Directories {
     pub storyfile: PathBuf,
+    pub system_cwd: PathBuf,
     pub temp: PathBuf,
     pub working: PathBuf,
 }

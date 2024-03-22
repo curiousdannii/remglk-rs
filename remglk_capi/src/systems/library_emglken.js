@@ -71,8 +71,7 @@ const EMGLKEN_JS = {
 
     emglken_set_storyfile_dir(path_ptr, path_len, buffer) {
         const path = UTF8ToString(path_ptr, path_len)
-        Dialog.set_storyfile_dir(path)
-        const dirs = Dialog.get_dirs()
+        const dirs = Dialog.set_storyfile_dir(path)
         writeBufferJSON(buffer, dirs)
     },
 

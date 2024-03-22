@@ -102,6 +102,7 @@ impl GlkSystem for EmglkenSystem {
         let dirs: EmglkenDirectories = buffer_to_protocol_struct(buf);
         Directories {
             storyfile: PathBuf::from(dirs.storyfile),
+            system_cwd: PathBuf::from(dirs.system_cwd),
             temp: PathBuf::from(dirs.temp),
             working: PathBuf::from(dirs.working),
         }
@@ -113,9 +114,13 @@ impl GlkSystem for EmglkenSystem {
         let path = path.to_str().unwrap();
         let mut buf: MaybeUninit<EmglkenBuffer> = MaybeUninit::uninit();
         unsafe {emglken_set_storyfile_dir(path.as_ptr(), path.len(), buf.as_mut_ptr())};
-        let emglken_dirs: EmglkenDirectories = buffer_to_protocol_struct(buf);
-        dirs.storyfile = PathBuf::from(emglken_dirs.storyfile);
-        dirs.working = PathBuf::from(emglken_dirs.working);
+        let emglken_dirs: EmglkenSetBaseFileDirectories = buffer_to_protocol_struct(buf);
+        if let Some(path) = emglken_dirs.storyfile {
+            dirs.storyfile = PathBuf::from(path);
+        }
+        if let Some(path) = emglken_dirs.working {
+            dirs.working = PathBuf::from(path);
+        }
     }
 }
 
@@ -128,8 +133,15 @@ pub struct EmglkenBuffer {
 #[derive(Deserialize)]
 struct EmglkenDirectories {
     pub storyfile: String,
+    pub system_cwd: String,
     pub temp: String,
     pub working: String,
+}
+
+#[derive(Deserialize)]
+struct EmglkenSetBaseFileDirectories {
+    pub storyfile: Option<String>,
+    pub working: Option<String>,
 }
 
 fn buffer_to_boxed_slice(buffer: MaybeUninit<EmglkenBuffer>) -> Box<[u8]> {
