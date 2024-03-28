@@ -59,7 +59,8 @@ extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
     // We can now hand control over to the app
     if unsafe{glkunix_startup_code(&GlkUnixArguments {
         count: processed_args.len() as c_int,
-        args: processed_args.iter().map(|arg| arg.as_ptr()).collect::<Vec<*const c_char>>().as_ptr(),
+        // We need to leak processed_args so that the app can save the args for later use
+        args: processed_args.into_iter().map(|arg| arg.into_raw().cast_const()).collect::<Vec<*const c_char>>().leak().as_ptr(),
     })} == 0 {
         glk_exit();
         return 0;
