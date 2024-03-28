@@ -21,6 +21,7 @@ use thiserror::Error;
 
 use crate::common::*;
 use crate::glkapi::*;
+use remglk::glkapi::StreamOperations;
 
 const glkunix_arg_End: i32 = 0;
 const glkunix_arg_ValueFollows: i32 = 1;
@@ -212,6 +213,14 @@ pub extern "C" fn glkunix_fileref_create_by_name_uncleaned(usage: u32, filename_
 pub extern "C" fn glkunix_set_base_file(filename_ptr: *const c_char) {
     let path = unsafe {CStr::from_ptr(filename_ptr)}.to_str().unwrap().to_owned();
     glkapi().lock().unwrap().glkunix_set_base_file(path);
+}
+
+#[no_mangle]
+pub extern "C" fn glkunix_stream_get_filename(str: StreamPtr) -> *const i8 {
+    let str = from_ptr(str);
+    let str = str.lock().unwrap();
+    let result = str.file_path().unwrap();
+    result.as_ptr()
 }
 
 #[no_mangle]

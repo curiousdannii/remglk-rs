@@ -10,6 +10,7 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::cmp::{max, min};
+use std::ffi::CString;
 
 use enum_dispatch::enum_dispatch;
 
@@ -51,6 +52,7 @@ pub trait StreamOperations {
             write_count: self.write_count() as u32,
         }
     }
+    fn file_path(&self) -> GlkResult<&CString> {Err(NotFileStream)}
     fn get_buffer(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<u32> {Ok(0)}
     fn get_char(&mut self, _uni: bool) -> GlkResult<i32> {Ok(-1)}
     fn get_line(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<u32> {Ok(0)}
@@ -80,14 +82,19 @@ pub struct ArrayBackedStream<T> {
         See https://github.com/iftechfoundation/ifarchive-if-specs/issues/8
     */
     len: usize,
+    path: Option<CString>,
     pos: usize,
     read_count: usize,
     write_count: usize,
 }
 
 impl<T> ArrayBackedStream<T> {
-    pub fn new(buf: Box<[T]>, fmode: FileMode) -> ArrayBackedStream<T> {
+    pub fn new(buf: Box<[T]>, fmode: FileMode, fileref: Option<&GlkFileRef>) -> ArrayBackedStream<T> {
         let buf_len = buf.len();
+        let path = fileref.map(|fileref| {
+            let fileref = lock!(fileref);
+            CString::new(&fileref.path[..]).unwrap()
+        });
         ArrayBackedStream {
             buf,
             expandable: fmode == FileMode::Write,
@@ -96,6 +103,7 @@ impl<T> ArrayBackedStream<T> {
                 FileMode::Write => 0,
                 _ => buf_len,
             },
+            path,
             pos: 0,
             read_count: 0,
             write_count: 0,
@@ -121,6 +129,10 @@ where Box<[T]>: GlkArray {
             read_count: self.read_count as u32,
             write_count: self.write_count as u32,
         }
+    }
+
+    fn file_path(&self) -> GlkResult<&CString> {
+        self.path.as_ref().ok_or(NotFileStream)
     }
 
     fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
@@ -241,10 +253,10 @@ pub struct FileStream<T> {
 
 impl<T> FileStream<T>
 where T: Clone + Default, Box<[T]>: GlkArray {
-    pub fn new(fileref: &GlkFileRef, buf: Box<[T]>, fmode: FileMode) -> FileStream<T> {
+    pub fn new(fileref_glkobj: &GlkFileRef, buf: Box<[T]>, fmode: FileMode) -> FileStream<T> {
         debug_assert!(fmode != FileMode::Read);
-        let fileref = lock!(fileref);
-        let str = ArrayBackedStream::new(buf, fmode);
+        let str = ArrayBackedStream::new(buf, fmode, Some(fileref_glkobj));
+        let fileref = lock!(fileref_glkobj);
         FileStream {
             binary: fileref.binary,
             changed: false,
@@ -275,6 +287,10 @@ impl<T> StreamOperations for FileStream<T>
 where T: Clone + Default, Box<[T]>: GlkArray {
     fn close(&self) -> StreamResultCounts {
         self.str.close()
+    }
+
+    fn file_path(&self) -> GlkResult<&CString> {
+        self.str.file_path()
     }
 
     fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {

@@ -62,11 +62,14 @@ extern strid_t glkunix_stream_open_pathname_gen(char *pathname,
 extern strid_t glkunix_stream_open_pathname(char *pathname, glui32 textmode, 
     glui32 rock);
 #ifdef GLKUNIX_FILEREF_GET_FILENAME
-extern char *glkunix_fileref_get_filename(fileref_t *fref);
+extern const char *glkunix_fileref_get_filename(frefid_t fref);
 #endif /* GLKUNIX_FILEREF_GET_FILENAME */
 
 #define GLKUNIX_FILEREF_CREATE_UNCLEANED (1)
-extern frefid_t glkunix_fileref_create_by_name_uncleaned(glui32 usage, char *name, glui32 rock);
+extern frefid_t glkunix_fileref_create_by_name_uncleaned(glui32 usage, const char *name, glui32 rock);
+
+#define GLKUNIX_STREAM_GET_FILENAME (1)
+extern const char *glkunix_stream_get_filename(strid_t stream);
 
 typedef struct glkunix_serialize_context_struct *glkunix_serialize_context_t;
 typedef struct glkunix_unserialize_context_struct *glkunix_unserialize_context_t;

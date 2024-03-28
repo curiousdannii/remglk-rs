@@ -38,6 +38,7 @@ use filerefs::*;
 use objects::*;
 use protocol::*;
 use streams::*;
+pub use streams::StreamOperations;
 use windows::*;
 
 // Expose for so they can be turned into pointers
@@ -1295,7 +1296,7 @@ where S: Default + GlkSystem {
             NullStream::default().into()
         }
         else {
-            ArrayBackedStream::<T>::new(buf, fmode).into()
+            ArrayBackedStream::<T>::new(buf, fmode, None).into()
         });
         if disprock.is_some() {
             let mut str = lock!(str);
@@ -1718,8 +1719,8 @@ fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unico
 
     let str = GlkObject::new(if mode == FileMode::Read {
         match data {
-            GlkOwnedBuffer::U8(buf) => ArrayBackedStream::<u8>::new(buf, mode).into(),
-            GlkOwnedBuffer::U32(buf) => ArrayBackedStream::<u32>::new(buf, mode).into(),
+            GlkOwnedBuffer::U8(buf) => ArrayBackedStream::<u8>::new(buf, mode, fileref).into(),
+            GlkOwnedBuffer::U32(buf) => ArrayBackedStream::<u32>::new(buf, mode, fileref).into(),
         }
     }
     else {

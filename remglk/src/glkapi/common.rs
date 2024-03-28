@@ -49,6 +49,8 @@ pub enum GlkApiError {
     KeywinMustBeDescendant,
     #[error("no current stream")]
     NoCurrentStream,
+    #[error("invalid stream: not a file stream")]
+    NotFileStream,
     #[error("invalid window: not a graphics window")]
     NotGraphicsWindow,
     #[error("invalid window: not a grid window")]
