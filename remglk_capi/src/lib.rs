@@ -15,6 +15,9 @@ mod dispatch;
 mod glkapi;
 mod glkstart;
 
+#[cfg(target_os = "emscripten")]
+mod emglken;
+
 use std::ffi::{c_char, c_int, CStr};
 
 use remglk::glkapi::protocol::{Event, EventData, InitEvent, Metrics};

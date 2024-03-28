@@ -54,7 +54,7 @@ extern int glkunix_startup_code(glkunix_startup_t *data);
 
 /* This library offers the glkunix_fileref_get_filename() API
    (used by some VMs originally built for GarGlk). */
-//#define GLKUNIX_FILEREF_GET_FILENAME (1)
+#define GLKUNIX_FILEREF_GET_FILENAME (1)
 
 extern void glkunix_set_base_file(char *filename);
 extern strid_t glkunix_stream_open_pathname_gen(char *pathname, 

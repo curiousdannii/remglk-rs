@@ -210,6 +210,14 @@ pub extern "C" fn glkunix_fileref_create_by_name_uncleaned(usage: u32, filename_
 }
 
 #[no_mangle]
+pub extern "C" fn glkunix_fileref_get_filename(fileref: FileRefPtr) -> *const i8 {
+    let fileref = from_ptr(fileref);
+    let fileref = fileref.lock().unwrap();
+    let result = &fileref.path_c;
+    result.as_ptr()
+}
+
+#[no_mangle]
 pub extern "C" fn glkunix_set_base_file(filename_ptr: *const c_char) {
     let path = unsafe {CStr::from_ptr(filename_ptr)}.to_str().unwrap().to_owned();
     glkapi().lock().unwrap().glkunix_set_base_file(path);
