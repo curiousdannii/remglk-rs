@@ -1,9 +1,11 @@
 [package]
 name = "remglk"
 version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.0"
+
 authors = ["Dannii Willis <curiousdannii@gmail.com>"]
 description = "A Rust port of RemGlk"
-edition = "2021"
 homepage = "https://github.com/curiousdannii/remglk-rs"
 license = "MIT"
 repository = "https://github.com/curiousdannii/remglk-rs"

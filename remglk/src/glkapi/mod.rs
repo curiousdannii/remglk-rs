@@ -19,6 +19,7 @@ mod streams;
 mod windows;
 
 use std::cmp::min;
+use std::ffi::c_char;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -1588,8 +1589,8 @@ where S: Default + GlkSystem {
 
     pub fn retain_array(&self, buf: &GlkBuffer) -> DispatchRock {
         match buf {
-            GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, b"&+#!Cn\0".as_ptr()),
-            GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, b"&+#!Iu\0".as_ptr()),
+            GlkBuffer::U8(buf) => (self.retain_array_callbacks_u8.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, c"&+#!Cn".as_ptr()),
+            GlkBuffer::U32(buf) => (self.retain_array_callbacks_u32.as_ref().unwrap().retain)(buf.as_ptr(), buf.len() as u32, c"&+#!Iu".as_ptr()),
         }
     }
 
@@ -1605,13 +1606,13 @@ where S: Default + GlkSystem {
             GlkOwnedBuffer::U8(buf) => {
                 let leaked_buf = Box::leak(buf);
                 if let Some(disprock) = disprock {
-                    (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(leaked_buf.as_ptr(), len, b"&+#!Cn\0".as_ptr(), disprock);
+                    (self.retain_array_callbacks_u8.as_ref().unwrap().unretain)(leaked_buf.as_ptr(), len, c"&+#!Cn".as_ptr(), disprock);
                 }
             },
             GlkOwnedBuffer::U32(buf) => {
                 let leaked_buf = Box::leak(buf);
                 if let Some(disprock) = disprock {
-                    (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(leaked_buf.as_ptr(), len, b"&+#!Iu\0".as_ptr(), disprock);
+                    (self.retain_array_callbacks_u32.as_ref().unwrap().unretain)(leaked_buf.as_ptr(), len, c"&+#!Iu".as_ptr(), disprock);
                 }
             },
         };
@@ -1658,8 +1659,8 @@ pub struct GlkDate {
 }
 
 // Retained array callbacks
-pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const u8) -> DispatchRock;
-pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const u8, DispatchRock);
+pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const c_char) -> DispatchRock;
+pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const c_char, DispatchRock);
 
 pub struct RetainArrayCallbacks<T> {
     pub retain: RetainArrayCallback<T>,
