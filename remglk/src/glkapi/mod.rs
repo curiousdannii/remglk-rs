@@ -537,20 +537,17 @@ where S: Default + GlkSystem {
         datetime_to_glkdate(&time)
     }
 
-    pub fn glk_time_to_date_local(time: &GlkTime) -> GlkDate {
-        let time = glktime_to_datetime(Local, time);
-        datetime_to_glkdate(&time)
-    }
-
-    pub fn glk_time_to_date_utc(time: &GlkTime) -> GlkDate {
-        let time = glktime_to_datetime(Utc, time);
-        datetime_to_glkdate(&time)
-    }
-
     pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<StreamResultCounts> {
+        let str_ptr = str_glkobj.as_ptr();
         let mut str = lock!(str_glkobj);
         if matches!(str.deref().deref(), Stream::Window(_)) {
             return Err(GlkApiError::CannotCloseWindowStream);
+        }
+
+        if let Some(current_stream) = &self.current_stream {
+            if current_stream.as_ptr() == str_ptr {
+                self.current_stream = None;
+            }
         }
 
         let res = str.close();
@@ -683,6 +680,16 @@ where S: Default + GlkSystem {
 
         let props = stylehints.get_mut(&selector).unwrap();
         props.insert(stylehint_name(hint).to_string(), css_value);
+    }
+
+    pub fn glk_time_to_date_local(time: &GlkTime) -> GlkDate {
+        let time = glktime_to_datetime(Local, time);
+        datetime_to_glkdate(&time)
+    }
+
+    pub fn glk_time_to_date_utc(time: &GlkTime) -> GlkDate {
+        let time = glktime_to_datetime(Utc, time);
+        datetime_to_glkdate(&time)
     }
 
     pub fn glk_window_clear(win: &GlkWindow) {
