@@ -97,7 +97,7 @@ impl GlkSystem for StandardSystem {
     fn set_base_file(dirs: &mut Directories, path: String) {
         let mut path = PathBuf::from(path);
         path.pop();
-        dirs.storyfile = path.clone();
+        dirs.storyfile.clone_from(&path);
         dirs.working = path;
     }
 }
