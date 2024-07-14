@@ -223,8 +223,12 @@ where S: Default + GlkSystem {
                     FileRefResponse::Fref(fref) => fref.filename,
                     FileRefResponse::Path(path) => path,
                 };
-                let path = self.dirs.working.join(clean_filename(filename, filetype)).to_str().unwrap().to_owned();
-                return Ok(Some(self.create_fileref(path, rock, usage)));
+                // If we're given a full file path, great! If not, add an extension and set relative to the working dir
+                let mut path = self.dirs.working.join(filename);
+                if path.extension().is_none() {
+                    path.set_extension(&filetype_suffix(filetype)[1..]);
+                }
+                return Ok(Some(self.create_fileref(path.to_str().unwrap().to_owned(), rock, usage)));
             }
         }
         else {
