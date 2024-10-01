@@ -1632,9 +1632,13 @@ where S: Default + GlkSystem {
 
 #[derive(Default)]
 pub struct Directories {
+    /** The storyfile directory, used by `garglk_add_resource_from_file` */
     pub storyfile: PathBuf,
+    /** The system current working directory, used by `glkunix_stream_open_pathname` */
     pub system_cwd: PathBuf,
+    /** Temp folder */
     pub temp: PathBuf,
+    /** The Glk "current directory", used by `glk_fileref_create_by_name`/`glk_fileref_create_by_prompt` */
     pub working: PathBuf,
 }
 

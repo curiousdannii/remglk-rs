@@ -18,6 +18,10 @@
 #ifndef GT_START_H
 #define GT_START_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* We define our own TRUE and FALSE and NULL, because ANSI
     is a strange world. */
 #ifndef TRUE
@@ -114,6 +118,10 @@ extern frefid_t glkunix_fileref_find_by_updatetag(glui32 tag);
 extern void glkunix_fileref_set_dispatch_rock(frefid_t fref, glk_objrock_u rock);
 
 #endif /* GLKUNIX_AUTOSAVE_FEATURES */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* GT_START_H */
 

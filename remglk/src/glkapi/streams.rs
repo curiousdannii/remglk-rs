@@ -331,6 +331,16 @@ where T: Clone + Default, Box<[T]>: GlkArray {
     }
 
     fn set_position(&mut self, mode: SeekMode, pos: i32) {
+        // Despite the Glk spec saying that it's illegal to specify a position after the end of a file (5.4) this is needed by Bocfel, and seemingly supported by all libc based Glk interpreters, so we might need to expand first
+        // See https://github.com/iftechfoundation/ifarchive-if-specs/issues/17
+        let new_pos = match mode {
+            SeekMode::Current => self.str.pos as i32 + pos,
+            SeekMode::End => self.str.len as i32 + pos,
+            SeekMode::Start => pos,
+        } as usize;
+        if new_pos > self.str.len {
+            self.expand(new_pos - self.str.len);
+        }
         self.str.set_position(mode, pos);
     }
 

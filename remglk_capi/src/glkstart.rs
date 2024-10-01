@@ -202,11 +202,10 @@ unsafe fn glkunix_arguments() -> Vec<GlkUnixArgument> {
 
 #[no_mangle]
 pub extern "C" fn glkunix_fileref_create_by_name_uncleaned(usage: u32, filename_ptr: *const i8, rock: u32) -> FileRefPtr {
-    let mut glkapi = glkapi().lock().unwrap();
     let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
     let filename = filename_cstr.to_string_lossy().to_string();
-    let fileref = glkapi.glkunix_fileref_create_by_name_uncleaned(usage, filename, rock);
-    to_owned(fileref)
+    let result = glkapi().lock().unwrap().glkunix_fileref_create_by_name_uncleaned(usage, filename, rock);
+    to_owned(result)
 }
 
 #[no_mangle]
@@ -242,7 +241,7 @@ pub extern "C" fn glkunix_stream_open_pathname_gen(filename_ptr: *const i8, writ
     let fileref = glkunix_fileref_create_by_name_uncleaned(fileusage_Data | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename_ptr, 0);
     let fileref = reclaim(fileref);
     let mut glkapi = glkapi().lock().unwrap();
-    let str = glkapi.glk_stream_open_file(&fileref, if writemode > 0 {FileMode::Write} else {FileMode::Read}, rock).unwrap().unwrap();
+    let result = glkapi.glk_stream_open_file(&fileref, if writemode > 0 {FileMode::Write} else {FileMode::Read}, rock);
     glkapi.glk_fileref_destroy(fileref);
-    to_owned(str)
+    to_owned_opt(result.unwrap())
 }
