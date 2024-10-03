@@ -723,8 +723,8 @@ where S: Default + GlkSystem {
             if let WindowData::Pair(data) = &parent_win.data {
                 let sibling_win = if data.child1.as_ptr() == win_ptr {&data.child2} else {&data.child1};
                 let sibling_win = Into::<GlkWindow>::into(sibling_win);
-                if let Some(grandparent_win) = grandparent_win {
-                    let mut grandparent_win = lock!(grandparent_win);
+                if let Some(grandparent_win_glkobj) = grandparent_win {
+                    let mut grandparent_win = lock!(grandparent_win_glkobj);
                     if let WindowData::Pair(ref mut data) = grandparent_win.data {
                         if data.child1.as_ptr() == parent_win_ptr {
                             data.child1 = sibling_win.downgrade();
@@ -736,6 +736,7 @@ where S: Default + GlkSystem {
                     else {
                         unreachable!();
                     }
+                    lock!(sibling_win).parent = Some(grandparent_win_glkobj.downgrade());
                 }
                 else {
                     self.root_window = Some(sibling_win.downgrade());
