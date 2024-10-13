@@ -24,6 +24,7 @@ use glkapi::protocol::{Event, Update};
 extern "C" {
     fn emglken_file_delete(path_ptr: *const u8, path_len: usize);
     fn emglken_file_exists(path_ptr: *const u8, path_len: usize) -> bool;
+    fn emglken_file_flush();
     fn emglken_file_read(path_ptr: *const u8, path_len: usize, buffer: *mut EmglkenBuffer) -> bool;
     fn emglken_file_write_buffer(path_ptr: *const u8, path_len: usize, buf_ptr: *const u8, buf_len: usize);
     fn emglken_get_dirs(buffer: *mut EmglkenBuffer);
@@ -78,9 +79,12 @@ impl GlkSystem for EmglkenSystem {
     }
 
     fn flush_writeable_files(&mut self) {
-        for (path, buf) in self.cache.drain() {
+        for (path, buf) in &self.cache {
             unsafe {emglken_file_write_buffer(path.as_ptr(), path.len(), buf.as_ptr(), buf.len())};
         }
+        // Signal we've written all the files
+        unsafe {emglken_file_flush()};
+        self.cache.clear();
         self.cache.shrink_to(4);
     }
 

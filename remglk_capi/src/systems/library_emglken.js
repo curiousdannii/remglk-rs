@@ -13,12 +13,16 @@ const EMGLKEN_JS = {
     $EMGLKEN_JS_CONSTANTS: {},
     $EMGLKEN_JS_CONSTANTS__deps: ['$writeBuffer', '$writeBufferJSON'],
     $EMGLKEN_JS_CONSTANTS__postset: `
+        let emglken_files = {}
         const encoder = new TextEncoder()
     `,
 
+    emglken_file_delete__async: true,
     emglken_file_delete(path_ptr, path_len) {
-        const path = UTF8ToString(path_ptr, path_len)
-        Dialog.delete(path)
+        return Asyncify.handleAsync(async () => {
+            const path = UTF8ToString(path_ptr, path_len)
+            await Dialog.delete(path)
+        })
     },
 
     emglken_file_exists__async: true,
@@ -26,6 +30,14 @@ const EMGLKEN_JS = {
         return Asyncify.handleAsync(async () => {
             const path = UTF8ToString(path_ptr, path_len)
             return Dialog.exists(path)
+        })
+    },
+
+    emglken_file_flush__async: true,
+    emglken_file_flush() {
+        return Asyncify.handleAsync(async () => {
+            await Dialog.write(emglken_files)
+            emglken_files = {}
         })
     },
 
@@ -45,7 +57,7 @@ const EMGLKEN_JS = {
     emglken_file_write_buffer(path_ptr, path_len, buf_ptr, buf_len) {
         const path = UTF8ToString(path_ptr, path_len)
         const data = HEAP8.subarray(buf_ptr, buf_ptr + buf_len)
-        Dialog.write(path, data)
+        emglken_files[path] = data
     },
 
     emglken_get_dirs(buffer) {
