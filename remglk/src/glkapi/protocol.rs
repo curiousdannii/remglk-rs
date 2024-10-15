@@ -766,7 +766,7 @@ pub enum CSSValue {
 }
 
 /** CSS styles
- * Keys will usually be for Glk styles, ex: `div.Style_header` or `span.Style_user1`
+ * Keys will usually be for Glk styles, ex: `.Style_header` or `.Style_user1_par`
  * But they can be anything else. Use a blank string to target the window itself.
 */
 pub type WindowStyles = HashMap<String, CSSProperties>;

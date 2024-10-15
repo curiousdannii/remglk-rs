@@ -10,7 +10,7 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 /** Wraps a Glk object in an `Arc<Mutex>` */
 #[derive(Default)]
@@ -43,6 +43,8 @@ where T: Default {
         Arc::downgrade(&self.obj)
     }
 }
+
+pub type LockedGlkObject<'a, T> = MutexGuard<'a, GlkObjectMetadata<T>>;
 
 /** References between objects should use a `Weak` to prevent cycles */
 pub type GlkObjectWeak<T> = Weak<Mutex<GlkObjectMetadata<T>>>;

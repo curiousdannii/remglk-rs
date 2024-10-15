@@ -61,6 +61,7 @@ where S: Default + GlkSystem {
     pub retain_array_callbacks_u8: Option<RetainArrayCallbacks<u8>>,
     pub retain_array_callbacks_u32: Option<RetainArrayCallbacks<u32>>,
     root_window: Option<GlkWindowWeak>,
+    page_margin_bg: Option<String>,
     special: Option<SpecialInput>,
     pub streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
@@ -331,7 +332,7 @@ where S: Default + GlkSystem {
 
             gestalt_ResourceStream => 1,
 
-            //gestalt_GarglkText => self.support.garglktext as u32,
+            gestalt_GarglkText => self.support.garglktext as u32,
 
             gestalt_Stylehints => self.support.garglktext as u32,
 
@@ -672,7 +673,7 @@ where S: Default + GlkSystem {
             stylehint_Size => CSSValue::String(format!("{}em", 1.0 + (value as f64) * 0.1)),
             stylehint_Weight => CSSValue::String(font_weight(value).to_string()),
             stylehint_Oblique => CSSValue::String((if value == 0 {"normal"} else {"italic"}).to_string()),
-            stylehint_Proportional => CSSValue::Number(value as f64),
+            stylehint_Proportional => CSSValue::Number(if value == 0 {1} else {0} as f64),
             stylehint_TextColor | stylehint_BackColor => CSSValue::String(colour_code_to_css(value as u32)),
             stylehint_ReverseColor => CSSValue::Number(value as f64),
             _ => unreachable!(),
@@ -1048,6 +1049,35 @@ where S: Default + GlkSystem {
 
     // Extensions
 
+    pub fn garglk_set_reversevideo(&self, val: u32) -> GlkResult<()> {
+        GlkApi::<S>::garglk_set_reversevideo_stream(current_stream!(self), val);
+        Ok(())
+    }
+
+    pub fn garglk_set_reversevideo_stream(str: &GlkStream, val: u32) {
+        lock!(str).set_css("reverse", if val != 0 {Some(&CSSValue::Number(1.0))} else {None});
+    }
+
+    pub fn garglk_set_zcolors(&self, fg: u32, bg: u32) -> GlkResult<()> {
+        GlkApi::<S>::garglk_set_zcolors_stream(current_stream!(self), fg, bg);
+        Ok(())
+    }
+
+    pub fn garglk_set_zcolors_stream(str: &GlkStream, fg: u32, bg: u32) {
+        fn add_str(str: &LockedGlkObject<Stream>, val: u32, key: &str) {
+            #[allow(non_upper_case_globals)]
+            match val {
+                0 ..= 0xFFFFFF => str.set_css(key, Some(&CSSValue::String(format!("#{:06X}", val)))),
+                zcolor_Default => str.set_css(key, None),
+                _ => {},
+            };
+        }
+
+        let str = lock!(str);
+        add_str(&str, fg, "color");
+        add_str(&str, bg, "background-color");
+    }
+
     pub fn glkunix_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
         let path = self.dirs.system_cwd.join(filename).to_str().unwrap().to_owned();
         self.create_fileref(path, rock, usage)
@@ -1239,7 +1269,16 @@ where S: Default + GlkSystem {
         }
         self.windows_changed = false;
 
-        // TODO: Page BG colour
+        if let Some(normal_styles) = self.stylehints_buffer.get(".Style_normal") {
+            let bg = normal_styles.get("background-color").and_then(|css| match css {
+                CSSValue::String(bg) => Some(bg.clone()),
+                _ => None,
+            });
+            if bg != self.page_margin_bg {
+                self.page_margin_bg = bg.clone();
+                state.page_margin_bg = bg.clone();
+            }
+        }
 
         state.specialinput = mem::take(&mut self.special);
 

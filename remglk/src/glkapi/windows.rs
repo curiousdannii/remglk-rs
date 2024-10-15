@@ -213,6 +213,8 @@ where T: Default + WindowOperations {
 
 pub struct BufferWindow {
     cleared: bool,
+    cleared_bg: Option<String>,
+    cleared_fg: Option<String>,
     content: Vec<BufferWindowParagraphUpdate>,
     pub echo_line_input: bool,
 }
@@ -260,6 +262,16 @@ impl BufferWindow {
 impl WindowOperations for BufferWindow {
     fn clear(&mut self) {
         self.cleared = true;
+        let last = self.last_textrun().clone("");
+        if let Some(css_styles) = last.css_styles {
+            let css_styles = lock!(css_styles);
+            if let Some(CSSValue::String(bg)) = css_styles.get("background-color") {
+                self.cleared_bg = Some(bg.clone());
+            }
+            if let Some(CSSValue::String(fg)) = css_styles.get("color") {
+                self.cleared_fg = Some(fg.clone());
+            }
+        }
         self.clear_content(None);
     }
 
@@ -282,11 +294,12 @@ impl WindowOperations for BufferWindow {
 
     fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
         if let Some(css_styles) = &self.last_textrun().css_styles {
-            if css_styles.lock().unwrap().get(name) != val {
-                self.clone_last_textrun(false);
-                set_css(&mut self.last_textrun().css_styles, name, val);
+            if css_styles.lock().unwrap().get(name) == val {
+                return;
             }
         }
+        self.clone_last_textrun(false);
+        set_css(&mut self.last_textrun().css_styles, name, val);
     }
 
     fn set_hyperlink(&mut self, val: u32) {
@@ -323,6 +336,8 @@ impl WindowOperations for BufferWindow {
             };
             if self.cleared {
                 content_update.base.clear = true;
+                content_update.base.bg = self.cleared_bg.take();
+                content_update.base.fg = self.cleared_fg.take();
                 self.cleared = false;
             }
             update.content = Some(ContentUpdate::Buffer(content_update));
@@ -337,6 +352,8 @@ impl Default for BufferWindow {
     fn default() -> Self {
         BufferWindow {
             cleared: true,
+            cleared_bg: None,
+            cleared_fg: None,
             content: vec![BufferWindowParagraphUpdate::new(TextRun::default())],
             echo_line_input: true,
         }
@@ -377,6 +394,8 @@ impl WindowOperations for GraphicsWindow {
 #[derive(Default)]
 pub struct GridWindow {
     cleared: bool,
+    cleared_bg: Option<String>,
+    cleared_fg: Option<String>,
     current_styles: TextRun,
     pub height: usize,
     lines: Vec<GridLine>,
@@ -422,6 +441,15 @@ impl WindowOperations for GridWindow {
     fn clear(&mut self) {
         let height = self.height;
         self.cleared = true;
+        if let Some(css_styles) = &self.current_styles.css_styles {
+            let css_styles = lock!(css_styles);
+            if let Some(CSSValue::String(bg)) = css_styles.get("background-color") {
+                self.cleared_bg = Some(bg.clone());
+            }
+            if let Some(CSSValue::String(fg)) = css_styles.get("color") {
+                self.cleared_fg = Some(fg.clone());
+            }
+        }
         self.update_size(0, self.width);
         self.update_size(height, self.width);
         self.x = 0;
@@ -502,6 +530,8 @@ impl WindowOperations for GridWindow {
             };
             if self.cleared {
                 grid_content.base.clear = true;
+                grid_content.base.bg = self.cleared_bg.take();
+                grid_content.base.fg = self.cleared_fg.take();
                 self.cleared = false;
             }
             update.content = Some(ContentUpdate::Grid(grid_content));

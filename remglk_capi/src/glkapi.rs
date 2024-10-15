@@ -661,6 +661,28 @@ pub extern "C" fn glk_window_set_echo_stream(win: WindowPtr, str: StreamPtr) {
     GlkApi::glk_window_set_echo_stream(&from_ptr(win), from_ptr_opt(str).as_ref())
 }
 
+// Extensions
+
+#[no_mangle]
+pub extern "C" fn garglk_set_reversevideo(val: u32) {
+    glkapi().lock().unwrap().garglk_set_reversevideo(val).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn garglk_set_reversevideo_stream(str: StreamPtr, val: u32) {
+    GlkApi::garglk_set_reversevideo_stream(&from_ptr(str), val);
+}
+
+#[no_mangle]
+pub extern "C" fn garglk_set_zcolors(fg: u32, bg: u32) {
+    glkapi().lock().unwrap().garglk_set_zcolors(fg, bg).ok();
+}
+
+#[no_mangle]
+pub extern "C" fn garglk_set_zcolors_stream(str: StreamPtr, fg: u32, bg: u32) {
+    GlkApi::garglk_set_zcolors_stream(&from_ptr(str), fg, bg);
+}
+
 /** A Glk event */
 #[derive(Clone, Copy)]
 #[repr(C)]
