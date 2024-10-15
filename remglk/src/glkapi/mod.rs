@@ -51,6 +51,7 @@ pub use windows::Window;
 #[derive(Default)]
 pub struct GlkApi<S>
 where S: Default + GlkSystem {
+    buffer_window_count: u32,
     current_stream: Option<GlkStreamWeak>,
     exited: bool,
     pub filerefs: GlkObjectStore<FileRef>,
@@ -61,7 +62,7 @@ where S: Default + GlkSystem {
     pub retain_array_callbacks_u8: Option<RetainArrayCallbacks<u8>>,
     pub retain_array_callbacks_u32: Option<RetainArrayCallbacks<u32>>,
     root_window: Option<GlkWindowWeak>,
-    page_margin_bg: Option<String>,
+    page_margin: PageMargin,
     special: Option<SpecialInput>,
     pub streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
@@ -511,7 +512,8 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_set_hyperlink_stream(str: &GlkStream, val: u32) {
-        lock!(str).set_hyperlink(val);
+        let str = lock!(str);
+        window_stream_operation!(str, set_hyperlink, val);
     }
 
     pub fn glk_set_style(&self, val: u32) -> GlkResult<()> {
@@ -520,7 +522,8 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_set_style_stream(str: &GlkStream, val: u32) {
-        lock!(str).set_style(val);
+        let str = lock!(str);
+        window_stream_operation!(str, set_style, val);
     }
 
     pub fn glk_set_terminators_line_event(win: &GlkWindow, keycodes: Vec<TerminatorCode>) {
@@ -627,7 +630,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stylehint_clear(&mut self, wintype: WindowType, style: u32, hint: u32) {
-        let selector = format!(".Style_{}{}", style_name(style), if hint == stylehint_Justification {"_par"} else {""});
+        let selector = format!(".Style_{}{}", style_name(style), if hint <= stylehint_Justification {"_par"} else {""});
         let remove_styles = |stylehints: &mut WindowStyles| {
             if stylehints.contains_key(&selector) {
                 let props = stylehints.get_mut(&selector).unwrap();
@@ -640,6 +643,9 @@ where S: Default + GlkSystem {
 
         if wintype == WindowType::All || wintype == WindowType::Buffer {
             remove_styles(&mut self.stylehints_buffer);
+            if style == style_Normal && hint == stylehint_BackColor {
+                self.page_margin.set_stylehint(None);
+            }
         }
         if wintype == WindowType::All || wintype == WindowType::Grid {
             remove_styles(&mut self.stylehints_grid);
@@ -664,7 +670,7 @@ where S: Default + GlkSystem {
         };
 
         let stylehints = if wintype == WindowType::Buffer {&mut self.stylehints_buffer} else {&mut self.stylehints_grid};
-        let selector = format!(".Style_{}{}", style_name(style), if hint == stylehint_Justification {"_par"} else {""});
+        let selector = format!(".Style_{}{}", style_name(style), if hint <= stylehint_Justification {"_par"} else {""});
 
         #[allow(non_upper_case_globals)]
         let css_value = match hint {
@@ -685,6 +691,10 @@ where S: Default + GlkSystem {
 
         let props = stylehints.get_mut(&selector).unwrap();
         props.insert(stylehint_name(hint).to_string(), css_value);
+
+        if wintype == WindowType::Buffer && style == style_Normal && hint == stylehint_BackColor {
+            self.page_margin.set_stylehint(Some(value as u32));
+        }
     }
 
     pub fn glk_time_to_date_local(time: &GlkTime) -> GlkDate {
@@ -697,8 +707,16 @@ where S: Default + GlkSystem {
         datetime_to_glkdate(&time)
     }
 
-    pub fn glk_window_clear(win: &GlkWindow) {
-        lock!(win).data.clear();
+    pub fn glk_window_clear(&mut self, win: &GlkWindow) {
+        let mut win = lock!(win);
+        let colour = win.data.clear();
+        if match win.data {
+            WindowData::Buffer(_) => true,
+            WindowData::Grid(_) => self.buffer_window_count == 0,
+            _ => false,
+        } {
+            self.page_margin.set_garglk(colour);
+        }
     }
 
     pub fn glk_window_close(&mut self, win_glkobj: GlkWindow) -> GlkResult<StreamResultCounts> {
@@ -708,6 +726,10 @@ where S: Default + GlkSystem {
         let str = Into::<GlkStream>::into(&win.str);
         let res = lock!(str).close();
         drop(str);
+
+        if win.wintype == WindowType::Buffer {
+            self.buffer_window_count -= 1;
+        }
 
         let root_win = self.root_window.as_ref().unwrap();
         if root_win.as_ptr() == win_ptr {
@@ -902,7 +924,10 @@ where S: Default + GlkSystem {
         // Create the window
         let windata = match wintype {
             WindowType::Blank => BlankWindow {}.into(),
-            WindowType::Buffer => TextWindow::<BufferWindow>::new(&self.stylehints_buffer).into(),
+            WindowType::Buffer => {
+                self.buffer_window_count += 1;
+                TextWindow::<BufferWindow>::new(&self.stylehints_buffer).into()
+            },
             WindowType::Graphics => GraphicsWindow::default().into(),
             WindowType::Grid => TextWindow::<GridWindow>::new(&self.stylehints_grid).into(),
             _ => {return Err(InvalidWindowType);}
@@ -1055,7 +1080,8 @@ where S: Default + GlkSystem {
     }
 
     pub fn garglk_set_reversevideo_stream(str: &GlkStream, val: u32) {
-        lock!(str).set_css("reverse", if val != 0 {Some(&CSSValue::Number(1.0))} else {None});
+        let str = lock!(str);
+        window_stream_operation!(str, set_css, "reverse", if val != 0 {Some(&CSSValue::Number(1.0))} else {None});
     }
 
     pub fn garglk_set_zcolors(&self, fg: u32, bg: u32) -> GlkResult<()> {
@@ -1064,18 +1090,8 @@ where S: Default + GlkSystem {
     }
 
     pub fn garglk_set_zcolors_stream(str: &GlkStream, fg: u32, bg: u32) {
-        fn add_str(str: &LockedGlkObject<Stream>, val: u32, key: &str) {
-            #[allow(non_upper_case_globals)]
-            match val {
-                0 ..= 0xFFFFFF => str.set_css(key, Some(&CSSValue::String(format!("#{:06X}", val)))),
-                zcolor_Default => str.set_css(key, None),
-                _ => {},
-            };
-        }
-
         let str = lock!(str);
-        add_str(&str, fg, "color");
-        add_str(&str, bg, "background-color");
+        window_stream_operation!(str, set_colours, fg, bg);
     }
 
     pub fn glkunix_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
@@ -1269,15 +1285,10 @@ where S: Default + GlkSystem {
         }
         self.windows_changed = false;
 
-        if let Some(normal_styles) = self.stylehints_buffer.get(".Style_normal") {
-            let bg = normal_styles.get("background-color").and_then(|css| match css {
-                CSSValue::String(bg) => Some(bg.clone()),
-                _ => None,
-            });
-            if bg != self.page_margin_bg {
-                self.page_margin_bg = bg.clone();
-                state.page_margin_bg = bg.clone();
-            }
+        let page_margin_bg = self.page_margin.get_page_margin_bg();
+        if page_margin_bg != self.page_margin.transmitted {
+            state.page_margin_bg = page_margin_bg.map(colour_code_to_css);
+            self.page_margin.transmitted = page_margin_bg;
         }
 
         state.specialinput = mem::take(&mut self.special);
@@ -1713,6 +1724,42 @@ pub struct GlkDate {
     microsec: i32, /* 0-999999 */
 }
 
+#[derive(Default)]
+struct PageMargin {
+    garglk: Option<u32>,
+    last_was_garglk: bool,
+    stylehint: Option<u32>,
+    transmitted: Option<u32>,
+}
+
+impl PageMargin {
+    /** We have two methods to set the margin colour: stylehints, and garglk_set_zcolors
+        If both are used, then use whichever was most recently set */
+    fn get_page_margin_bg(&self) -> Option<u32> {
+        if self.stylehint.is_some() {
+            if self.last_was_garglk && self.garglk.is_some() {
+                self.garglk
+            }
+            else {
+                self.stylehint
+            }
+        }
+        else {
+            self.garglk
+        }
+    }
+
+    fn set_garglk(&mut self, val: Option<u32>) {
+        self.last_was_garglk = true;
+        self.garglk = val;
+    }
+
+    fn set_stylehint(&mut self, val: Option<u32>) {
+        self.last_was_garglk = false;
+        self.stylehint = val;
+    }
+}
+
 // Retained array callbacks
 pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const c_char) -> DispatchRock;
 pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const c_char, DispatchRock);
@@ -1761,7 +1808,7 @@ fn clean_filename(filename: String, filetype: FileType) -> String {
         fixed_filename
 }
 
-fn colour_code_to_css(colour: u32) -> String {
+pub fn colour_code_to_css(colour: u32) -> String {
     // Uppercase colours are required by RegTest
     format!("#{:06X}", colour & 0xFFFFFF)
 }
@@ -1873,3 +1920,40 @@ fn stream_to_file_buffer(str: &mut Stream) -> Option<(&str, Box<[u8]>)> {
         _ => None,
     }
 }
+
+/** Run a window function on a stream, and the window's echo stream; must be given a locked GlkStream */
+macro_rules! window_stream_operation {
+    ($str: expr, $func: ident, $val: expr) => {
+        if let Stream::Window(str) = $str.deref().deref() {
+            let win = str.win.upgrade().unwrap();
+            let mut win = lock!(win);
+            win.$func($val);
+            if let Some(str) = &win.echostr {
+                let str = str.upgrade().unwrap();
+                let str = lock!(str);
+                if let Stream::Window(str) = str.deref().deref() {
+                    let win = str.win.upgrade().unwrap();
+                    let mut win = lock!(win);
+                    win.$func($val);
+                }
+            }
+        }
+    };
+    ($str: expr, $func: ident, $val1: expr, $val2: expr) => {
+        if let Stream::Window(str) = $str.deref().deref() {
+            let win = str.win.upgrade().unwrap();
+            let mut win = lock!(win);
+            win.$func($val1, $val2);
+            if let Some(str) = &win.echostr {
+                let str = str.upgrade().unwrap();
+                let str = lock!(str);
+                if let Stream::Window(str) = str.deref().deref() {
+                    let win = str.win.upgrade().unwrap();
+                    let mut win = lock!(win);
+                    win.$func($val1, $val2);
+                }
+            }
+        }
+    };
+}
+pub(crate) use window_stream_operation;

@@ -427,7 +427,7 @@ pub struct StateUpdate {
     /** Windows with active input */
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub input: Vec<InputUpdate>,
-    /** Background colour for the page margin (ie, outside of the gameport) */
+    /** Background colour for the page margin (ie, outside of the gameport); blank means remove the current background colour */
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_margin_bg: Option<String>,
     /* Special input */

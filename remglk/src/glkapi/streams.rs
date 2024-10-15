@@ -60,10 +60,7 @@ pub trait StreamOperations {
     fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()>;
     fn put_char(&mut self, ch: u32) -> GlkResult<()>;
     fn put_string(&mut self, str: &str, style: Option<u32>) -> GlkResult<()>;
-    fn set_css(&self, _name: &str, _val: Option<&CSSValue>) {}
-    fn set_hyperlink(&self, _val: u32) {}
     fn set_position(&mut self, _mode: SeekMode, _pos: i32) {}
-    fn set_style(&self, _style: u32) {}
     fn write_count(&self) -> usize;
 }
 
@@ -379,7 +376,7 @@ impl StreamOperations for NullStream {
 /** A window stream */
 #[derive(Default)]
 pub struct WindowStream {
-    win: GlkWindowWeak,
+    pub win: GlkWindowWeak,
     write_count: usize,
 }
 
@@ -436,36 +433,6 @@ impl StreamOperations for WindowStream {
             echostr.lock().unwrap().put_string(str, style)?;
         }
         Ok(())
-    }
-
-    fn set_css(&self, name: &str, val: Option<&CSSValue>) {
-        let win: GlkWindow = (&self.win).into();
-        let mut win = win.lock().unwrap();
-        win.set_css(name, val);
-        if let Some(str) = &win.echostr {
-            let str: GlkStream = str.into();
-            str.lock().unwrap().set_css(name, val);
-        }
-    }
-
-    fn set_hyperlink(&self, val: u32) {
-        let win: GlkWindow = (&self.win).into();
-        let mut win = win.lock().unwrap();
-        win.set_hyperlink(val);
-        if let Some(str) = &win.echostr {
-            let str: GlkStream = str.into();
-            str.lock().unwrap().set_hyperlink(val);
-        }
-    }
-
-    fn set_style(&self, val: u32) {
-        let win: GlkWindow = (&self.win).into();
-        let mut win = win.lock().unwrap();
-        win.set_style(val);
-        if let Some(str) = &win.echostr {
-            let str: GlkStream = str.into();
-            str.lock().unwrap().set_style(val);
-        }
     }
 
     fn write_count(&self) -> usize {

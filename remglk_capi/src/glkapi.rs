@@ -541,7 +541,7 @@ pub extern "C" fn glk_tick() {}
 
 #[no_mangle]
 pub extern "C" fn glk_window_clear(win: WindowPtr) {
-    GlkApi::glk_window_clear(&from_ptr(win));
+    glkapi().lock().unwrap().glk_window_clear(&from_ptr(win));
 }
 
 #[no_mangle]

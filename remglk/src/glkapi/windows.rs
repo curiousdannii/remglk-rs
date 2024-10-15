@@ -131,8 +131,9 @@ impl GlkObjectClass for Window {
 
 #[enum_dispatch(WindowData)]
 pub trait WindowOperations {
-    fn clear(&mut self) {}
+    fn clear(&mut self) -> Option<u32> {None}
     fn put_string(&mut self, _str: &str, _style: Option<u32>) {}
+    fn set_colours(&mut self, _fg: u32, _bg: u32) {}
     fn set_css(&mut self, _name: &str, _val: Option<&CSSValue>) {}
     fn set_hyperlink(&mut self, _val: u32) {}
     fn set_style(&mut self, _val: u32) {}
@@ -174,12 +175,16 @@ where T: Default + WindowOperations {
 
 impl<T> WindowOperations for TextWindow<T>
 where T: Default + WindowOperations {
-    fn clear(&mut self) {
-        self.data.clear();
+    fn clear(&mut self) -> Option<u32> {
+        self.data.clear()
     }
 
     fn put_string(&mut self, str: &str, style: Option<u32>) {
         self.data.put_string(str, style);
+    }
+
+    fn set_colours(&mut self, fg: u32, bg: u32) {
+        self.data.set_colours(fg, bg);
     }
 
     fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
@@ -213,10 +218,12 @@ where T: Default + WindowOperations {
 
 pub struct BufferWindow {
     cleared: bool,
-    cleared_bg: Option<String>,
-    cleared_fg: Option<String>,
+    cleared_bg: Option<u32>,
+    cleared_fg: Option<u32>,
     content: Vec<BufferWindowParagraphUpdate>,
     pub echo_line_input: bool,
+    last_bg: Option<u32>,
+    last_fg: Option<u32>,
 }
 
 impl BufferWindow {
@@ -260,19 +267,12 @@ impl BufferWindow {
 }
 
 impl WindowOperations for BufferWindow {
-    fn clear(&mut self) {
+    fn clear(&mut self) -> Option<u32> {
         self.cleared = true;
-        let last = self.last_textrun().clone("");
-        if let Some(css_styles) = last.css_styles {
-            let css_styles = lock!(css_styles);
-            if let Some(CSSValue::String(bg)) = css_styles.get("background-color") {
-                self.cleared_bg = Some(bg.clone());
-            }
-            if let Some(CSSValue::String(fg)) = css_styles.get("color") {
-                self.cleared_fg = Some(fg.clone());
-            }
-        }
+        self.cleared_bg = self.last_bg;
+        self.cleared_fg = self.last_fg;
         self.clear_content(None);
+        self.cleared_bg
     }
 
     fn put_string(&mut self, str: &str, style: Option<u32>) {
@@ -290,6 +290,10 @@ impl WindowOperations for BufferWindow {
         if style.is_some() {
             self.set_style(old_style);
         }
+    }
+
+    fn set_colours(&mut self, fg: u32, bg: u32) {
+        set_window_colours!(self, fg, bg);
     }
 
     fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
@@ -336,8 +340,8 @@ impl WindowOperations for BufferWindow {
             };
             if self.cleared {
                 content_update.base.clear = true;
-                content_update.base.bg = self.cleared_bg.take();
-                content_update.base.fg = self.cleared_fg.take();
+                content_update.base.bg = self.cleared_bg.map(colour_code_to_css);
+                content_update.base.fg = self.cleared_fg.map(colour_code_to_css);
                 self.cleared = false;
             }
             update.content = Some(ContentUpdate::Buffer(content_update));
@@ -356,6 +360,8 @@ impl Default for BufferWindow {
             cleared_fg: None,
             content: vec![BufferWindowParagraphUpdate::new(TextRun::default())],
             echo_line_input: true,
+            last_bg: None,
+            last_fg: None,
         }
     }
 }
@@ -369,13 +375,14 @@ pub struct GraphicsWindow {
 }
 
 impl WindowOperations for GraphicsWindow {
-    fn clear(&mut self) {
+    fn clear(&mut self) -> Option<u32> {
         self.draw = self.draw.drain(..).filter(|op| {
             matches!(op, GraphicsWindowOperation::SetColor(_))
         }).collect();
         self.draw.reverse();
         self.draw.shrink_to(1);
         self.draw.push(GraphicsWindowOperation::Fill(FillOperation::default()));
+        None
     }
 
     fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
@@ -394,10 +401,12 @@ impl WindowOperations for GraphicsWindow {
 #[derive(Default)]
 pub struct GridWindow {
     cleared: bool,
-    cleared_bg: Option<String>,
-    cleared_fg: Option<String>,
+    cleared_bg: Option<u32>,
+    cleared_fg: Option<u32>,
     current_styles: TextRun,
     pub height: usize,
+    last_bg: Option<u32>,
+    last_fg: Option<u32>,
     lines: Vec<GridLine>,
     pub width: usize,
     pub x: usize,
@@ -438,22 +447,16 @@ impl GridWindow {
 }
 
 impl WindowOperations for GridWindow {
-    fn clear(&mut self) {
+    fn clear(&mut self) -> Option<u32> {
         let height = self.height;
         self.cleared = true;
-        if let Some(css_styles) = &self.current_styles.css_styles {
-            let css_styles = lock!(css_styles);
-            if let Some(CSSValue::String(bg)) = css_styles.get("background-color") {
-                self.cleared_bg = Some(bg.clone());
-            }
-            if let Some(CSSValue::String(fg)) = css_styles.get("color") {
-                self.cleared_fg = Some(fg.clone());
-            }
-        }
+        self.cleared_bg = self.last_bg;
+        self.cleared_fg = self.last_fg;
         self.update_size(0, self.width);
         self.update_size(height, self.width);
         self.x = 0;
         self.y = 0;
+        self.cleared_bg
     }
 
     fn put_string(&mut self, str: &str, style: Option<u32>) {
@@ -479,6 +482,10 @@ impl WindowOperations for GridWindow {
         if style.is_some() {
             self.set_style(old_style);
         }
+    }
+
+    fn set_colours(&mut self, fg: u32, bg: u32) {
+        set_window_colours!(self, fg, bg);
     }
 
     fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
@@ -530,8 +537,8 @@ impl WindowOperations for GridWindow {
             };
             if self.cleared {
                 grid_content.base.clear = true;
-                grid_content.base.bg = self.cleared_bg.take();
-                grid_content.base.fg = self.cleared_fg.take();
+                grid_content.base.bg = self.cleared_bg.map(colour_code_to_css);
+                grid_content.base.fg = self.cleared_fg.map(colour_code_to_css);
                 self.cleared = false;
             }
             update.content = Some(ContentUpdate::Grid(grid_content));
@@ -620,3 +627,34 @@ fn set_css(css_styles: &mut Option<Arc<Mutex<CSSProperties>>>, name: &str, val: 
     }
     *css_styles = Some(Arc::new(Mutex::new(styles)));
 }
+
+/** Set colours on a window */
+macro_rules! set_window_colours {
+    ($self: ident, $fg: expr, $bg: expr) => {
+        #[allow(non_upper_case_globals)]
+        match $fg {
+            0 ..= 0xFFFFFF => {
+                $self.last_fg = Some($fg);
+                $self.set_css("color", Some(&CSSValue::String(colour_code_to_css($fg))));
+            },
+            zcolor_Default => {
+                $self.last_fg = None;
+                $self.set_css("color", None);
+            },
+            _ => {},
+        };
+        #[allow(non_upper_case_globals)]
+        match $bg {
+            0 ..= 0xFFFFFF => {
+                $self.last_bg = Some($bg);
+                $self.set_css("background-color", Some(&CSSValue::String(colour_code_to_css($bg))));
+            },
+            zcolor_Default => {
+                $self.last_bg = None;
+                $self.set_css("background-color", None);
+            },
+            _ => {},
+        };
+    };
+}
+use set_window_colours;
