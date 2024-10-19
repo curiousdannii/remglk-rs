@@ -1503,19 +1503,23 @@ where S: Default + GlkSystem {
                     let keywin = Into::<GlkWindow>::into(&win.key);
                     let keywin = lock!(keywin);
                     match keywin.wintype {
-                        WindowType::Buffer => if win.vertical {
+                        WindowType::Buffer => if win.size > 0 {
+                            if win.vertical {
                                 win.size as f64 * self.metrics.buffercharwidth + self.metrics.buffermarginx
                             }
                             else {
                                 win.size as f64 * self.metrics.buffercharheight + self.metrics.buffermarginy
                             }
-                        WindowType::Graphics => win.size as f64 + (if win.vertical {self.metrics.graphicsmarginx} else {self.metrics.graphicsmarginy}),
-                        WindowType::Grid => if win.vertical {
+                        } else {0.0},
+                        WindowType::Graphics => if win.size > 0 {win.size as f64 + (if win.vertical {self.metrics.graphicsmarginx} else {self.metrics.graphicsmarginy})} else {0.0},
+                        WindowType::Grid => if win.size > 0 {
+                            if win.vertical {
                                 win.size as f64 * self.metrics.gridcharwidth + self.metrics.gridmarginx
                             }
                             else {
                                 win.size as f64 * self.metrics.gridcharheight + self.metrics.gridmarginy
                             }
+                        } else {0.0},
                         _ => unreachable!(),
                     }
                 }

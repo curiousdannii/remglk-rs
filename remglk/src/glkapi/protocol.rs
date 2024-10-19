@@ -733,6 +733,9 @@ pub struct WindowUpdate {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gridwidth: Option<u32>,
     pub height: f64,
+    /** Whether the window should be completely hidden, though could potentially still respond to character events */
+    #[serde(skip_serializing_if = "Not::not")]
+    pub hidden: bool,
     /** Window ID */
     pub id: u32,
     /** Left position */

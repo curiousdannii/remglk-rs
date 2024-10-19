@@ -86,17 +86,20 @@ impl Window {
         }
 
         // Now give it to the specific window types for them to fill in
+        let height = self.wbox.bottom - self.wbox.top;
+        let width = self.wbox.right - self.wbox.left;
         self.data.update(WindowUpdate {
             id: self.id,
             input: input_update,
             size: protocol::WindowUpdate {
-                height: self.wbox.bottom - self.wbox.top,
+                height,
+                hidden: height == 0.0 || width == 0.0,
                 id: self.id,
                 left: self.wbox.left,
                 rock: self.rock,
                 top: self.wbox.top,
                 wintype: self.wintype,
-                width: self.wbox.right - self.wbox.left,
+                width,
                 ..Default::default()
             },
             ..Default::default()
