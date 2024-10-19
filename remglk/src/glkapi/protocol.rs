@@ -3,7 +3,7 @@
 The GlkOte protocol
 ===================
 
-Copyright (c) 2022 Dannii Willis
+Copyright (c) 2024 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -48,9 +48,11 @@ pub enum EventData {
     Mouse(MouseEvent),
     Redraw(RedrawEvent),
     Refresh(RefreshEvent),
+    Sound(SoundEvent),
     #[serde(rename = "specialresponse")]
     Special(SpecialEvent),
     Timer(TimerEvent),
+    Volume(VolumeEvent),
 }
 
 pub type PartialInputs = Option<HashMap<u32, String>>;
@@ -126,6 +128,12 @@ pub struct RedrawEvent {
 pub struct RefreshEvent {}
 
 #[derive(Deserialize)]
+pub struct SoundEvent {
+    pub notify: u32,
+    pub snd: u32,
+}
+
+#[derive(Deserialize)]
 pub struct SpecialEvent {
     /** Response type */
     pub response: String,
@@ -151,6 +159,11 @@ pub struct SystemFileRef {
 
 #[derive(Deserialize)]
 pub struct TimerEvent {}
+
+#[derive(Deserialize)]
+pub struct VolumeEvent {
+    pub notify: u32,
+}
 
 /** Screen and font metrics - all potential options */
 #[derive(Default, Deserialize)]
@@ -430,6 +443,9 @@ pub struct StateUpdate {
     /** Background colour for the page margin (ie, outside of the gameport); blank means remove the current background colour */
     #[serde(skip_serializing_if = "Option::is_none")]
     pub page_margin_bg: Option<String>,
+    /** Sound channels */
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub schannels: Vec<SoundChannelUpdate>,
     /* Special input */
     #[serde(skip_serializing_if = "Option::is_none")]
     pub specialinput: Option<SpecialInput>,
@@ -698,6 +714,55 @@ impl InputUpdate {
             ..Default::default()
         }
     }
+}
+
+#[derive(Default, Serialize)]
+pub struct SoundChannelUpdate {
+    /** Sound channel ID */
+    pub id: u32,
+    /** Operations */
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ops: Vec<SoundChannelOperation>,
+}
+
+/** Sound channel operation */
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "op")]
+pub enum SoundChannelOperation {
+    Pause,
+    Play(PlayOperation),
+    Stop,
+    Unpause,
+    Volume(SetVolumeOperation),
+}
+
+#[derive(Serialize)]
+pub struct PlayOperation {
+    /** Notification value */
+    #[serde(skip_serializing_if = "Option::is_none")]
+    notify: Option<u32>,
+    /** Number of repeats (default: 1) */
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repeats: Option<u32>,
+    /** Sound resource ID (from a Blorb) */
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snd: Option<u32>,
+    /** Sound URL */
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct SetVolumeOperation {
+    /** Duration in milliseconds */
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dur: Option<u32>,
+    /** Notification value */
+    #[serde(skip_serializing_if = "Option::is_none")]
+    notify: Option<u32>,
+    /** The volume as a number between 0 and 1 */
+    vol: f64,
 }
 
 #[derive(Default, Serialize)]
