@@ -309,13 +309,11 @@ where S: Default + GlkSystem {
 
             gestalt_DrawImage => (self.support.graphics && (val == wintype_Graphics || val == wintype_TextBuffer)) as u32,
 
-            //gestalt_Sound | gestalt_SoundVolume | gestalt_SoundNotify => 1,
+            gestalt_Sound | gestalt_SoundVolume | gestalt_SoundNotify | gestalt_SoundMusic | gestalt_Sound2 => self.support.sounds as u32,
 
             gestalt_Hyperlinks => self.support.hyperlinks as u32,
 
             gestalt_HyperlinkInput => (self.support.hyperlinks && (val == wintype_TextBuffer || val == wintype_TextGrid))  as u32,
-
-            //gestalt_SoundMusic => 1,
 
             gestalt_Unicode => 1,
 
@@ -329,13 +327,9 @@ where S: Default + GlkSystem {
 
             gestalt_DateTime => 1,
 
-            //gestalt_Sound2 => 1,
-
             gestalt_ResourceStream => 1,
 
-            gestalt_GarglkText => self.support.garglktext as u32,
-
-            gestalt_Stylehints => self.support.garglktext as u32,
+            gestalt_GarglkText | gestalt_Stylehints => self.support.garglktext as u32,
 
             _ => 0,
         }
@@ -1135,6 +1129,7 @@ where S: Default + GlkSystem {
                         "garglktext" => self.support.garglktext = true,
                         "graphics" => self.support.graphics = true,
                         "hyperlinks" => self.support.hyperlinks = true,
+                        "sounds" => self.support.sounds = true,
                         "timer" => self.support.timers = true,
                         _ => {},
                     };
@@ -1295,7 +1290,7 @@ where S: Default + GlkSystem {
 
         // Timer
         if self.timer.last_interval != self.timer.interval {
-            state.timer = if self.timer.interval > 0 {Some(self.timer.interval)} else {None};
+            state.timer = Some(self.timer.interval);
             self.timer.last_interval = self.timer.interval;
         }
 
@@ -1786,6 +1781,7 @@ struct SupportedFeatures {
     garglktext: bool,
     graphics: bool,
     hyperlinks: bool,
+    sounds: bool,
     timers: bool,
 }
 
