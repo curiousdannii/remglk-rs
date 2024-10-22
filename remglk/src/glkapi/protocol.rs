@@ -737,32 +737,32 @@ pub enum SoundChannelOperation {
     Volume(SetVolumeOperation),
 }
 
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 pub struct PlayOperation {
     /** Notification value */
     #[serde(skip_serializing_if = "Option::is_none")]
-    notify: Option<u32>,
+    pub notify: Option<u32>,
     /** Number of repeats (default: 1) */
     #[serde(skip_serializing_if = "Option::is_none")]
-    repeats: Option<u32>,
+    pub repeats: Option<u32>,
     /** Sound resource ID (from a Blorb) */
     #[serde(skip_serializing_if = "Option::is_none")]
-    snd: Option<u32>,
+    pub snd: Option<u32>,
     /** Sound URL */
     #[serde(skip_serializing_if = "Option::is_none")]
-    url: Option<String>,
+    pub url: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 pub struct SetVolumeOperation {
     /** Duration in milliseconds */
     #[serde(skip_serializing_if = "Option::is_none")]
-    dur: Option<u32>,
+    pub dur: Option<u32>,
     /** Notification value */
     #[serde(skip_serializing_if = "Option::is_none")]
-    notify: Option<u32>,
+    pub notify: Option<u32>,
     /** The volume as a number between 0 and 1 */
-    vol: f64,
+    pub vol: f64,
 }
 
 #[derive(Default, Serialize)]

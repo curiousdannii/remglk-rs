@@ -15,6 +15,7 @@ pub mod constants;
 mod filerefs;
 pub mod objects;
 pub mod protocol;
+mod schannels;
 mod streams;
 mod windows;
 
@@ -38,6 +39,7 @@ use constants::*;
 use filerefs::*;
 use objects::*;
 use protocol::*;
+use schannels::*;
 use streams::*;
 pub use streams::StreamOperations;
 use windows::*;
@@ -45,6 +47,7 @@ use windows::*;
 // Expose for so they can be turned into pointers
 pub use filerefs::FileRef;
 pub use objects::{GlkObject, GlkObjectMetadata};
+pub use schannels::SoundChannel;
 pub use streams::Stream;
 pub use windows::Window;
 
@@ -63,6 +66,8 @@ where S: Default + GlkSystem {
     pub retain_array_callbacks_u32: Option<RetainArrayCallbacks<u32>>,
     root_window: Option<GlkWindowWeak>,
     page_margin: PageMargin,
+    pub schannels: GlkObjectStore<SoundChannel>,
+    schannels_changed: bool,
     special: Option<SpecialInput>,
     pub streams: GlkObjectStore<Stream>,
     stylehints_buffer: WindowStyles,
@@ -458,6 +463,53 @@ where S: Default + GlkSystem {
     pub fn glk_request_timer_events(&mut self, msecs: u32) {
         self.timer.interval = msecs;
         self.timer.started = if msecs > 0 {Some(SystemTime::now())} else {None}
+    }
+
+    pub fn glk_schannel_create(&mut self, rock: u32) -> SoundChannelRef {
+        self.schannels_changed = true;
+        let schannel = SoundChannel::default();
+        let schannel_glkobj = GlkObject::new(schannel);
+        self.schannels.register(&schannel_glkobj, rock);
+        schannel_glkobj
+    }
+
+    pub fn glk_schannel_create_ext(&mut self, rock: u32, vol: u32) -> SoundChannelRef {
+        let schannel_glkobj = self.glk_schannel_create(rock);
+        {
+            let mut schannel = lock!(schannel_glkobj);
+            schannel.ops.push(SoundChannelOperation::Volume(SetVolumeOperation {
+                vol: (vol as f64 / SCHANNEL_MAX_VOL),
+                ..Default::default()
+            }));
+        }
+        schannel_glkobj
+    }
+
+    pub fn glk_schannel_destroy(&mut self, schannel: SoundChannelRef) {
+        self.schannels_changed = true;
+        self.schannels.unregister(schannel);
+    }
+
+    pub fn glk_schannel_play(schannel: &SoundChannelRef, snd: u32) -> u32 {
+        Self::glk_schannel_play_ext(schannel, snd, 1, 0)
+    }
+
+    pub fn glk_schannel_play_ext(schannel: &SoundChannelRef, snd: u32, repeats: u32, notify: u32) -> u32 {
+        let mut schannel = lock!(schannel);
+        if repeats == 0 {
+            schannel.ops.push(SoundChannelOperation::Stop);
+        }
+        else {
+            schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
+                notify: if notify != 0 {Some(notify)} else {None},
+                repeats: if repeats != 1 {Some(repeats)} else {None},
+                snd: Some(snd),
+                ..Default::default()
+            }));
+        }
+        // TODO: check for previous play operations?
+        // TODO: return 0 for MOD resources?
+        1
     }
 
     pub fn glk_select(&mut self) -> GlkResult<GlkEvent> {

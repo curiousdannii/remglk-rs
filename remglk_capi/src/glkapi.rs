@@ -25,6 +25,7 @@ type BufferMutU32 = *mut u32;
 type CStringU8 = *const i8;
 type CStringU32 = *const u32;
 pub type FileRefPtr = *const Mutex<GlkObjectMetadata<FileRef>>;
+pub type SchannelPtr = *const Mutex<GlkObjectMetadata<SoundChannel>>;
 pub type StreamPtr = *const Mutex<GlkObjectMetadata<Stream>>;
 pub type WindowPtr = *const Mutex<GlkObjectMetadata<Window>>;
 type WindowPtrMut = *mut Mutex<GlkObjectMetadata<Window>>;
@@ -356,6 +357,33 @@ pub extern "C" fn glk_request_timer_events(msecs: u32) {
 }
 
 #[no_mangle]
+pub extern "C" fn glk_schannel_create(rock: u32) -> SchannelPtr {
+    let result = glkapi().lock().unwrap().glk_schannel_create(rock);
+    to_owned(result)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_create_ext(rock: u32, vol: u32) -> SchannelPtr {
+    let result = glkapi().lock().unwrap().glk_schannel_create_ext(rock, vol);
+    to_owned(result)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_destroy(schannel: SchannelPtr) {
+    glkapi().lock().unwrap().glk_schannel_destroy(reclaim(schannel));
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_play(schannel: SchannelPtr, snd: u32) -> u32 {
+    GlkApi::glk_schannel_play(&from_ptr(schannel), snd)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_play_ext(schannel: SchannelPtr, snd: u32, repeats: u32, notify: u32) -> u32 {
+    GlkApi::glk_schannel_play_ext(&from_ptr(schannel), snd, repeats, notify)
+}
+
+#[no_mangle]
 pub extern "C" fn glk_select(ev_ptr: *mut GlkEvent) {
     let res = glkapi().lock().unwrap().glk_select().unwrap().into();
     write_ptr(ev_ptr, res);
@@ -415,18 +443,6 @@ pub extern "C" fn glk_simple_time_to_date_local(time: i32, factor: u32, date_ptr
 #[no_mangle]
 pub extern "C" fn glk_simple_time_to_date_utc(time: i32, factor: u32, date_ptr: *mut GlkDate) {
     let date = GlkApi::glk_simple_time_to_date_utc(time, factor);
-    write_ptr(date_ptr, date);
-}
-
-#[no_mangle]
-pub extern "C" fn glk_time_to_date_local(time_ptr: *const GlkTime, date_ptr: *mut GlkDate) {
-    let date = GlkApi::glk_time_to_date_local(unsafe{&(*time_ptr)});
-    write_ptr(date_ptr, date);
-}
-
-#[no_mangle]
-pub extern "C" fn glk_time_to_date_utc(time_ptr: *const GlkTime, date_ptr: *mut GlkDate) {
-    let date = GlkApi::glk_time_to_date_utc(unsafe{&(*time_ptr)});
     write_ptr(date_ptr, date);
 }
 
@@ -538,6 +554,18 @@ pub extern "C" fn glk_stylehint_set(wintype: WindowType, style: u32, hint: u32, 
 
 #[no_mangle]
 pub extern "C" fn glk_tick() {}
+
+#[no_mangle]
+pub extern "C" fn glk_time_to_date_local(time_ptr: *const GlkTime, date_ptr: *mut GlkDate) {
+    let date = GlkApi::glk_time_to_date_local(unsafe{&(*time_ptr)});
+    write_ptr(date_ptr, date);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_time_to_date_utc(time_ptr: *const GlkTime, date_ptr: *mut GlkDate) {
+    let date = GlkApi::glk_time_to_date_utc(unsafe{&(*time_ptr)});
+    write_ptr(date_ptr, date);
+}
 
 #[no_mangle]
 pub extern "C" fn glk_window_clear(win: WindowPtr) {
