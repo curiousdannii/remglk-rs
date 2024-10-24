@@ -63,7 +63,7 @@ impl Window {
             ..Default::default()
         });
         let str = GlkObject::new(WindowStream::new(&win).into());
-        win.lock().unwrap().str = str.downgrade();
+        lock!(win).str = str.downgrade();
         (win, str)
     }
 
@@ -162,6 +162,7 @@ where T: Default + WindowOperations {
     pub data: T,
     pub line_input_buffer: Option<GlkOwnedBuffer>,
     pub request_echo_line_input: bool,
+    sent_stylehints: bool,
     stylehints: WindowStyles,
 }
 
@@ -203,8 +204,8 @@ where T: Default + WindowOperations {
     }
 
     fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
-        // TODO: don't resend stylehints when only metrics have changed?
-        if !self.stylehints.is_empty() {
+        if !self.sent_stylehints && !self.stylehints.is_empty() {
+            self.sent_stylehints = true;
             update.size.styles = Some(self.stylehints.clone());
         }
 
@@ -301,7 +302,7 @@ impl WindowOperations for BufferWindow {
 
     fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
         if let Some(css_styles) = &self.last_textrun().css_styles {
-            if css_styles.lock().unwrap().get(name) == val {
+            if lock!(css_styles).get(name) == val {
                 return;
             }
         }
@@ -423,6 +424,7 @@ struct GridLine {
 }
 
 impl GridWindow {
+    /** Fit the cursor within the window; returns true if the cursor is actually outside the window */
     fn fit_cursor(&mut self) -> bool {
         if self.x >= self.width {
             self.x = 0;
@@ -435,6 +437,13 @@ impl GridWindow {
     }
 
     pub fn update_size(&mut self, height: usize, width: usize) {
+        // Garglk extension quirk: expanding a 0 line window has to update the background colour just like clearing
+        if self.lines.is_empty() {
+            self.cleared = true;
+            self.cleared_bg = self.last_bg;
+            self.cleared_fg = self.last_fg;
+        }
+
         self.height = height;
         self.width = width;
 
@@ -452,9 +461,7 @@ impl GridWindow {
 impl WindowOperations for GridWindow {
     fn clear(&mut self) -> Option<u32> {
         let height = self.height;
-        self.cleared = true;
-        self.cleared_bg = self.last_bg;
-        self.cleared_fg = self.last_fg;
+        // We set the cleared status in `update_size`, so don't need to do it here
         self.update_size(0, self.width);
         self.update_size(height, self.width);
         self.x = 0;
@@ -492,6 +499,11 @@ impl WindowOperations for GridWindow {
     }
 
     fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
+        if let Some(css_styles) = &self.current_styles.css_styles {
+            if lock!(css_styles).get(name) == val {
+                return;
+            }
+        }
         set_css(&mut self.current_styles.css_styles, name, val);
     }
 
@@ -526,7 +538,7 @@ impl WindowOperations for GridWindow {
                                 last.text.push_str(&cur.text);
                             }
                             else {
-                                let new = last.clone(&cur.text);
+                                let new = cur.clone(&cur.text);
                                 acc.push(new);
                             }
                         }
@@ -602,7 +614,7 @@ fn cleanup_paragraph_styles(par: Vec<LineData>) -> Vec<LineData> {
         match content {
             LineData::TextRun(mut tr) => {
                 if let Some(ref styles) = tr.css_styles {
-                    if styles.lock().unwrap().is_empty() {
+                    if lock!(styles).is_empty() {
                         tr.css_styles = None;
                     }
                 }
@@ -614,21 +626,16 @@ fn cleanup_paragraph_styles(par: Vec<LineData>) -> Vec<LineData> {
 }
 
 fn set_css(css_styles: &mut Option<Arc<Mutex<CSSProperties>>>, name: &str, val: Option<&CSSValue>) {
-    // Don't do anything if this style is already set
-    if let Some(css_styles) = css_styles {
-        if css_styles.lock().unwrap().get(name) == val {
-            return;
-        }
-    }
+    // We assume that the calling function has already checked if this style is already set
     // We need to either clone the existing styles, or insert an empty one
-    let mut styles = css_styles.take().map_or(HashMap::new(), |old| old.lock().unwrap().clone());
+    let mut styles = css_styles.take().map_or(HashMap::new(), |old| lock!(old).clone());
     if let Some(style) = val {
         styles.insert(name.to_string(), style.clone());
     }
     else {
         styles.remove(name);
     }
-    *css_styles = Some(Arc::new(Mutex::new(styles)));
+    let _ = css_styles.insert(Arc::new(Mutex::new(styles)));
 }
 
 /** Set colours on a window */
