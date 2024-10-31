@@ -28,6 +28,9 @@ pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCal
     let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<FileRef>>(register_cb);
     let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<FileRef>>(unregister_cb);
     glkapi.filerefs.set_callbacks(register, unregister);
+    let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<SoundChannel>>(register_cb);
+    let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<SoundChannel>>(unregister_cb);
+    glkapi.schannels.set_callbacks(register, unregister);
     let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<Stream>>(register_cb);
     let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<Stream>>(unregister_cb);
     glkapi.streams.set_callbacks(register, unregister);
@@ -39,6 +42,13 @@ pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCal
 // The C function `gidispatch_get_objrock` takes a generic pointer, which we can't really deal with here in Rust, so support.c will handle calling the appropriate function
 #[no_mangle]
 pub extern "C" fn gidispatch_get_objrock_fileref(ptr: FileRefPtr) -> DispatchRock {
+    let obj = from_ptr(ptr);
+    let obj = obj.lock().unwrap();
+    obj.disprock.unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn gidispatch_get_objrock_schannel(ptr: SchannelPtr) -> DispatchRock {
     let obj = from_ptr(ptr);
     let obj = obj.lock().unwrap();
     obj.disprock.unwrap()

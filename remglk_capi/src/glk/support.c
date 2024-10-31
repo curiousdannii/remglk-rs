@@ -17,6 +17,8 @@ gidispatch_rock_t gidispatch_get_objrock(void *obj, glui32 objclass) {
     switch (objclass) {
         case gidisp_Class_Fileref:
             return gidispatch_get_objrock_fileref(obj);
+        case gidisp_Class_Schannel:
+            return gidispatch_get_objrock_schannel(obj);
         case gidisp_Class_Stream:
             return gidispatch_get_objrock_stream(obj);
         case gidisp_Class_Window:

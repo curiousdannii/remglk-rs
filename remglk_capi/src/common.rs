@@ -33,6 +33,11 @@ pub fn from_ptr<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> GlkObject<T> {
     reclaim(ptr)
 }
 
+pub fn from_ptr_array<T>(array_ptr: *const *const Mutex<GlkObjectMetadata<T>>, array_count: u32) -> Vec<GlkObject<T>> {
+    let array = unsafe {slice::from_raw_parts(array_ptr, array_count as usize)};
+    array.iter().map(|ptr| from_ptr(*ptr)).collect()
+}
+
 pub fn from_ptr_opt<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> Option<GlkObject<T>> {
     if ptr.is_null() {
         None

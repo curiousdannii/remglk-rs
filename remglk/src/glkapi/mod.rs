@@ -21,6 +21,7 @@ mod windows;
 
 use std::cmp::min;
 use std::ffi::c_char;
+use std::iter::zip;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -490,11 +491,25 @@ where S: Default + GlkSystem {
         self.schannels.unregister(schannel);
     }
 
-    pub fn glk_schannel_play(schannel: &SoundChannelRef, snd: u32) -> u32 {
-        Self::glk_schannel_play_ext(schannel, snd, 1, 0)
+    pub fn glk_schannel_get_rock(schannel: &SoundChannelRef) -> GlkResult<u32> {
+        Ok(lock!(schannel).rock)
     }
 
-    pub fn glk_schannel_play_ext(schannel: &SoundChannelRef, snd: u32, repeats: u32, notify: u32) -> u32 {
+    pub fn glk_schannel_iterate(&self, schannel: Option<&SoundChannelRef>) -> Option<SoundChannelRef> {
+        self.schannels.iterate(schannel)
+    }
+
+    pub fn glk_schannel_pause(&mut self, schannel: &SoundChannelRef) {
+        self.schannels_changed = true;
+        let mut schannel = lock!(schannel);
+        schannel.ops.push(SoundChannelOperation::Pause);
+    }
+
+    pub fn glk_schannel_play(&mut self, schannel: &SoundChannelRef, snd: u32) -> u32 {
+        self.glk_schannel_play_ext(schannel, snd, 1, 0)
+    }
+
+    pub fn glk_schannel_play_ext(&mut self, schannel: &SoundChannelRef, snd: u32, repeats: u32, notify: u32) -> u32 {
         let mut schannel = lock!(schannel);
         if repeats == 0 {
             schannel.ops.push(SoundChannelOperation::Stop);
@@ -507,9 +522,43 @@ where S: Default + GlkSystem {
                 ..Default::default()
             }));
         }
+        self.schannels_changed = true;
         // TODO: check for previous play operations?
         // TODO: return 0 for MOD resources?
         1
+    }
+
+    pub fn glk_schannel_play_multi(&mut self, schannels: Vec<SoundChannelRef>, sounds: &[u32], notify: u32) -> u32 {
+        zip(schannels, sounds).fold(0, |acc, sound| {
+            let (schannel, &snd) = sound;
+            acc + self.glk_schannel_play_ext(&schannel, snd, 1, notify)
+        })
+    }
+
+    pub fn glk_schannel_set_volume(&mut self, schannel: &SoundChannelRef, vol: u32) {
+        self.glk_schannel_set_volume_ext(schannel, vol, 0, 0);
+    }
+
+    pub fn glk_schannel_set_volume_ext(&mut self, schannel: &SoundChannelRef, vol: u32, duration: u32, notify: u32) {
+        self.schannels_changed = true;
+        let mut schannel = lock!(schannel);
+        schannel.ops.push(SoundChannelOperation::Volume(SetVolumeOperation {
+            dur: if duration > 0 {Some(duration)} else {None},
+            notify: if notify > 0 {Some(notify)} else {None},
+            vol: (vol as f64 / SCHANNEL_MAX_VOL),
+        }));
+    }
+
+    pub fn glk_schannel_stop(&mut self, schannel: &SoundChannelRef) {
+        self.schannels_changed = true;
+        let mut schannel = lock!(schannel);
+        schannel.ops.push(SoundChannelOperation::Stop);
+    }
+
+    pub fn glk_schannel_unpause(&mut self, schannel: &SoundChannelRef) {
+        self.schannels_changed = true;
+        let mut schannel = lock!(schannel);
+        schannel.ops.push(SoundChannelOperation::Unpause);
     }
 
     pub fn glk_select(&mut self) -> GlkResult<GlkEvent> {
@@ -1349,6 +1398,18 @@ where S: Default + GlkSystem {
         if page_margin_bg != self.page_margin.transmitted {
             state.page_margin_bg = page_margin_bg.map(colour_code_to_css);
             self.page_margin.transmitted = page_margin_bg;
+        }
+
+        if self.schannels_changed {
+            self.schannels_changed = false;
+            state.schannels = self.schannels.iter().map(|schannel| {
+                let mut schannel = lock!(schannel);
+                let ops = mem::take(&mut schannel.ops);
+                protocol::SoundChannelUpdate {
+                    id: schannel.id,
+                    ops,
+                }
+            }).collect();
         }
 
         state.specialinput = mem::take(&mut self.special);

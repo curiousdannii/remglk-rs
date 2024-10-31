@@ -374,13 +374,63 @@ pub extern "C" fn glk_schannel_destroy(schannel: SchannelPtr) {
 }
 
 #[no_mangle]
+pub extern "C" fn glk_schannel_get_rock(schannel: SchannelPtr) -> u32 {
+    GlkApi::glk_schannel_get_rock(&from_ptr(schannel)).unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_iterate(schannel: SchannelPtr, rock_ptr: *mut u32) -> SchannelPtr {
+    let schannel = from_ptr_opt(schannel);
+    let next = glkapi().lock().unwrap().glk_schannel_iterate(schannel.as_ref());
+    let (obj, rock) = if let Some(obj) = next {
+        let rock = obj.lock().unwrap().rock;
+        (Some(obj), rock)
+    }
+    else {
+        (None, 0)
+    };
+    write_ptr(rock_ptr, rock);
+    borrow(obj.as_ref())
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_pause(schannel: SchannelPtr) {
+    glkapi().lock().unwrap().glk_schannel_pause(&from_ptr(schannel));
+}
+
+#[no_mangle]
 pub extern "C" fn glk_schannel_play(schannel: SchannelPtr, snd: u32) -> u32 {
-    GlkApi::glk_schannel_play(&from_ptr(schannel), snd)
+    glkapi().lock().unwrap().glk_schannel_play(&from_ptr(schannel), snd)
 }
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_play_ext(schannel: SchannelPtr, snd: u32, repeats: u32, notify: u32) -> u32 {
-    GlkApi::glk_schannel_play_ext(&from_ptr(schannel), snd, repeats, notify)
+    glkapi().lock().unwrap().glk_schannel_play_ext(&from_ptr(schannel), snd, repeats, notify)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_play_multi(schannels: *const SchannelPtr, schannels_len: u32, sounds: BufferU32, sounds_len: u32, notify: u32) -> u32 {
+    glkapi().lock().unwrap().glk_schannel_play_multi(from_ptr_array(schannels, schannels_len), glk_buffer(sounds, sounds_len), notify)
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_set_volume(schannel: SchannelPtr, vol: u32) {
+    glkapi().lock().unwrap().glk_schannel_set_volume(&from_ptr(schannel), vol);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_set_volume_ext(schannel: SchannelPtr, vol: u32, duration: u32, notify: u32) {
+    glkapi().lock().unwrap().glk_schannel_set_volume_ext(&from_ptr(schannel), vol, duration, notify);
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_stop(schannel: SchannelPtr) {
+    glkapi().lock().unwrap().glk_schannel_stop(&from_ptr(schannel));
+}
+
+#[no_mangle]
+pub extern "C" fn glk_schannel_unpause(schannel: SchannelPtr) {
+    glkapi().lock().unwrap().glk_schannel_unpause(&from_ptr(schannel));
 }
 
 #[no_mangle]
@@ -445,6 +495,9 @@ pub extern "C" fn glk_simple_time_to_date_utc(time: i32, factor: u32, date_ptr: 
     let date = GlkApi::glk_simple_time_to_date_utc(time, factor);
     write_ptr(date_ptr, date);
 }
+
+#[no_mangle]
+pub extern "C" fn glk_sound_load_hint(_snd: u32, _flag: u32) {}
 
 #[no_mangle]
 pub extern "C" fn glk_stream_close(str: StreamPtr, result_ptr: *mut StreamResultCounts) {
