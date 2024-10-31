@@ -960,8 +960,21 @@ where S: Default + GlkSystem {
                 return Err(SplitMustBeNull);
             }
         }
-        else if let Some(splitwin) = splitwin {
-            validate_winmethod(method, lock!(splitwin).wintype)?;
+        else if splitwin.is_some() {
+            // Check method
+            let division = method & winmethod_DivisionMask;
+            let direction = method & winmethod_DirMask;
+            if division != winmethod_Fixed && division != winmethod_Proportional {
+                return Err(InvalidWindowDivision)
+            }
+            if division == winmethod_Fixed && wintype == WindowType::Blank {
+                return Err(InvalidWindowDivisionBlank)
+            }
+            #[allow(non_upper_case_globals)]
+            if let winmethod_Above | winmethod_Below | winmethod_Left | winmethod_Right = direction {}
+            else {
+                return Err(InvalidWindowDirection)
+            }
         }
         else {
             return Err(InvalidSplitwin);
@@ -979,60 +992,60 @@ where S: Default + GlkSystem {
             _ => {return Err(InvalidWindowType);}
         };
         // TODO: try new_cyclic
-        let (win, str) = Window::new(windata, self.windows.next_id(), rock, wintype);
-        self.windows.register(&win, rock);
+        let (win_glkobj, str) = Window::new(windata, self.windows.next_id(), rock, wintype);
+        self.windows.register(&win_glkobj, rock);
         self.streams.register(&str, 0);
 
         // Rearrange the windows for the new window
-        if let Some(splitwin) = splitwin {
+        if let Some(splitwin_glkobj) = splitwin {
             // Set up the pairwindata before turning it into a full window
-            let mut pairwindata = PairWindow::new(&win, method, size);
-            pairwindata.child1 = splitwin.downgrade();
-            pairwindata.child2 = win.downgrade();
+            let mut pairwindata = PairWindow::new(&win_glkobj, method, size);
+            pairwindata.child1 = splitwin_glkobj.downgrade();
+            pairwindata.child2 = win_glkobj.downgrade();
 
             // Now the pairwin object can be created and registered
-            let (pairwin, pairwinstr) = Window::new(pairwindata.into(), self.windows.next_id(), 0, WindowType::Pair);
-            self.windows.register(&pairwin, 0);
+            let (pairwin_glkobj, pairwinstr) = Window::new(pairwindata.into(), self.windows.next_id(), 0, WindowType::Pair);
+            self.windows.register(&pairwin_glkobj, 0);
             self.streams.register(&pairwinstr, 0);
 
             // Set up the rest of the relations
-            let mut splitwin_inner = lock!(splitwin);
-            let wbox = splitwin_inner.wbox;
-            let old_parent = splitwin_inner.parent.as_ref().map(Into::<GlkWindow>::into);
-            lock!(pairwin).parent = old_parent.as_ref().map(|win| win.downgrade());
-            splitwin_inner.parent = Some(pairwin.downgrade());
-            lock!(win).parent = Some(pairwin.downgrade());
-            drop(splitwin_inner);
+            let mut splitwin = lock!(splitwin_glkobj);
+            let wbox = splitwin.wbox;
+            let grandparent_opt = splitwin.parent.as_ref().map(Into::<GlkWindow>::into);
+            lock!(pairwin_glkobj).parent = grandparent_opt.as_ref().map(|win| win.downgrade());
+            splitwin.parent = Some(pairwin_glkobj.downgrade());
+            lock!(win_glkobj).parent = Some(pairwin_glkobj.downgrade());
+            drop(splitwin);
 
-            if let Some(old_parent) = old_parent {
-                let mut old_parent_inner = lock!(old_parent);
-                if let WindowData::Pair(old_parent_inner) = &mut old_parent_inner.data {
-                    if old_parent_inner.child1.as_ptr() == splitwin.as_ptr() {
-                        old_parent_inner.child1 = pairwin.downgrade();
+            if let Some(grandparent_glkobj) = grandparent_opt {
+                let mut grandparent = lock!(grandparent_glkobj);
+                if let WindowData::Pair(grandparent_data) = &mut grandparent.data {
+                    if grandparent_data.child1.as_ptr() == splitwin_glkobj.as_ptr() {
+                        grandparent_data.child1 = pairwin_glkobj.downgrade();
                     }
                     else {
-                        old_parent_inner.child2 = pairwin.downgrade();
+                        grandparent_data.child2 = pairwin_glkobj.downgrade();
                     }
                 }
                 else {
-                    unreachable!();
+                    return Err(SplitParentIsntPair);
                 }
             }
             else {
-                self.root_window = Some(pairwin.downgrade());
+                self.root_window = Some(pairwin_glkobj.downgrade());
             }
-            self.rearrange_window(&pairwin, wbox)?;
+            self.rearrange_window(&pairwin_glkobj, wbox)?;
         }
         else {
-            self.root_window = Some(win.downgrade());
-            self.rearrange_window(&win, WindowBox {
+            self.root_window = Some(win_glkobj.downgrade());
+            self.rearrange_window(&win_glkobj, WindowBox {
                 bottom: self.metrics.height,
                 right: self.metrics.width,
                 ..Default::default()
             })?;
         }
 
-        Ok(win)
+        Ok(win_glkobj)
     }
 
     pub fn glk_window_set_arrangement(&mut self, win_glkobj: &GlkWindow, method: u32, size: u32, keywin: Option<&GlkWindow>) -> GlkResult<()> {

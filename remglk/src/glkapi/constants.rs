@@ -213,25 +213,6 @@ pub const winmethod_Border: u32 = 0x000;
 pub const winmethod_NoBorder: u32 = 0x100;
 pub const winmethod_BorderMask: u32 = 0x100;
 
-pub fn validate_winmethod(method: u32, wintype: WindowType) -> GlkResult<'static, (u32, u32, u32)> {
-    if wintype == WindowType::Pair {
-        return Err(SplitCantBePair);
-    }
-    let division = method & winmethod_DivisionMask;
-    let direction = method & winmethod_DirMask;
-    if division != winmethod_Fixed && division != winmethod_Proportional {
-        return Err(InvalidWindowDivision)
-    }
-    if division == winmethod_Fixed && wintype == WindowType::Blank {
-        return Err(InvalidWindowDivisionBlank)
-    }
-    if let winmethod_Above | winmethod_Below | winmethod_Left | winmethod_Right = direction {}
-    else {
-        return Err(InvalidWindowDirection)
-    }
-    Ok((division, direction, method & winmethod_BorderMask))
-}
-
 pub const fileusage_Data: u32 = 0x00;
 pub const fileusage_SavedGame: u32 = 0x01;
 pub const fileusage_Transcript: u32 = 0x02;

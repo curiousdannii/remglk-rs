@@ -65,10 +65,10 @@ pub enum GlkApiError {
     PendingLineInput,
     #[error("cannot read from write-only stream")]
     ReadFromWriteOnly,
-    #[error("invalid splitwin: can't be a pair window")]
-    SplitCantBePair,
     #[error("splitwin must be null for first window")]
     SplitMustBeNull,
+    #[error("invalid splitwin: split window's parent isn't a pair window")]
+    SplitParentIsntPair,
     #[error("window doesn't support character input")]
     WindowDoesntSupportCharInput,
     #[error("window doesn't support line input")]
