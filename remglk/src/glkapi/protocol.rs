@@ -746,11 +746,7 @@ pub struct PlayOperation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repeats: Option<u32>,
     /** Sound resource ID (from a Blorb) */
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub snd: Option<u32>,
-    /** Sound URL */
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    pub snd: u32,
 }
 
 #[derive(Default, Serialize)]

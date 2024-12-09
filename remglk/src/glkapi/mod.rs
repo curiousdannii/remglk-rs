@@ -515,12 +515,23 @@ where S: Default + GlkSystem {
             schannel.ops.push(SoundChannelOperation::Stop);
         }
         else {
-            schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
-                notify: if notify != 0 {Some(notify)} else {None},
-                repeats: if repeats != 1 {Some(repeats)} else {None},
-                snd: Some(snd),
-                ..Default::default()
-            }));
+            if let Some(data) = get_blorb_resource(giblorb_ID_Snd, snd) {
+                let id = &data[0..4];
+                // For now only support Ogg/Vorbis and AIFF
+                if id == b"OggS" || (id == b"FORM" && &data[8..12] == b"AIFF") {
+                    schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
+                        notify: if notify != 0 {Some(notify)} else {None},
+                        repeats: if repeats != 1 {Some(repeats)} else {None},
+                        snd,
+                    }));
+                }
+                else {
+                    return 0;
+                }
+            }
+            else {
+                return 0;
+            }
         }
         self.schannels_changed = true;
         // TODO: check for previous play operations?
@@ -1342,6 +1353,15 @@ where S: Default + GlkSystem {
                 }
             },
 
+            EventData::Sound(data) => {
+                glkevent = GlkEvent {
+                    evtype: GlkEventType::SoundNotify,
+                    val1: data.snd,
+                    val2: data.notify,
+                    ..Default::default()
+                }
+            },
+
             EventData::Special(data) => {
                 glkevent = GlkEvent {
                     fref: data.value,
@@ -1353,6 +1373,15 @@ where S: Default + GlkSystem {
                 self.timer.started = Some(SystemTime::now());
                 glkevent = GlkEvent {
                     evtype: GlkEventType::Timer,
+                    ..Default::default()
+                }
+            },
+
+            EventData::Volume(data) => {
+                glkevent = GlkEvent {
+                    evtype: GlkEventType::VolumeNotify,
+                    val1: 0,
+                    val2: data.notify,
                     ..Default::default()
                 }
             },
@@ -1491,7 +1520,7 @@ where S: Default + GlkSystem {
     }
 
     fn create_resource_stream(&mut self, filenum: u32, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
-        let resource = get_blorb_resource_chunk(filenum);
+        let resource = get_blorb_data_resource(filenum);
         if let Some(resource) = resource {
             // Create an appopriate stream
             let str = create_stream_from_buffer(resource.data.into(), resource.binary, FileMode::Read, uni, None)?;

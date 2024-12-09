@@ -18,10 +18,13 @@ use std::slice;
 const fn giblorb_make_id(c1: char, c2: char, c3: char, c4: char) -> u32 {
     ((c1 as u32) << 24) | ((c2 as u32) << 16) | ((c3 as u32) << 8) | (c4 as u32)
 }
-const giblorb_ID_BINA: u32 = giblorb_make_id('B', 'I', 'N', 'A');
-const giblorb_ID_Data: u32 = giblorb_make_id('D', 'a', 't', 'a');
-const giblorb_ID_FORM: u32 = giblorb_make_id('F', 'O', 'R', 'M');
-const giblorb_ID_TEXT: u32 = giblorb_make_id('T', 'E', 'X', 'T');
+pub const giblorb_ID_BINA: u32 = giblorb_make_id('B', 'I', 'N', 'A');
+pub const giblorb_ID_Data: u32 = giblorb_make_id('D', 'a', 't', 'a');
+pub const giblorb_ID_Exec: u32 = giblorb_make_id('E', 'x', 'e', 'c');
+pub const giblorb_ID_FORM: u32 = giblorb_make_id('F', 'O', 'R', 'M');
+pub const giblorb_ID_Pict: u32 = giblorb_make_id('P', 'i', 'c', 't');
+pub const giblorb_ID_Snd: u32 =  giblorb_make_id('S', 'n', 'd', ' ');
+pub const giblorb_ID_TEXT: u32 = giblorb_make_id('T', 'E', 'X', 'T');
 
 const giblorb_method_Memory: u32 = 1;
 
@@ -73,7 +76,23 @@ extern "C" {
     fn giblorb_load_resource(map: BlorbMapPtr, method: u32, res: BlorbChunkPtr, usage: u32, resnum: u32) -> u32;
 }
 
-pub fn get_blorb_resource_chunk(filenum: u32) -> Option<ResourceChunk> {
+/** Get a Blorb resource */
+pub fn get_blorb_resource(usage: u32, resnum: u32) -> Option<&'static [u8]> {
+    let map = unsafe{giblorb_get_resource_map()};
+    if map.is_null() {
+        return None;
+    }
+    let mut chunk = MaybeUninit::uninit();
+    let res = unsafe {giblorb_load_resource(map, giblorb_method_Memory, chunk.as_mut_ptr(), usage, resnum)};
+    if res > 0 {
+        return None;
+    }
+    let chunk = unsafe {chunk.assume_init()};
+    Some(unsafe {slice::from_raw_parts(chunk.data, chunk.length as usize)})
+}
+
+/** Get a Blorb Data resource */
+pub fn get_blorb_data_resource(filenum: u32) -> Option<ResourceChunk> {
     let map = unsafe{giblorb_get_resource_map()};
     if map.is_null() {
         return None;
