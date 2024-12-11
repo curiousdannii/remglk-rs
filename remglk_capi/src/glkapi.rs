@@ -28,7 +28,6 @@ pub type FileRefPtr = *const Mutex<GlkObjectMetadata<FileRef>>;
 pub type SchannelPtr = *const Mutex<GlkObjectMetadata<SoundChannel>>;
 pub type StreamPtr = *const Mutex<GlkObjectMetadata<Stream>>;
 pub type WindowPtr = *const Mutex<GlkObjectMetadata<Window>>;
-type WindowPtrMut = *mut Mutex<GlkObjectMetadata<Window>>;
 
 #[cfg(target_os = "emscripten")]
 #[path = "systems/emglken.rs"]
@@ -647,11 +646,11 @@ pub extern "C" fn glk_window_flow_break(win: WindowPtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn glk_window_get_arrangement(win: WindowPtr, method_ptr: *mut u32, size_ptr: *mut u32, keywin_ptr: WindowPtrMut) {
+pub extern "C" fn glk_window_get_arrangement(win: WindowPtr, method_ptr: *mut u32, size_ptr: *mut u32, keywin_ptr: *mut WindowPtr) {
     let (method, size, keywin) = GlkApi::glk_window_get_arrangement(&from_ptr(win)).unwrap();
     write_ptr(method_ptr, method);
     write_ptr(size_ptr, size);
-    write_ptr(keywin_ptr, unsafe {borrow(Some(&keywin)).read()});
+    write_ptr(keywin_ptr, borrow(Some(&keywin)));
 }
 
 #[no_mangle]
