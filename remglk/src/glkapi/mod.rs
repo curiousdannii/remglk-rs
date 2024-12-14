@@ -1755,11 +1755,16 @@ where S: Default + GlkSystem {
 
     fn request_char_event(&self, win: &GlkWindow, uni: bool) -> GlkResult<()> {
         let mut win = lock!(win);
-        if win.input.text_input_type.is_some() {
-            return Err(PendingKeyboardRequest);
-        }
         if let WindowType::Blank | WindowType::Pair = win.wintype {
             return Err(WindowDoesntSupportCharInput);
+        }
+        // Some games expect lax implementations which allow multiple calls to `glk_request_char_event`. We'll only raise an error if the existing input type is not the same as what is currently be requested.
+        // See https://github.com/iftechfoundation/ifarchive-if-specs/issues/25
+        if let Some(text_input_type) = win.input.text_input_type {
+            if text_input_type == TextInputType::Char && uni == win.uni_char_input {
+                return Ok(());
+            }
+            return Err(PendingKeyboardRequest);
         }
 
         win.input.gen = Some(self.gen);
