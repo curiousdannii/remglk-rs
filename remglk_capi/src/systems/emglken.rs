@@ -3,7 +3,7 @@
 Emglken system
 ==============
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -14,6 +14,7 @@ use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use std::slice;
 
+use jiff::tz::{Offset, TimeZone};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
@@ -29,6 +30,7 @@ extern "C" {
     fn emglken_file_write_buffer(path_ptr: *const u8, path_len: usize, buf_ptr: *const u8, buf_len: usize);
     fn emglken_get_dirs(buffer: *mut EmglkenBuffer);
     fn emglken_get_glkote_event(buffer: *mut EmglkenBuffer);
+    fn emglken_get_local_tz() -> i32;
     fn emglken_send_glkote_update(update_ptr: *const u8, update_len: usize);
     fn emglken_set_storyfile_dir(path_ptr: *const u8, path_len: usize, buffer: *mut EmglkenBuffer);
 }
@@ -110,6 +112,11 @@ impl GlkSystem for EmglkenSystem {
             temp: PathBuf::from(dirs.temp),
             working: PathBuf::from(dirs.working),
         }
+    }
+
+    fn get_local_tz() -> TimeZone {
+        let offset = Offset::from_seconds(unsafe {emglken_get_local_tz()}).unwrap();
+        TimeZone::fixed(offset)
     }
 
     fn set_base_file(dirs: &mut Directories, path: String) {

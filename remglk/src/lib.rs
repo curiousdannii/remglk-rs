@@ -3,7 +3,7 @@
 RemGlk ported to Rust
 =====================
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -11,6 +11,8 @@ https://github.com/curiousdannii/remglk-rs
 
 pub mod blorb;
 pub mod glkapi;
+
+use jiff::tz::TimeZone;
 
 use glkapi::Directories;
 use glkapi::protocol::{Event, Update};
@@ -29,6 +31,8 @@ pub trait GlkSystem {
     /** Get an event from GlkOte */
     fn get_glkote_event(&mut self) -> Option<Event>;
 
+    // Misc system functions
     fn get_directories() -> Directories;
+    fn get_local_tz() -> TimeZone;
     fn set_base_file(dirs: &mut Directories, path: String);
 }

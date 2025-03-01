@@ -3,7 +3,7 @@
 Emglken JS library
 ==================
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/emglken
 
@@ -74,6 +74,10 @@ const EMGLKEN_JS = {
             writeBufferJSON(buffer, glkote_event_data)
             glkote_event_data = null
         })
+    },
+
+    emglken_get_local_tz() {
+        return new Date().getTimezoneOffset() * -60
     },
 
     emglken_send_glkote_update(update_ptr, update_len) {

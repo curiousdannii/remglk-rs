@@ -3,7 +3,7 @@
 The Glk API
 ===========
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -28,7 +28,7 @@ use std::path::PathBuf;
 use std::str;
 use std::time::SystemTime;
 
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
+use jiff::{Timestamp, ToSpan, tz::TimeZone};
 use unicode_normalization::UnicodeNormalization;
 
 use super::*;
@@ -176,27 +176,31 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_current_simple_time(factor: u32) -> i32 {
-        datetime_to_simpletime(&Local::now(), factor)
+        timestamp_to_simpletime(Timestamp::now(), factor)
     }
 
     pub fn glk_current_time() -> GlkTime {
-        datetime_to_glktime(&Local::now())
+        timestamp_to_glktime(Timestamp::now())
     }
 
     pub fn glk_date_to_simple_time_local(date: &GlkDate, factor: u32) -> i32 {
-        datetime_to_simpletime(&glkdate_to_datetime(Local, date), factor)
+        let timestamp = glkdate_to_timestamp(date, S::get_local_tz());
+        timestamp_to_simpletime(timestamp, factor)
     }
 
     pub fn glk_date_to_simple_time_utc(date: &GlkDate, factor: u32) -> i32 {
-        datetime_to_simpletime(&glkdate_to_datetime(Utc, date), factor)
+        let timestamp = glkdate_to_timestamp(date, TimeZone::UTC);
+        timestamp_to_simpletime(timestamp, factor)
     }
 
     pub fn glk_date_to_time_local(date: &GlkDate) -> GlkTime {
-        datetime_to_glktime(&glkdate_to_datetime(Local, date))
+        let timestamp = glkdate_to_timestamp(date, S::get_local_tz());
+        timestamp_to_glktime(timestamp)
     }
 
     pub fn glk_date_to_time_utc(date: &GlkDate) -> GlkTime {
-        datetime_to_glktime(&glkdate_to_datetime(Utc, date))
+        let timestamp = glkdate_to_timestamp(date, TimeZone::UTC);
+        timestamp_to_glktime(timestamp)
     }
 
     pub fn glk_exit(&mut self) {
@@ -642,13 +646,13 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_simple_time_to_date_local(time: i32, factor: u32) -> GlkDate {
-        let time: DateTime<Local> = Local.timestamp_millis_opt(time as i64 * 1000 * factor as i64).unwrap();
-        datetime_to_glkdate(&time)
+        let timestamp = Timestamp::from_second(time as i64 * factor as i64).unwrap();
+        timestamp_to_glkdate(timestamp, S::get_local_tz())
     }
 
     pub fn glk_simple_time_to_date_utc(time: i32, factor: u32) -> GlkDate {
-        let time: DateTime<Utc> = Utc.timestamp_millis_opt(time as i64 * 1000 * factor as i64).unwrap();
-        datetime_to_glkdate(&time)
+        let timestamp = Timestamp::from_second(time as i64 * factor as i64).unwrap();
+        timestamp_to_glkdate(timestamp, TimeZone::UTC)
     }
 
     pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<StreamResultCounts> {
@@ -804,13 +808,13 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_time_to_date_local(time: &GlkTime) -> GlkDate {
-        let time = glktime_to_datetime(Local, time);
-        datetime_to_glkdate(&time)
+        let timestamp = glktime_to_timestamp(time);
+        timestamp_to_glkdate(timestamp, S::get_local_tz())
     }
 
     pub fn glk_time_to_date_utc(time: &GlkTime) -> GlkDate {
-        let time = glktime_to_datetime(Utc, time);
-        datetime_to_glkdate(&time)
+        let timestamp = glktime_to_timestamp(time);
+        timestamp_to_glkdate(timestamp, TimeZone::UTC)
     }
 
     pub fn glk_window_clear(&mut self, win: &GlkWindow) {
@@ -1995,63 +1999,55 @@ fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unico
     Ok(str)
 }
 
-fn datetime_to_glkdate<T: TimeZone>(datetime: &DateTime<T>) -> GlkDate {
+fn glkdate_to_timestamp(date: &GlkDate, timezone: TimeZone) -> Timestamp {
+    // We must normalise the date, which is thankfully not too bad with the Jiff library!
+    let mut normalised_date = jiff::civil::datetime(date.year as i16, 1, 1, 0, 0, 0, 0);
+    normalised_date += (date.month - 1).months();
+    normalised_date += (date.day - 1).days();
+    normalised_date += date.hour.hours();
+    normalised_date += date.minute.minutes();
+    normalised_date += date.second.seconds();
+    normalised_date += date.microsec.microseconds();
+    timezone.to_timestamp(normalised_date).unwrap()
+}
+
+fn glktime_to_timestamp(time: &GlkTime) -> Timestamp {
+    Timestamp::new((time.high_sec as i64) << 32 | (time.low_sec as i64), time.microsec * 1000).unwrap()
+}
+
+fn timestamp_to_glkdate(timestamp: Timestamp, timezone: TimeZone) -> GlkDate {
+    let zoned = timestamp.to_zoned(timezone);
     GlkDate {
-        year: datetime.year(),
-        month: datetime.month() as i32,
-        day: datetime.day() as i32,
-        weekday: datetime.weekday().num_days_from_sunday() as i32,
-        hour: datetime.hour() as i32,
-        minute: datetime.minute() as i32,
-        second: datetime.second() as i32,
-        microsec: (datetime.nanosecond() / 1000) as i32,
+        year: zoned.year() as i32,
+        month: zoned.month() as i32,
+        day: zoned.day() as i32,
+        weekday: zoned.weekday().to_sunday_zero_offset() as i32,
+        hour: zoned.hour() as i32,
+        minute: zoned.minute() as i32,
+        second: zoned.second() as i32,
+        microsec: zoned.subsec_nanosecond() / 1000,
     }
 }
 
-fn datetime_to_glktime<T: TimeZone>(time: &DateTime<T>) -> GlkTime {
-    let timestamp = time.timestamp();
+fn timestamp_to_glktime(timestamp: Timestamp) -> GlkTime {
+    let seconds = timestamp.as_second();
     GlkTime {
-        high_sec: (timestamp >> 32) as i32,
-        low_sec: timestamp as u32,
-        microsec: time.timestamp_subsec_micros() as i32,
+        high_sec: (seconds >> 32) as i32,
+        low_sec: seconds as u32,
+        // Do we need to handle negative microseconds?
+        microsec: timestamp.subsec_microsecond(),
     }
 }
 
-fn datetime_to_simpletime<T: TimeZone>(time: &DateTime<T>, factor: u32) -> i32 {
-    let timestamp = time.timestamp();
+fn timestamp_to_simpletime(timestamp: Timestamp, factor: u32) -> i32 {
+    let seconds = timestamp.as_second();
     // Unfortunately we can't simply divide, as we must round to negative infinity
-    if timestamp >= 0 {
-        (timestamp / (factor as i64)) as i32
+    if seconds >= 0 {
+        (seconds / (factor as i64)) as i32
     }
     else {
-        -1 - ((-1 - timestamp) / (factor as i64)) as i32
+        -1 - ((-1 - seconds) / (factor as i64)) as i32
     }
-}
-
-fn glkdate_to_datetime<T: TimeZone>(timezone: T, date: &GlkDate) -> DateTime<T> {
-    // We must normalise the date, which is not fun
-    let mut normalised_date = NaiveDate::from_ymd_opt(date.year, 1, 1).unwrap();
-    let months = date.month - 1;
-    if months > 0 {
-        normalised_date = normalised_date.checked_add_months(chrono::Months::new(months as u32)).unwrap();
-    }
-    if months < 0 {
-        normalised_date = normalised_date.checked_sub_months(chrono::Months::new((-months) as u32)).unwrap();
-    }
-    let mut normalised_date = NaiveDateTime::from(normalised_date).and_utc();
-    let duration = Duration::try_days(date.day as i64 - 1).unwrap()
-        + Duration::try_hours(date.hour as i64).unwrap()
-        + Duration::try_minutes(date.minute as i64).unwrap()
-        + Duration::try_seconds(date.second as i64).unwrap()
-        + Duration::nanoseconds(date.microsec as i64 * 1000);
-    normalised_date = normalised_date.checked_add_signed(duration).unwrap();
-    normalised_date.with_timezone(&timezone)
-}
-
-fn glktime_to_datetime<T: TimeZone>(timezone: T, time: &GlkTime) -> DateTime<T> {
-    let timestamp = ((time.high_sec as i64) << 32 | (time.low_sec as i64)) * 1000000 + (time.microsec as i64);
-    let naive = DateTime::from_timestamp_micros(timestamp).unwrap().naive_utc();
-    naive.and_local_timezone(timezone).unwrap()
 }
 
 fn normalise_metrics(metrics: Metrics) -> GlkResult<'static, NormalisedMetrics> {

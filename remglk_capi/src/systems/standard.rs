@@ -3,7 +3,7 @@
 Standard system
 ===============
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -14,6 +14,8 @@ use std::env;
 use std::fs;
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
+
+use jiff::tz::TimeZone;
 
 use super::*;
 use remglk::GlkSystem;
@@ -92,6 +94,10 @@ impl GlkSystem for StandardSystem {
             temp: env::temp_dir(),
             working: cwd,
         }
+    }
+
+    fn get_local_tz() -> TimeZone {
+        TimeZone::system()
     }
 
     fn set_base_file(dirs: &mut Directories, path: String) {
