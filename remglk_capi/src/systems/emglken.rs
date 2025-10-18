@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use std::slice;
+use std::sync::LazyLock;
 
 use jiff::tz::{Offset, TimeZone};
 use serde::Deserialize;
@@ -37,12 +38,9 @@ extern "C" {
 
 pub type GlkApi = glkapi::GlkApi<EmglkenSystem>;
 
-pub fn glkapi() -> &'static Mutex<GlkApi> {
-    static GLKAPI: OnceLock<Mutex<GlkApi>> = OnceLock::new();
-    GLKAPI.get_or_init(|| {
-        Mutex::new(GlkApi::new(EmglkenSystem::default()))
-    })
-}
+pub static GLKAPI: LazyLock<Mutex<GlkApi>> = LazyLock::new(|| {
+    Mutex::new(GlkApi::new(EmglkenSystem::default()))
+});
 
 #[derive(Default)]
 pub struct EmglkenSystem {

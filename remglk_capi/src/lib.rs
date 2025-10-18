@@ -22,7 +22,7 @@ use std::ffi::{c_char, c_int, CStr};
 
 use remglk::glkapi::protocol::{Event, EventData, InitEvent, Metrics};
 
-use glkapi::{glk_exit, glkapi};
+use glkapi::{glk_exit, GLKAPI};
 use glkstart::*;
 
 /** Processed arguments which we give to `glkunix_startup_code` */
@@ -71,7 +71,7 @@ extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
 
     // Wait for the initial event with the metrics
     if library_args.autoinit {
-        glkapi().lock().unwrap().handle_event(Event {
+        GLKAPI.lock().unwrap().handle_event(Event {
             data: EventData::Init(InitEvent {
                 metrics: Metrics {
                     buffercharheight: Some(1.0),
@@ -95,7 +95,7 @@ extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
         }).unwrap();
     }
     else {
-        glkapi().lock().unwrap().get_glkote_init();
+        GLKAPI.lock().unwrap().get_glkote_init();
     }
 
     unsafe{glk_main()};

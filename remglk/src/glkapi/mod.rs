@@ -139,7 +139,7 @@ where S: Default + GlkSystem {
         lock!(win).input.hyperlink = false;
     }
 
-    pub fn glk_cancel_line_event(&mut self, win_glkobj: &GlkWindow) -> GlkResult<GlkEvent> {
+    pub fn glk_cancel_line_event(&mut self, win_glkobj: &GlkWindow) -> GlkResult<'_, GlkEvent> {
         let (id, text_input_type) = {
             let win = lock!(win_glkobj);
             (win.id, win.input.text_input_type)
@@ -216,7 +216,7 @@ where S: Default + GlkSystem {
         self.create_fileref(path, rock, usage)
     }
 
-    pub fn glk_fileref_create_by_prompt(&mut self, usage: u32, fmode: FileMode, rock: u32) -> GlkResult<Option<GlkFileRef>> {
+    pub fn glk_fileref_create_by_prompt(&mut self, usage: u32, fmode: FileMode, rock: u32) -> GlkResult<'_, Option<GlkFileRef>> {
         let filetype = file_type(usage & fileusage_TypeMask);
         self.special = Some(SpecialInput {
             filemode: fmode,
@@ -274,7 +274,7 @@ where S: Default + GlkSystem {
         self.system.file_exists(&fileref.path)
     }
 
-    pub fn glk_fileref_get_rock(fileref: &GlkFileRef) -> GlkResult<u32> {
+    pub fn glk_fileref_get_rock(fileref: &GlkFileRef) -> GlkResult<'_, u32> {
         Ok(lock!(fileref).rock)
     }
 
@@ -353,11 +353,11 @@ where S: Default + GlkSystem {
         lock!(str).get_buffer(&mut GlkBufferMut::U32(buf))
     }
 
-    pub fn glk_get_char_stream(str: &GlkStream) -> GlkResult<i32> {
+    pub fn glk_get_char_stream(str: &GlkStream) -> GlkResult<'_, i32> {
         lock!(str).get_char(false)
     }
 
-    pub fn glk_get_char_stream_uni(str: &GlkStream) -> GlkResult<i32> {
+    pub fn glk_get_char_stream_uni(str: &GlkStream) -> GlkResult<'_, i32> {
         lock!(str).get_char(true)
     }
 
@@ -395,7 +395,7 @@ where S: Default + GlkSystem {
         get_image_info(image)
     }
 
-    pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<()> {
+    pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<'_, ()> {
         self.glk_put_buffer_stream(current_stream!(self), buf)
     }
 
@@ -411,35 +411,35 @@ where S: Default + GlkSystem {
         Ok(())
     }
 
-    pub fn glk_put_buffer_uni(&mut self, buf: &[u32]) -> GlkResult<()> {
+    pub fn glk_put_buffer_uni(&mut self, buf: &[u32]) -> GlkResult<'_, ()> {
         self.glk_put_buffer_stream_uni(current_stream!(self), buf)
     }
 
-    pub fn glk_put_char(&mut self, ch: u8) -> GlkResult<()> {
+    pub fn glk_put_char(&mut self, ch: u8) -> GlkResult<'_, ()> {
         self.glk_put_char_stream(current_stream!(self), ch)
     }
 
-    pub fn glk_put_char_stream(&mut self, str: &GlkStream, ch: u8) -> GlkResult<()> {
+    pub fn glk_put_char_stream(&mut self, str: &GlkStream, ch: u8) -> GlkResult<'_, ()> {
         let mut str = lock!(str);
         str.put_char(ch as u32)?;
         Ok(())
     }
 
-    pub fn glk_put_char_stream_uni(&mut self, str: &GlkStream, ch: u32) -> GlkResult<()> {
+    pub fn glk_put_char_stream_uni(&mut self, str: &GlkStream, ch: u32) -> GlkResult<'_, ()> {
         let mut str = lock!(str);
         str.put_char(ch)?;
         Ok(())
     }
 
-    pub fn glk_put_char_uni(&mut self, ch: u32) -> GlkResult<()> {
+    pub fn glk_put_char_uni(&mut self, ch: u32) -> GlkResult<'_, ()> {
         self.glk_put_char_stream_uni(current_stream!(self), ch)
     }
 
-    pub fn glk_request_char_event(&self, win: &GlkWindow) -> GlkResult<()> {
+    pub fn glk_request_char_event(&self, win: &GlkWindow) -> GlkResult<'_, ()> {
         self.request_char_event(win, false)
     }
 
-    pub fn glk_request_char_event_uni(&self, win: &GlkWindow) -> GlkResult<()> {
+    pub fn glk_request_char_event_uni(&self, win: &GlkWindow) -> GlkResult<'_, ()> {
         self.request_char_event(win, true)
     }
 
@@ -450,11 +450,11 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn glk_request_line_event(&self, win: &GlkWindow, buf: Box<[u8]>, initlen: u32) -> GlkResult<()> {
+    pub fn glk_request_line_event(&self, win: &GlkWindow, buf: Box<[u8]>, initlen: u32) -> GlkResult<'_, ()> {
         self.request_line_event(win, GlkOwnedBuffer::U8(buf), initlen)
     }
 
-    pub fn glk_request_line_event_uni(&self, win: &GlkWindow, buf: Box<[u32]>, initlen: u32) -> GlkResult<()> {
+    pub fn glk_request_line_event_uni(&self, win: &GlkWindow, buf: Box<[u32]>, initlen: u32) -> GlkResult<'_, ()> {
         self.request_line_event(win, GlkOwnedBuffer::U32(buf), initlen)
     }
 
@@ -495,7 +495,7 @@ where S: Default + GlkSystem {
         self.schannels.unregister(schannel);
     }
 
-    pub fn glk_schannel_get_rock(schannel: &SoundChannelRef) -> GlkResult<u32> {
+    pub fn glk_schannel_get_rock(schannel: &SoundChannelRef) -> GlkResult<'_, u32> {
         Ok(lock!(schannel).rock)
     }
 
@@ -574,7 +574,7 @@ where S: Default + GlkSystem {
         schannel.ops.push(SoundChannelOperation::Unpause);
     }
 
-    pub fn glk_select(&mut self) -> GlkResult<GlkEvent> {
+    pub fn glk_select(&mut self) -> GlkResult<'_, GlkEvent> {
         let update = self.update();
         self.system.send_glkote_update(update);
         let event = self.system.get_glkote_event();
@@ -614,7 +614,7 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn glk_set_hyperlink(&self, val: u32) -> GlkResult<()> {
+    pub fn glk_set_hyperlink(&self, val: u32) -> GlkResult<'_, ()> {
         GlkApi::<S>::glk_set_hyperlink_stream(current_stream!(self), val);
         Ok(())
     }
@@ -624,7 +624,7 @@ where S: Default + GlkSystem {
         window_stream_operation!(str, set_hyperlink, val);
     }
 
-    pub fn glk_set_style(&self, val: u32) -> GlkResult<()> {
+    pub fn glk_set_style(&self, val: u32) -> GlkResult<'_, ()> {
         GlkApi::<S>::glk_set_style_stream(current_stream!(self), val);
         Ok(())
     }
@@ -653,7 +653,7 @@ where S: Default + GlkSystem {
         timestamp_to_glkdate(timestamp, TimeZone::UTC)
     }
 
-    pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<StreamResultCounts> {
+    pub fn glk_stream_close(&mut self, str_glkobj: GlkStream) -> GlkResult<'_, StreamResultCounts> {
         let str_ptr = str_glkobj.as_ptr();
         let mut str = lock!(str_glkobj);
         if matches!(str.deref().deref(), Stream::Window(_)) {
@@ -691,7 +691,7 @@ where S: Default + GlkSystem {
         lock!(str).get_position()
     }
 
-    pub fn glk_stream_get_rock(str: &GlkStream) -> GlkResult<u32> {
+    pub fn glk_stream_get_rock(str: &GlkStream) -> GlkResult<'_, u32> {
         Ok(lock!(str).rock)
     }
 
@@ -699,15 +699,15 @@ where S: Default + GlkSystem {
         self.streams.iterate(str)
     }
 
-    pub fn glk_stream_open_file(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32) -> GlkResult<Option<GlkStream>> {
+    pub fn glk_stream_open_file(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32) -> GlkResult<'_, Option<GlkStream>> {
         self.create_file_stream(fileref, mode, rock, false)
     }
 
-    pub fn glk_stream_open_file_uni(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32) -> GlkResult<Option<GlkStream>> {
+    pub fn glk_stream_open_file_uni(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32) -> GlkResult<'_, Option<GlkStream>> {
         self.create_file_stream(fileref, mode, rock, true)
     }
 
-    pub fn glk_stream_open_memory(&mut self, buf: Option<Box<[u8]>>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
+    pub fn glk_stream_open_memory(&mut self, buf: Option<Box<[u8]>>, fmode: FileMode, rock: u32) -> GlkResult<'_, GlkStream> {
         let disprock = match &buf {
             Some(buf) => self.retain_array_callbacks_u8.as_ref().map(|_| {
                 self.retain_array(&GlkBuffer::U8(buf))
@@ -717,7 +717,7 @@ where S: Default + GlkSystem {
         self.create_memory_stream(buf, fmode, rock, disprock)
     }
 
-    pub fn glk_stream_open_memory_uni(&mut self, buf: Option<Box<[u32]>>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
+    pub fn glk_stream_open_memory_uni(&mut self, buf: Option<Box<[u32]>>, fmode: FileMode, rock: u32) -> GlkResult<'_, GlkStream> {
         let disprock = match &buf {
             Some(buf) => self.retain_array_callbacks_u32.as_ref().map(|_| {
                 self.retain_array(&GlkBuffer::U32(buf))
@@ -727,11 +727,11 @@ where S: Default + GlkSystem {
         self.create_memory_stream(buf, fmode, rock, disprock)
     }
 
-    pub fn glk_stream_open_resource(&mut self, filenum: u32, rock: u32) -> GlkResult<Option<GlkStream>> {
+    pub fn glk_stream_open_resource(&mut self, filenum: u32, rock: u32) -> GlkResult<'_, Option<GlkStream>> {
         self.create_resource_stream(filenum, rock, false)
     }
 
-    pub fn glk_stream_open_resource_uni(&mut self, filenum: u32, rock: u32) -> GlkResult<Option<GlkStream>> {
+    pub fn glk_stream_open_resource_uni(&mut self, filenum: u32, rock: u32) -> GlkResult<'_, Option<GlkStream>> {
         self.create_resource_stream(filenum, rock, true)
     }
 
@@ -833,7 +833,7 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn glk_window_close(&mut self, win_glkobj: GlkWindow) -> GlkResult<StreamResultCounts> {
+    pub fn glk_window_close(&mut self, win_glkobj: GlkWindow) -> GlkResult<'_, StreamResultCounts> {
         let win_ptr = win_glkobj.as_ptr();
         let win = lock!(win_glkobj);
 
@@ -895,7 +895,7 @@ where S: Default + GlkSystem {
         Ok(res)
     }
 
-    pub fn glk_window_erase_rect(win: &GlkWindow, left: i32, top: i32, width: u32, height: u32) -> GlkResult<()> {
+    pub fn glk_window_erase_rect(win: &GlkWindow, left: i32, top: i32, width: u32, height: u32) -> GlkResult<'_, ()> {
         let mut win = lock!(win);
         if let WindowData::Graphics(data) = &mut win.data {
             data.draw.push(GraphicsWindowOperation::Fill(FillOperation {
@@ -912,7 +912,7 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn glk_window_fill_rect(win: &GlkWindow, colour: u32, left: i32, top: i32, width: u32, height: u32) -> GlkResult<()> {
+    pub fn glk_window_fill_rect(win: &GlkWindow, colour: u32, left: i32, top: i32, width: u32, height: u32) -> GlkResult<'_, ()> {
         let mut win = lock!(win);
         if let WindowData::Graphics(data) = &mut win.data {
             data.draw.push(GraphicsWindowOperation::Fill(FillOperation {
@@ -936,7 +936,7 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn glk_window_get_arrangement(win: &GlkWindow) -> GlkResult<(u32, u32, GlkWindow)> {
+    pub fn glk_window_get_arrangement(win: &GlkWindow) -> GlkResult<'_, (u32, u32, GlkWindow)> {
         let win = lock!(win);
         if let WindowData::Pair(data) = &win.data {
             let keywin = Into::<GlkWindow>::into(&data.key);
@@ -956,7 +956,7 @@ where S: Default + GlkSystem {
         lock!(win).parent.as_ref().map(Into::<GlkWindow>::into)
     }
 
-    pub fn glk_window_get_rock(win: &GlkWindow) -> GlkResult<u32> {
+    pub fn glk_window_get_rock(win: &GlkWindow) -> GlkResult<'_, u32> {
         Ok(lock!(win).rock)
     }
 
@@ -964,7 +964,7 @@ where S: Default + GlkSystem {
         self.root_window.as_ref().map(Into::<GlkWindow>::into)
     }
 
-    pub fn glk_window_get_sibling(win: &GlkWindow) -> GlkResult<Option<GlkWindow>> {
+    pub fn glk_window_get_sibling(win: &GlkWindow) -> GlkResult<'_, Option<GlkWindow>> {
         let win_ptr = win.as_ptr();
         let win = lock!(win);
         if let Some(parent) = &win.parent {
@@ -1010,7 +1010,7 @@ where S: Default + GlkSystem {
         self.windows.iterate(win)
     }
 
-    pub fn glk_window_move_cursor(win: &GlkWindow, xpos: usize, ypos: usize) -> GlkResult<()> {
+    pub fn glk_window_move_cursor(win: &GlkWindow, xpos: usize, ypos: usize) -> GlkResult<'_, ()> {
         let mut win = lock!(win);
         if let WindowData::Grid(data) = &mut win.data {
             data.data.x = xpos;
@@ -1022,7 +1022,7 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn glk_window_open(&mut self, splitwin: Option<&GlkWindow>, method: u32, size: u32, wintype: WindowType, rock: u32) -> GlkResult<GlkWindow> {
+    pub fn glk_window_open(&mut self, splitwin: Option<&GlkWindow>, method: u32, size: u32, wintype: WindowType, rock: u32) -> GlkResult<'_, GlkWindow> {
         if self.root_window.is_none() {
             if splitwin.is_some() {
                 return Err(SplitMustBeNull);
@@ -1116,7 +1116,7 @@ where S: Default + GlkSystem {
         Ok(win_glkobj)
     }
 
-    pub fn glk_window_set_arrangement(&mut self, win_glkobj: &GlkWindow, method: u32, size: u32, keywin: Option<&GlkWindow>) -> GlkResult<()> {
+    pub fn glk_window_set_arrangement(&mut self, win_glkobj: &GlkWindow, method: u32, size: u32, keywin: Option<&GlkWindow>) -> GlkResult<'_, ()> {
         let win_ptr = win_glkobj.as_ptr();
         let mut win = lock!(win_glkobj);
         if let WindowData::Pair(data) = &mut win.data {
@@ -1182,7 +1182,7 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn glk_window_set_background_color(win: &GlkWindow, colour: u32) -> GlkResult<()> {
+    pub fn glk_window_set_background_color(win: &GlkWindow, colour: u32) -> GlkResult<'_, ()> {
         let mut win = lock!(win);
         if let WindowData::Graphics(data) = &mut win.data {
             data.draw.push(GraphicsWindowOperation::SetColor(SetColorOperation {
@@ -1201,7 +1201,7 @@ where S: Default + GlkSystem {
 
     // Extensions
 
-    pub fn garglk_set_reversevideo(&self, val: u32) -> GlkResult<()> {
+    pub fn garglk_set_reversevideo(&self, val: u32) -> GlkResult<'_, ()> {
         GlkApi::<S>::garglk_set_reversevideo_stream(current_stream!(self), val);
         Ok(())
     }
@@ -1211,7 +1211,7 @@ where S: Default + GlkSystem {
         window_stream_operation!(str, set_css, "reverse", if val != 0 {Some(&CSSValue::Number(1.0))} else {None});
     }
 
-    pub fn garglk_set_zcolors(&self, fg: u32, bg: u32) -> GlkResult<()> {
+    pub fn garglk_set_zcolors(&self, fg: u32, bg: u32) -> GlkResult<'_, ()> {
         GlkApi::<S>::garglk_set_zcolors_stream(current_stream!(self), fg, bg);
         Ok(())
     }
@@ -1242,7 +1242,7 @@ where S: Default + GlkSystem {
         }
     }
 
-    pub fn handle_event(&mut self, mut event: Event) -> GlkResult<GlkEvent> {
+    pub fn handle_event(&mut self, mut event: Event) -> GlkResult<'_, GlkEvent> {
         if event.gen != self.gen {
             if let EventData::Init(_) = event.data {}
             else {
@@ -1473,7 +1473,7 @@ where S: Default + GlkSystem {
         fref_glkobj
     }
 
-    fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
+    fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32, uni: bool) -> GlkResult<'_, Option<GlkStream>> {
         let (binary, path) = {
             let fileref = lock!(fileref);
             (fileref.binary, fileref.path.clone())
@@ -1508,7 +1508,7 @@ where S: Default + GlkSystem {
         Ok(Some(str))
     }
 
-    fn create_memory_stream<T>(&mut self, buf: Option<Box<[T]>>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<GlkStream>
+    fn create_memory_stream<T>(&mut self, buf: Option<Box<[T]>>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<'_, GlkStream>
     where Stream: From<ArrayBackedStream<T>> {
         if fmode == FileMode::WriteAppend {
             return Err(IllegalFilemode);
@@ -1525,7 +1525,7 @@ where S: Default + GlkSystem {
         Ok(str)
     }
 
-    fn create_resource_stream(&mut self, filenum: u32, rock: u32, uni: bool) -> GlkResult<Option<GlkStream>> {
+    fn create_resource_stream(&mut self, filenum: u32, rock: u32, uni: bool) -> GlkResult<'_, Option<GlkStream>> {
         let resource = get_blorb_data_resource(filenum);
         if let Some(resource) = resource {
             // Create an appopriate stream
@@ -1583,7 +1583,7 @@ where S: Default + GlkSystem {
         self.system.flush_writeable_files();
     }
 
-    fn handle_line_input(&mut self, win_glkobj: &GlkWindow, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<GlkEvent> {
+    fn handle_line_input(&mut self, win_glkobj: &GlkWindow, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<'_, GlkEvent> {
         let mut win = lock!(win_glkobj);
         let (request_echo_line_input, mut line_input_buffer) = match &mut win.data {
             WindowData::Buffer(data) => (data.request_echo_line_input, data.line_input_buffer.take().unwrap()),
@@ -1624,7 +1624,7 @@ where S: Default + GlkSystem {
         })
     }
 
-    fn rearrange_window(&mut self, win: &GlkWindow, wbox: WindowBox) -> GlkResult<()> {
+    fn rearrange_window(&mut self, win: &GlkWindow, wbox: WindowBox) -> GlkResult<'_, ()> {
         self.windows_changed = true;
         let mut win = lock!(win);
         win.wbox = wbox;
@@ -1759,7 +1759,7 @@ where S: Default + GlkSystem {
         self.windows.unregister(win_glkobj);
     }
 
-    fn request_char_event(&self, win: &GlkWindow, uni: bool) -> GlkResult<()> {
+    fn request_char_event(&self, win: &GlkWindow, uni: bool) -> GlkResult<'_, ()> {
         let mut win = lock!(win);
         if let WindowType::Blank | WindowType::Pair = win.wintype {
             return Err(WindowDoesntSupportCharInput);
@@ -1780,7 +1780,7 @@ where S: Default + GlkSystem {
         Ok(())
     }
 
-    fn request_line_event(&self, win: &GlkWindow, buf: GlkOwnedBuffer, initlen: u32) -> GlkResult<()> {
+    fn request_line_event(&self, win: &GlkWindow, buf: GlkOwnedBuffer, initlen: u32) -> GlkResult<'_, ()> {
         let mut win = lock!(win);
 
         if win.input.text_input_type.is_some() {
@@ -1926,8 +1926,8 @@ impl PageMargin {
 }
 
 // Retained array callbacks
-pub type RetainArrayCallback<T> = extern fn(*const T, u32, *const c_char) -> DispatchRock;
-pub type UnretainArrayCallback<T> = extern fn(*const T, u32, *const c_char, DispatchRock);
+pub type RetainArrayCallback<T> = extern "C" fn(*const T, u32, *const c_char) -> DispatchRock;
+pub type UnretainArrayCallback<T> = extern "C" fn(*const T, u32, *const c_char, DispatchRock);
 
 pub struct RetainArrayCallbacks<T> {
     pub retain: RetainArrayCallback<T>,

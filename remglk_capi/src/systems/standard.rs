@@ -14,6 +14,7 @@ use std::env;
 use std::fs;
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use jiff::tz::TimeZone;
 
@@ -23,12 +24,9 @@ use glkapi::protocol::{Event, Update};
 
 pub type GlkApi = glkapi::GlkApi<StandardSystem>;
 
-pub fn glkapi() -> &'static Mutex<GlkApi> {
-    static GLKAPI: OnceLock<Mutex<GlkApi>> = OnceLock::new();
-    GLKAPI.get_or_init(|| {
-        Mutex::new(GlkApi::new(StandardSystem::default()))
-    })
-}
+pub static GLKAPI: LazyLock<Mutex<GlkApi>> = LazyLock::new(|| {
+    Mutex::new(GlkApi::new(StandardSystem::default()))
+});
 
 #[derive(Default)]
 pub struct StandardSystem {

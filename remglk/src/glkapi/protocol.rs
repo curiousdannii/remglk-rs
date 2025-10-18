@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use super::*;
 
-/** The GlkOte protocol has two parts:
+/* The GlkOte protocol has two parts:
  * 1. GlkOte sends events to GlkApi/RemGlk
  * 2. GlkApi/RemGlk send content updates to GlkOte
 */

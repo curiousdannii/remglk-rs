@@ -19,12 +19,12 @@ use super::*;
 use common::*;
 use glkapi::*;
 
-type RegisterCallbackGeneric = extern fn(*const c_void, u32) -> DispatchRock;
-type UnregisterCallbackGeneric = extern fn(*const c_void, u32, DispatchRock);
+type RegisterCallbackGeneric = extern "C" fn(*const c_void, u32) -> DispatchRock;
+type UnregisterCallbackGeneric = extern "C" fn(*const c_void, u32, DispatchRock);
 
 #[no_mangle]
 pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCallbackGeneric, unregister_cb: UnregisterCallbackGeneric) {
-    let mut glkapi = glkapi().lock().unwrap();
+    let mut glkapi = GLKAPI.lock().unwrap();
     let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<FileRef>>(register_cb);
     let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<FileRef>>(unregister_cb);
     glkapi.filerefs.set_callbacks(register, unregister);
@@ -68,12 +68,12 @@ pub extern "C" fn gidispatch_get_objrock_window(ptr: WindowPtr) -> DispatchRock 
     obj.disprock.unwrap()
 }
 
-type RetainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char) -> DispatchRock;
-type UnretainArrayCallbackGeneric = extern fn(*const c_void, u32, *const c_char, DispatchRock);
+type RetainArrayCallbackGeneric = extern "C" fn(*const c_void, u32, *const c_char) -> DispatchRock;
+type UnretainArrayCallbackGeneric = extern "C" fn(*const c_void, u32, *const c_char, DispatchRock);
 
 #[no_mangle]
 pub unsafe extern "C" fn gidispatch_set_retained_registry(register_cb: RetainArrayCallbackGeneric, unregister_cb: UnretainArrayCallbackGeneric) {
-    let mut glkapi = glkapi().lock().unwrap();
+    let mut glkapi = GLKAPI.lock().unwrap();
     let retain = mem::transmute::<RetainArrayCallbackGeneric, RetainArrayCallback<u8>>(register_cb);
     let unretain = mem::transmute::<UnretainArrayCallbackGeneric, UnretainArrayCallback<u8>>(unregister_cb);
     glkapi.retain_array_callbacks_u8 = Some(RetainArrayCallbacks {

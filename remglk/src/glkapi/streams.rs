@@ -52,14 +52,14 @@ pub trait StreamOperations {
             write_count: self.write_count() as u32,
         }
     }
-    fn file_path(&self) -> GlkResult<&CString> {Err(NotFileStream)}
-    fn get_buffer(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<u32> {Ok(0)}
-    fn get_char(&mut self, _uni: bool) -> GlkResult<i32> {Ok(-1)}
-    fn get_line(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<u32> {Ok(0)}
+    fn file_path(&self) -> GlkResult<'_, &CString> {Err(NotFileStream)}
+    fn get_buffer(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {Ok(0)}
+    fn get_char(&mut self, _uni: bool) -> GlkResult<'_, i32> {Ok(-1)}
+    fn get_line(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {Ok(0)}
     fn get_position(&self) -> u32 {0}
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()>;
-    fn put_char(&mut self, ch: u32) -> GlkResult<()>;
-    fn put_string(&mut self, str: &str, style: Option<u32>) -> GlkResult<()>;
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()>;
+    fn put_char(&mut self, ch: u32) -> GlkResult<'_, ()>;
+    fn put_string(&mut self, str: &str, style: Option<u32>) -> GlkResult<'_, ()>;
     fn set_position(&mut self, _mode: SeekMode, _pos: i32) {}
     fn write_count(&self) -> usize;
 }
@@ -128,11 +128,11 @@ where Box<[T]>: GlkArray {
         }
     }
 
-    fn file_path(&self) -> GlkResult<&CString> {
+    fn file_path(&self) -> GlkResult<'_, &CString> {
         self.path.as_ref().ok_or(NotFileStream)
     }
 
-    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
+    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
             return Err(ReadFromWriteOnly);
         }
@@ -146,7 +146,7 @@ where Box<[T]>: GlkArray {
         Ok(read_length as u32)
     }
 
-    fn get_char(&mut self, uni: bool) -> GlkResult<i32> {
+    fn get_char(&mut self, uni: bool) -> GlkResult<'_, i32> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
             return Err(ReadFromWriteOnly);
         }
@@ -159,7 +159,7 @@ where Box<[T]>: GlkArray {
         Ok(-1)
     }
 
-    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
+    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {
         if let FileMode::Write | FileMode::WriteAppend = self.fmode {
             return Err(ReadFromWriteOnly);
         }
@@ -186,7 +186,7 @@ where Box<[T]>: GlkArray {
         self.pos as u32
     }
 
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()> {
         if let FileMode::Read = self.fmode {
             return Err(WriteToReadOnly);
         }
@@ -203,7 +203,7 @@ where Box<[T]>: GlkArray {
         Ok(())
     }
 
-    fn put_char(&mut self, ch: u32) -> GlkResult<()> {
+    fn put_char(&mut self, ch: u32) -> GlkResult<'_, ()> {
         if let FileMode::Read = self.fmode {
             return Err(WriteToReadOnly);
         }
@@ -218,7 +218,7 @@ where Box<[T]>: GlkArray {
         Ok(())
     }
 
-    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<()> {
+    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<'_, ()> {
         let buf: GlkOwnedBuffer = str.into();
         self.put_buffer(&(&buf).into())
     }
@@ -286,19 +286,19 @@ where T: Clone + Default, Box<[T]>: GlkArray {
         self.str.close()
     }
 
-    fn file_path(&self) -> GlkResult<&CString> {
+    fn file_path(&self) -> GlkResult<'_, &CString> {
         self.str.file_path()
     }
 
-    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
+    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {
         self.str.get_buffer(buf)
     }
 
-    fn get_char(&mut self, uni: bool) -> GlkResult<i32> {
+    fn get_char(&mut self, uni: bool) -> GlkResult<'_, i32> {
         self.str.get_char(uni)
     }
 
-    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<u32> {
+    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {
         self.str.get_line(buf)
     }
 
@@ -306,7 +306,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
         self.str.get_position()
     }
 
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()> {
         self.changed = true;
         if self.str.pos + buf.len() > self.str.len {
             self.expand(buf.len());
@@ -314,7 +314,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
         self.str.put_buffer(buf)
     }
 
-    fn put_char(&mut self, ch: u32) -> GlkResult<()> {
+    fn put_char(&mut self, ch: u32) -> GlkResult<'_, ()> {
         self.changed = true;
         if self.str.pos == self.str.len {
             self.expand(1);
@@ -322,7 +322,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
         self.str.put_char(ch)
     }
 
-    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<()> {
+    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<'_, ()> {
         let buf: GlkOwnedBuffer = str.into();
         self.put_buffer(&(&buf).into())
     }
@@ -353,17 +353,17 @@ pub struct NullStream {
 }
 
 impl StreamOperations for NullStream {
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()> {
         self.write_count += buf.len();
         Ok(())
     }
 
-    fn put_char(&mut self, _: u32) -> GlkResult<()> {
+    fn put_char(&mut self, _: u32) -> GlkResult<'_, ()> {
         self.write_count += 1;
         Ok(())
     }
 
-    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<()> {
+    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<'_, ()> {
         self.write_count += str.chars().count();
         Ok(())
     }
@@ -390,7 +390,7 @@ impl WindowStream {
 }
 
 impl StreamOperations for WindowStream {
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<()> {
+    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()> {
         let win: GlkWindow = (&self.win).into();
         let mut win = win.lock().unwrap();
         if let Some(TextInputType::Line) = win.input.text_input_type {
@@ -405,7 +405,7 @@ impl StreamOperations for WindowStream {
         Ok(())
     }
 
-    fn put_char(&mut self, ch: u32) -> GlkResult<()> {
+    fn put_char(&mut self, ch: u32) -> GlkResult<'_, ()> {
         let win: GlkWindow = (&self.win).into();
         let mut win = win.lock().unwrap();
         if let Some(TextInputType::Line) = win.input.text_input_type {
@@ -420,7 +420,7 @@ impl StreamOperations for WindowStream {
         Ok(())
     }
 
-    fn put_string(&mut self, str: &str, style: Option<u32>) -> GlkResult<()> {
+    fn put_string(&mut self, str: &str, style: Option<u32>) -> GlkResult<'_, ()> {
         let win: GlkWindow = (&self.win).into();
         let mut win = win.lock().unwrap();
         if let Some(TextInputType::Line) = win.input.text_input_type {

@@ -16,7 +16,7 @@ use crate::glkapi::*;
 
 #[no_mangle]
 pub extern "C" fn emglken_getcwd(buf_ptr: *mut u8, len: usize) -> *const u8 {
-    let glkapi = glkapi().lock().unwrap();
+    let glkapi = GLKAPI.lock().unwrap();
     let system_cwd = glkapi.dirs.system_cwd.to_str().unwrap();
     let system_cwd_len = system_cwd.len();
     if system_cwd_len + 1 > len {

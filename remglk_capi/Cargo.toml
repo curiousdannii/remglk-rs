@@ -2,7 +2,7 @@
 name = "remglk_capi"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.71.0"
+rust-version = "1.80.0"
 
 authors = ["Dannii Willis <curiousdannii@gmail.com>"]
 description = "A Rust port of RemGlk - C API"
