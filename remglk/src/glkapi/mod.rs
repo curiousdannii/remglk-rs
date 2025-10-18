@@ -518,24 +518,22 @@ where S: Default + GlkSystem {
         if repeats == 0 {
             schannel.ops.push(SoundChannelOperation::Stop);
         }
-        else {
-            if let Some(data) = get_blorb_resource(giblorb_ID_Snd, snd) {
-                let id = &data[0..4];
-                // For now only support Ogg/Vorbis and AIFF
-                if id == b"OggS" || (id == b"FORM" && &data[8..12] == b"AIFF") {
-                    schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
-                        notify: if notify != 0 {Some(notify)} else {None},
-                        repeats: if repeats != 1 {Some(repeats)} else {None},
-                        snd,
-                    }));
-                }
-                else {
-                    return 0;
-                }
+        else if let Some(data) = get_blorb_resource(giblorb_ID_Snd, snd) {
+            let id = &data[0..4];
+            // For now only support Ogg/Vorbis and AIFF
+            if id == b"OggS" || (id == b"FORM" && &data[8..12] == b"AIFF") {
+                schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
+                    notify: if notify != 0 {Some(notify)} else {None},
+                    repeats: if repeats != 1 {Some(repeats)} else {None},
+                    snd,
+                }));
             }
             else {
                 return 0;
             }
+        }
+        else {
+            return 0;
         }
         self.schannels_changed = true;
         // TODO: check for previous play operations?
@@ -636,7 +634,7 @@ where S: Default + GlkSystem {
         window_stream_operation!(str, set_style, val);
     }
 
-    pub fn glk_set_terminators_line_event(win: &GlkWindow, keycodes: Vec<TerminatorCode>) {
+    pub fn glk_set_terminators_line_event(win: &GlkWindow, keycodes: Option<Vec<TerminatorCode>>) {
         let mut win = lock!(win);
         win.input.terminators = keycodes;
     }
@@ -709,17 +707,23 @@ where S: Default + GlkSystem {
         self.create_file_stream(fileref, mode, rock, true)
     }
 
-    pub fn glk_stream_open_memory(&mut self, buf: Box<[u8]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
-        let disprock = if buf.is_empty() {None} else {self.retain_array_callbacks_u8.as_ref().map(|_| {
-            self.retain_array(&GlkBuffer::U8(&buf))
-        })};
+    pub fn glk_stream_open_memory(&mut self, buf: Option<Box<[u8]>>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
+        let disprock = match &buf {
+            Some(buf) => self.retain_array_callbacks_u8.as_ref().map(|_| {
+                self.retain_array(&GlkBuffer::U8(buf))
+            }),
+            None => None,
+        };
         self.create_memory_stream(buf, fmode, rock, disprock)
     }
 
-    pub fn glk_stream_open_memory_uni(&mut self, buf: Box<[u32]>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
-        let disprock = if buf.is_empty() {None} else {self.retain_array_callbacks_u8.as_ref().map(|_| {
-            self.retain_array(&GlkBuffer::U32(&buf))
-        })};
+    pub fn glk_stream_open_memory_uni(&mut self, buf: Option<Box<[u32]>>, fmode: FileMode, rock: u32) -> GlkResult<GlkStream> {
+        let disprock = match &buf {
+            Some(buf) => self.retain_array_callbacks_u32.as_ref().map(|_| {
+                self.retain_array(&GlkBuffer::U32(buf))
+            }),
+            None => None,
+        };
         self.create_memory_stream(buf, fmode, rock, disprock)
     }
 
@@ -1504,16 +1508,14 @@ where S: Default + GlkSystem {
         Ok(Some(str))
     }
 
-    fn create_memory_stream<T>(&mut self, buf: Box<[T]>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<GlkStream>
+    fn create_memory_stream<T>(&mut self, buf: Option<Box<[T]>>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<GlkStream>
     where Stream: From<ArrayBackedStream<T>> {
         if fmode == FileMode::WriteAppend {
             return Err(IllegalFilemode);
         }
-        let str = GlkObject::new(if buf.len() == 0 {
-            NullStream::default().into()
-        }
-        else {
-            ArrayBackedStream::<T>::new(buf, fmode, None).into()
+        let str = GlkObject::new(match buf {
+            Some(buf) => ArrayBackedStream::<T>::new(buf, fmode, None).into(),
+            None => NullStream::default().into(),
         });
         if disprock.is_some() {
             let mut str = lock!(str);

@@ -693,8 +693,8 @@ pub struct InputUpdate {
     #[serde(skip_serializing_if = "Not::not")]
     pub mouse: bool,
     /* Line input terminators */
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub terminators: Vec<TerminatorCode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terminators: Option<Vec<TerminatorCode>>,
     /** Textual input type */
     #[serde(rename = "type")]
     #[serde(skip_serializing_if = "Option::is_none")]

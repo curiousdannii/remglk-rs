@@ -3,7 +3,7 @@
 The Glk API
 ===========
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -18,12 +18,12 @@ use glkapi::constants::*;
 
 use crate::common::*;
 
-type BufferU8 = *const u8;
-type BufferU32 = *const u32;
-type BufferMutU8 = *mut u8;
-type BufferMutU32 = *mut u32;
-type CStringU8 = *const i8;
-type CStringU32 = *const u32;
+type BufferU8Ptr = *const u8;
+type BufferU32Ptr = *const u32;
+type BufferMutU8Ptr = *mut u8;
+type BufferMutU32Ptr = *mut u32;
+type CStringU8Ptr = *const i8;
+type CStringU32Ptr = *const u32;
 pub type FileRefPtr = *const Mutex<GlkObjectMetadata<FileRef>>;
 pub type SchannelPtr = *const Mutex<GlkObjectMetadata<SoundChannel>>;
 pub type StreamPtr = *const Mutex<GlkObjectMetadata<Stream>>;
@@ -42,27 +42,27 @@ pub use system::{glkapi, GlkApi};
 // TODO: error handling!
 
 #[no_mangle]
-pub extern "C" fn glk_buffer_canon_decompose_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
+pub extern "C" fn glk_buffer_canon_decompose_uni(buf: BufferMutU32Ptr, len: u32, initlen: u32) -> u32 {
     GlkApi::glk_buffer_canon_decompose_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
 }
 
 #[no_mangle]
-pub extern "C" fn glk_buffer_canon_normalize_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
+pub extern "C" fn glk_buffer_canon_normalize_uni(buf: BufferMutU32Ptr, len: u32, initlen: u32) -> u32 {
     GlkApi::glk_buffer_canon_normalize_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
 }
 
 #[no_mangle]
-pub extern "C" fn glk_buffer_to_lower_case_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
+pub extern "C" fn glk_buffer_to_lower_case_uni(buf: BufferMutU32Ptr, len: u32, initlen: u32) -> u32 {
     GlkApi::glk_buffer_to_lower_case_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
 }
 
 #[no_mangle]
-pub extern "C" fn glk_buffer_to_title_case_uni(buf: BufferMutU32, len: u32, initlen: u32, lowerrest: u32) -> u32 {
+pub extern "C" fn glk_buffer_to_title_case_uni(buf: BufferMutU32Ptr, len: u32, initlen: u32, lowerrest: u32) -> u32 {
     GlkApi::glk_buffer_to_title_case_uni(glk_buffer_mut(buf, len), initlen as usize, lowerrest > 0) as u32
 }
 
 #[no_mangle]
-pub extern "C" fn glk_buffer_to_upper_case_uni(buf: BufferMutU32, len: u32, initlen: u32) -> u32 {
+pub extern "C" fn glk_buffer_to_upper_case_uni(buf: BufferMutU32Ptr, len: u32, initlen: u32) -> u32 {
     GlkApi::glk_buffer_to_upper_case_uni(glk_buffer_mut(buf, len), initlen as usize) as u32
 }
 
@@ -203,17 +203,20 @@ pub extern "C" fn glk_gestalt(sel: u32, val: u32) -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn glk_gestalt_ext(sel: u32, val: u32, buf: BufferMutU32, len: u32) -> u32 {
-    glkapi().lock().unwrap().glk_gestalt_ext(sel, val, glk_buffer_mut_opt(buf, len))
+pub extern "C" fn glk_gestalt_ext(sel: u32, val: u32, buf: BufferMutU32Ptr, len: u32) -> u32 {
+    if len > 0 {
+        return glkapi().lock().unwrap().glk_gestalt_ext(sel, val, Some(glk_buffer_mut(buf, len)));
+    }
+    glkapi().lock().unwrap().glk_gestalt_ext(sel, val, None)
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_buffer_stream(str: StreamPtr, buf: BufferMutU8, len: u32) -> u32 {
+pub extern "C" fn glk_get_buffer_stream(str: StreamPtr, buf: BufferMutU8Ptr, len: u32) -> u32 {
     GlkApi::glk_get_buffer_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_buffer_stream_uni(str: StreamPtr, buf: BufferMutU32, len: u32) -> u32 {
+pub extern "C" fn glk_get_buffer_stream_uni(str: StreamPtr, buf: BufferMutU32Ptr, len: u32) -> u32 {
     GlkApi::glk_get_buffer_stream_uni(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
 
@@ -228,12 +231,12 @@ pub extern "C" fn glk_get_char_stream(str: StreamPtr) -> i32 {
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_line_stream(str: StreamPtr, buf: BufferMutU8, len: u32) -> u32 {
+pub extern "C" fn glk_get_line_stream(str: StreamPtr, buf: BufferMutU8Ptr, len: u32) -> u32 {
     GlkApi::glk_get_line_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_line_stream_uni(str: StreamPtr, buf: BufferMutU32, len: u32) -> u32 {
+pub extern "C" fn glk_get_line_stream_uni(str: StreamPtr, buf: BufferMutU32Ptr, len: u32) -> u32 {
     GlkApi::glk_get_line_stream_uni(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
 }
 
@@ -259,23 +262,31 @@ pub extern "C" fn glk_image_get_info(image: u32, width_ptr: *mut u32, height_ptr
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_buffer(buf: BufferU8, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer(glk_buffer(buf, len)).ok();
+pub extern "C" fn glk_put_buffer(buf: BufferU8Ptr, len: u32) {
+    if len > 0 {
+        glkapi().lock().unwrap().glk_put_buffer(glk_buffer(buf, len)).ok();
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_buffer_stream(str: StreamPtr, buf: BufferU8, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer_stream(&from_ptr(str), glk_buffer(buf, len)).ok();
+pub extern "C" fn glk_put_buffer_stream(str: StreamPtr, buf: BufferU8Ptr, len: u32) {
+    if len > 0 {
+        glkapi().lock().unwrap().glk_put_buffer_stream(&from_ptr(str), glk_buffer(buf, len)).ok();
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_buffer_stream_uni(str: StreamPtr, buf: BufferU32, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer_stream_uni(&from_ptr(str), glk_buffer(buf, len)).ok();
+pub extern "C" fn glk_put_buffer_stream_uni(str: StreamPtr, buf: BufferU32Ptr, len: u32) {
+    if len > 0 {
+        glkapi().lock().unwrap().glk_put_buffer_stream_uni(&from_ptr(str), glk_buffer(buf, len)).ok();
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_buffer_uni(buf: BufferU32, len: u32) {
-    glkapi().lock().unwrap().glk_put_buffer_uni(glk_buffer(buf, len)).ok();
+pub extern "C" fn glk_put_buffer_uni(buf: BufferU32Ptr, len: u32) {
+    if len > 0 {
+        glkapi().lock().unwrap().glk_put_buffer_uni(glk_buffer(buf, len)).ok();
+    }
 }
 
 #[no_mangle]
@@ -299,22 +310,22 @@ pub extern "C" fn glk_put_char_uni(ch: u32) {
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_string(cstr: CStringU8) {
+pub extern "C" fn glk_put_string(cstr: CStringU8Ptr) {
     glkapi().lock().unwrap().glk_put_buffer(cstring_u8(cstr)).ok();
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_string_stream(str: StreamPtr, cstr: CStringU8) {
+pub extern "C" fn glk_put_string_stream(str: StreamPtr, cstr: CStringU8Ptr) {
     glkapi().lock().unwrap().glk_put_buffer_stream(&from_ptr(str), cstring_u8(cstr)).ok();
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_string_stream_uni(str: StreamPtr, cstr: CStringU32) {
+pub extern "C" fn glk_put_string_stream_uni(str: StreamPtr, cstr: CStringU32Ptr) {
     glkapi().lock().unwrap().glk_put_buffer_stream_uni(&from_ptr(str), cstring_u32(cstr)).ok();
 }
 
 #[no_mangle]
-pub extern "C" fn glk_put_string_uni(cstr: CStringU32) {
+pub extern "C" fn glk_put_string_uni(cstr: CStringU32Ptr) {
     glkapi().lock().unwrap().glk_put_buffer_uni(cstring_u32(cstr)).ok();
 }
 
@@ -334,13 +345,13 @@ pub extern "C" fn glk_request_hyperlink_event(win: WindowPtr) {
 }
 
 #[no_mangle]
-pub extern "C" fn glk_request_line_event(win: WindowPtr, buf: BufferMutU8, len: u32, initlen: u32) {
+pub extern "C" fn glk_request_line_event(win: WindowPtr, buf: BufferMutU8Ptr, len: u32, initlen: u32) {
     let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
     glkapi().lock().unwrap().glk_request_line_event(&from_ptr(win), buf, initlen).unwrap();
 }
 
 #[no_mangle]
-pub extern "C" fn glk_request_line_event_uni(win: WindowPtr, buf: BufferMutU32, len: u32, initlen: u32) {
+pub extern "C" fn glk_request_line_event_uni(win: WindowPtr, buf: BufferMutU32Ptr, len: u32, initlen: u32) {
     let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
     glkapi().lock().unwrap().glk_request_line_event_uni(&from_ptr(win), buf, initlen).unwrap();
 }
@@ -408,7 +419,7 @@ pub extern "C" fn glk_schannel_play_ext(schannel: SchannelPtr, snd: u32, repeats
 }
 
 #[no_mangle]
-pub extern "C" fn glk_schannel_play_multi(schannels: *const SchannelPtr, schannels_len: u32, sounds: BufferU32, sounds_len: u32, notify: u32) -> u32 {
+pub extern "C" fn glk_schannel_play_multi(schannels: *const SchannelPtr, schannels_len: u32, sounds: BufferU32Ptr, sounds_len: u32, notify: u32) -> u32 {
     glkapi().lock().unwrap().glk_schannel_play_multi(from_ptr_array(schannels, schannels_len), glk_buffer(sounds, sounds_len), notify)
 }
 
@@ -474,8 +485,13 @@ pub extern "C" fn glk_set_style_stream(str: StreamPtr, val: u32) {
 
 #[no_mangle]
 pub extern "C" fn glk_set_terminators_line_event(win: WindowPtr, keycodes_ptr: *mut TerminatorCode, count: u32) {
-    let terminators = glk_buffer(keycodes_ptr, count);
-    GlkApi::glk_set_terminators_line_event(&from_ptr(win), terminators.to_vec());
+    let terminators = if count > 0 {
+        Some(glk_buffer(keycodes_ptr, count).to_vec())
+    }
+    else {
+        None
+    };
+    GlkApi::glk_set_terminators_line_event(&from_ptr(win), terminators);
 }
 
 #[no_mangle]
@@ -548,15 +564,25 @@ pub extern "C" fn glk_stream_open_file_uni(fileref: FileRefPtr, mode: FileMode, 
 }
 
 #[no_mangle]
-pub extern "C" fn glk_stream_open_memory(buf: BufferMutU8, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
-    let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
+pub extern "C" fn glk_stream_open_memory(buf: BufferMutU8Ptr, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
+    let buf = if len > 0 {
+        unsafe{Some(Box::from_raw(glk_buffer_mut(buf, len)))}
+    }
+    else {
+        None
+    };
     let result = glkapi().lock().unwrap().glk_stream_open_memory(buf, fmode, rock);
     to_owned(result.unwrap())
 }
 
 #[no_mangle]
-pub extern "C" fn glk_stream_open_memory_uni(buf: BufferMutU32, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
-    let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
+pub extern "C" fn glk_stream_open_memory_uni(buf: BufferMutU32Ptr, len: u32, fmode: FileMode, rock: u32) -> StreamPtr {
+    let buf = if len > 0 {
+        unsafe{Some(Box::from_raw(glk_buffer_mut(buf, len)))}
+    }
+    else {
+        None
+    };
     let result = glkapi().lock().unwrap().glk_stream_open_memory_uni(buf, fmode, rock);
     to_owned(result.unwrap())
 }
