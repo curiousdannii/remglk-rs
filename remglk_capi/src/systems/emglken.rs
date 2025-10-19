@@ -24,6 +24,11 @@ use remglk::GlkSystem;
 use glkapi::protocol::{Event, Update};
 
 extern "C" {
+    fn emglken_buffer_canon_decompose(buffer_ptr: *mut u32, buffer_len: usize, initlen: usize) -> usize;
+    fn emglken_buffer_canon_normalize(buffer_ptr: *mut u32, buffer_len: usize, initlen: usize) -> usize;
+    fn emglken_buffer_to_lower_case(buffer_ptr: *mut u32, buffer_len: usize, initlen: usize) -> usize;
+    fn emglken_buffer_to_title_case(buffer_ptr: *mut u32, buffer_len: usize, initlen: usize, lowerrest: bool) -> usize;
+    fn emglken_buffer_to_upper_case(buffer_ptr: *mut u32, buffer_len: usize, initlen: usize) -> usize;
     fn emglken_file_delete(path_ptr: *const u8, path_len: usize);
     fn emglken_file_exists(path_ptr: *const u8, path_len: usize) -> bool;
     fn emglken_file_flush();
@@ -98,6 +103,26 @@ impl GlkSystem for EmglkenSystem {
         // Send the update
         let json = serde_json::to_string(&update).unwrap();
         unsafe {emglken_send_glkote_update(json.as_ptr(), json.len())};
+    }
+
+    fn buffer_canon_decompose(buf: &mut [u32], initlen: usize) -> usize {
+        unsafe {emglken_buffer_canon_decompose(buf.as_mut_ptr(), buf.len(), initlen)}
+    }
+
+    fn buffer_canon_normalize(buf: &mut [u32], initlen: usize) -> usize {
+        unsafe {emglken_buffer_canon_normalize(buf.as_mut_ptr(), buf.len(), initlen)}
+    }
+
+    fn buffer_to_lower_case(buf: &mut [u32], initlen: usize) -> usize {
+        unsafe {emglken_buffer_to_lower_case(buf.as_mut_ptr(), buf.len(), initlen)}
+    }
+
+    fn buffer_to_title_case(buf: &mut [u32], initlen: usize, lowerrest: bool) -> usize {
+        unsafe {emglken_buffer_to_title_case(buf.as_mut_ptr(), buf.len(), initlen, lowerrest)}
+    }
+
+    fn buffer_to_upper_case(buf: &mut [u32], initlen: usize) -> usize {
+        unsafe {emglken_buffer_to_upper_case(buf.as_mut_ptr(), buf.len(), initlen)}
     }
 
     fn get_directories() -> Directories {

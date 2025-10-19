@@ -9,6 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use std::cmp::min;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -17,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use jiff::tz::TimeZone;
+use unicode_normalization::UnicodeNormalization;
 
 use super::*;
 use remglk::GlkSystem;
@@ -84,6 +86,44 @@ impl GlkSystem for StandardSystem {
         println!("{}", output);
     }
 
+    fn buffer_canon_decompose(buf: &mut [u32], initlen: usize) -> usize {
+        let res = u32slice_to_string(&buf[..initlen]).nfd().map(|ch| ch as u32).collect::<Vec<u32>>();
+        write_common_buffer(&res, buf)
+    }
+
+    fn buffer_canon_normalize(buf: &mut [u32], initlen: usize) -> usize {
+        let res = u32slice_to_string(&buf[..initlen]).nfc().map(|ch| ch as u32).collect::<Vec<u32>>();
+        write_common_buffer(&res, buf)
+    }
+
+    fn buffer_to_lower_case(buf: &mut [u32], initlen: usize) -> usize {
+        let res = str_to_u32vec(&u32slice_to_string(&buf[..initlen]).to_lowercase());
+        write_common_buffer(&res, buf)
+    }
+
+    fn buffer_to_title_case(buf: &mut [u32], initlen: usize, lowerrest: bool) -> usize {
+        let titlecase = unicode_case_mapping::to_titlecase(char::from_u32(buf[0]).unwrap());
+        let mut res = vec![if titlecase[0] > 0 {titlecase[0]} else {buf[0]}];
+        if titlecase[1] > 0 {
+            res.push(titlecase[1]);
+        }
+        if titlecase[2] > 0 {
+            res.push(titlecase[2]);
+        }
+        if lowerrest {
+            res.append(&mut str_to_u32vec(&u32slice_to_string(&buf[1..initlen]).to_lowercase()));
+        }
+        else {
+            res.extend_from_slice(&buf[1..initlen]);
+        }
+        write_common_buffer(&res, buf)
+    }
+
+    fn buffer_to_upper_case(buf: &mut [u32], initlen: usize) -> usize {
+        let res = str_to_u32vec(&u32slice_to_string(&buf[..initlen]).to_uppercase());
+        write_common_buffer(&res, buf)
+    }
+
     fn get_directories() -> Directories {
         let cwd = env::current_dir().unwrap();
         Directories {
@@ -104,4 +144,11 @@ impl GlkSystem for StandardSystem {
         dirs.storyfile.clone_from(&path);
         dirs.working = path;
     }
+}
+
+fn write_common_buffer(src: &[u32], dest: &mut [u32]) -> usize {
+    let len = src.len();
+    let act_len = min(len, dest.len());
+    dest[..act_len].copy_from_slice(&src[..act_len]);
+    len
 }

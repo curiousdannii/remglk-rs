@@ -31,6 +31,13 @@ pub trait GlkSystem {
     /** Get an event from GlkOte */
     fn get_glkote_event(&mut self) -> Option<Event>;
 
+    // Unicode functions
+    fn buffer_canon_decompose(buf: &mut [u32], initlen: usize) -> usize;
+    fn buffer_canon_normalize(buf: &mut [u32], initlen: usize) -> usize;
+    fn buffer_to_lower_case(buf: &mut [u32], initlen: usize) -> usize;
+    fn buffer_to_title_case(buf: &mut [u32], initlen: usize, lowerrest: bool) -> usize;
+    fn buffer_to_upper_case(buf: &mut [u32], initlen: usize) -> usize;
+
     // Misc system functions
     fn get_directories() -> Directories;
     fn get_local_tz() -> TimeZone;

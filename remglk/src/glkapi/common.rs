@@ -99,13 +99,6 @@ macro_rules! lock {
 }
 pub(crate) use lock;
 
-pub fn write_common_buffer(src: &[u32], dest: &mut [u32]) -> usize {
-    let len = src.len();
-    let act_len = min(len, dest.len());
-    dest[..act_len].copy_from_slice(&src[..act_len]);
-    len
-}
-
 // Array & string conversions
 
 pub fn str_to_u32vec(str: &str) -> Vec<u32> {
