@@ -17,7 +17,7 @@ use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
-use jiff::tz::TimeZone;
+use jiff::{Timestamp, tz::TimeZone};
 use unicode_normalization::UnicodeNormalization;
 
 use super::*;
@@ -136,6 +136,10 @@ impl GlkSystem for StandardSystem {
 
     fn get_local_tz() -> TimeZone {
         TimeZone::system()
+    }
+
+    fn get_now() -> Timestamp {
+        Timestamp::now()
     }
 
     fn set_base_file(dirs: &mut Directories, path: String) {

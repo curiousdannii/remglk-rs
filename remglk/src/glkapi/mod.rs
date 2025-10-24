@@ -157,11 +157,11 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_current_simple_time(factor: u32) -> i32 {
-        timestamp_to_simpletime(Timestamp::now(), factor)
+        timestamp_to_simpletime(S::get_now(), factor)
     }
 
     pub fn glk_current_time() -> GlkTime {
-        timestamp_to_glktime(Timestamp::now())
+        timestamp_to_glktime(S::get_now())
     }
 
     pub fn glk_date_to_simple_time_local(date: &GlkDate, factor: u32) -> i32 {

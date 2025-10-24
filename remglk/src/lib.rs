@@ -12,7 +12,7 @@ https://github.com/curiousdannii/remglk-rs
 pub mod blorb;
 pub mod glkapi;
 
-use jiff::tz::TimeZone;
+use jiff::{Timestamp, tz::TimeZone};
 
 use glkapi::Directories;
 use glkapi::protocol::{Event, Update};
@@ -41,5 +41,6 @@ pub trait GlkSystem {
     // Misc system functions
     fn get_directories() -> Directories;
     fn get_local_tz() -> TimeZone;
+    fn get_now() -> Timestamp;
     fn set_base_file(dirs: &mut Directories, path: String);
 }

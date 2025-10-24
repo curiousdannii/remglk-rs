@@ -14,7 +14,9 @@ use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use std::slice;
 use std::sync::LazyLock;
+use std::time::SystemTime;
 
+use jiff::Timestamp;
 use jiff::tz::{Offset, TimeZone};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -140,6 +142,11 @@ impl GlkSystem for EmglkenSystem {
     fn get_local_tz() -> TimeZone {
         let offset = Offset::from_seconds(unsafe {emglken_get_local_tz()}).unwrap();
         TimeZone::fixed(offset)
+    }
+
+    fn get_now() -> Timestamp {
+        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+        Timestamp::from_second(now.as_secs() as i64).unwrap()
     }
 
     fn set_base_file(dirs: &mut Directories, path: String) {
