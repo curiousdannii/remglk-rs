@@ -23,13 +23,13 @@ mod windows;
 use std::cmp::min;
 use std::ffi::c_char;
 use std::iter::zip;
-use std::mem;
+use std::{mem, u32};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::str;
 use std::time::SystemTime;
 
-use jiff::{Timestamp, ToSpan, tz::TimeZone};
+use jiff::{Timestamp, tz::TimeZone};
 
 use super::*;
 pub use arrays::*;
@@ -167,22 +167,35 @@ where S: Default + GlkSystem {
 
     pub fn glk_date_to_simple_time_local(date: &GlkDate, factor: u32) -> i32 {
         let timestamp = glkdate_to_timestamp(date, S::get_local_tz());
-        timestamp_to_simpletime(timestamp, factor)
+        match timestamp {
+            Some(timestamp) => timestamp_to_simpletime(timestamp, factor)
+,
+            None => -1,
+        }
     }
 
     pub fn glk_date_to_simple_time_utc(date: &GlkDate, factor: u32) -> i32 {
         let timestamp = glkdate_to_timestamp(date, TimeZone::UTC);
-        timestamp_to_simpletime(timestamp, factor)
+        match timestamp {
+            Some(timestamp) => timestamp_to_simpletime(timestamp, factor),
+            None => -1,
+        }
     }
 
     pub fn glk_date_to_time_local(date: &GlkDate) -> GlkTime {
         let timestamp = glkdate_to_timestamp(date, S::get_local_tz());
-        timestamp_to_glktime(timestamp)
+        match timestamp {
+            Some(timestamp) => timestamp_to_glktime(timestamp),
+            None => INVALID_GLKDATE,
+        }
     }
 
     pub fn glk_date_to_time_utc(date: &GlkDate) -> GlkTime {
         let timestamp = glkdate_to_timestamp(date, TimeZone::UTC);
-        timestamp_to_glktime(timestamp)
+        match timestamp {
+            Some(timestamp) => timestamp_to_glktime(timestamp),
+            None => INVALID_GLKDATE,
+        }
     }
 
     pub fn glk_exit(&mut self) {
@@ -1851,12 +1864,19 @@ pub struct GlkEvent {
 }
 
 /** A Glk Time struct */
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct GlkTime {
     high_sec: i32,
     low_sec: u32,
     microsec: i32,
 }
+
+const INVALID_GLKDATE: GlkTime = GlkTime {
+    high_sec: -1,
+    low_sec: u32::MAX,
+    microsec: 0,
+};
 
 /** A Glk Date struct */
 #[repr(C)]
@@ -1983,16 +2003,21 @@ fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unico
     Ok(str)
 }
 
-fn glkdate_to_timestamp(date: &GlkDate, timezone: TimeZone) -> Timestamp {
+fn glkdate_to_timestamp(date: &GlkDate, timezone: TimeZone) -> Option<Timestamp> {
     // We must normalise the date, which is thankfully not too bad with the Jiff library!
-    let mut normalised_date = jiff::civil::datetime(date.year as i16, 1, 1, 0, 0, 0, 0);
+    /*let mut normalised_date = jiff::civil::datetime(date.year as i16, 1, 1, 0, 0, 0, 0);
     normalised_date += (date.month - 1).months();
     normalised_date += (date.day - 1).days();
     normalised_date += date.hour.hours();
     normalised_date += date.minute.minutes();
     normalised_date += date.second.seconds();
     normalised_date += date.microsec.microseconds();
-    timezone.to_timestamp(normalised_date).unwrap()
+    timezone.to_timestamp(normalised_date).unwrap()*/
+    let datetime = jiff::civil::DateTime::new(date.year as i16, date.month as i8, date.day as i8, date.hour as i8, date.minute as i8, date.second as i8, date.microsec * 1000);
+    match datetime {
+        Ok(datetime) => Some(timezone.to_timestamp(datetime).unwrap()),
+        Err(_) => None,
+    }
 }
 
 fn glktime_to_timestamp(time: &GlkTime) -> Timestamp {
