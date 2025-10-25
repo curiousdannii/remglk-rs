@@ -44,6 +44,19 @@ impl GlkObjectClass for Stream {
     }
 }
 
+/** A stream operation */
+pub enum StreamOperation<'a> {
+    GetBuffer(&'a mut GlkBufferMut<'a>),
+    GetChar(bool),
+    GetLine(&'a mut GlkBufferMut<'a>),
+    GetPosition,
+    PutBuffer(&'a GlkBuffer<'a>),
+    PutChar(u32),
+    PutString(&'a str, Option<u32>),
+    SetPosition(SeekMode, i32),
+}
+use StreamOperation::*;
+
 #[enum_dispatch(Stream)]
 pub trait StreamOperations {
     fn close(&self) -> StreamResultCounts {
@@ -52,15 +65,8 @@ pub trait StreamOperations {
             write_count: self.write_count() as u32,
         }
     }
+    fn do_operation(&mut self, op: StreamOperation) -> GlkResult<'_, i32>;
     fn file_path(&self) -> GlkResult<'_, &CString> {Err(NotFileStream)}
-    fn get_buffer(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {Ok(0)}
-    fn get_char(&mut self, _uni: bool) -> GlkResult<'_, i32> {Ok(-1)}
-    fn get_line(&mut self, _buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {Ok(0)}
-    fn get_position(&self) -> u32 {0}
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()>;
-    fn put_char(&mut self, ch: u32) -> GlkResult<'_, ()>;
-    fn put_string(&mut self, str: &str, style: Option<u32>) -> GlkResult<'_, ()>;
-    fn set_position(&mut self, _mode: SeekMode, _pos: i32) {}
     fn write_count(&self) -> usize;
 }
 
@@ -128,108 +134,106 @@ where Box<[T]>: GlkArray {
         }
     }
 
+    fn do_operation(&mut self, op: StreamOperation) -> GlkResult<'_, i32> {
+        // Check file mode first
+        match &op {
+            GetBuffer(_) | GetChar(_) | GetLine(_) => {
+                if let FileMode::Write | FileMode::WriteAppend = self.fmode {
+                    return Err(ReadFromWriteOnly);
+                }
+            },
+            PutBuffer(_) | PutChar(_) | PutString(_, _) => {
+                if let FileMode::Read = self.fmode {
+                    return Err(WriteToReadOnly);
+                }
+            },
+            _ => {},
+        };
+
+        match op {
+            GetBuffer(buf) => {
+                let read_length = min(buf.len(), self.len - self.pos);
+                if read_length == 0 {
+                    return Ok(0);
+                }
+                self.buf.copy_to_buffer(self.pos, buf, 0, read_length);
+                self.pos += read_length;
+                self.read_count += read_length;
+                Ok(read_length as i32)
+            },
+            GetChar(uni) =>{
+                if self.pos < self.len {
+                    let ch = self.buf.get_u32(self.pos);
+                    self.pos += 1;
+                    self.read_count += 1;
+                    return Ok(if !uni && ch > MAX_LATIN1 {QUESTION_MARK} else {ch} as i32);
+                }
+                Ok(-1)
+            },
+            GetLine(buf) => {
+                let read_length: isize = min(buf.len() as isize - 1, (self.len - self.pos) as isize);
+                if read_length < 0 {
+                    return Ok(0);
+                }
+                let mut i: usize = 0;
+                while i < read_length as usize {
+                    let ch = self.buf.get_u32(self.pos);
+                    self.pos += 1;
+                    buf.set_u32(i, ch);
+                    i += 1;
+                    if ch == 10 {
+                        break;
+                    }
+                }
+                buf.set_u32(i, GLK_NULL);
+                self.read_count += i;
+                Ok(i as i32)
+            },
+            GetPosition => {
+                Ok(self.pos as i32)
+            },
+            PutBuffer(buf) => {
+                let buf_len = buf.len();
+                self.write_count += buf_len;
+                if self.pos + buf_len > self.len && self.expandable {
+                    self.expand(buf_len);
+                }
+                let write_length = min(buf_len, self.len - self.pos);
+                if write_length > 0 {
+                    self.buf.copy_from_buffer(self.pos, buf, 0, write_length);
+                    self.pos += write_length;
+                }
+                Ok(0)
+            },
+            PutChar(ch) => {
+                self.write_count += 1;
+                if self.pos == self.len && self.expandable {
+                    self.expand(1);
+                }
+                if self.pos < self.len {
+                    self.buf.set_u32(self.pos, ch);
+                    self.pos += 1;
+                }
+                Ok(0)
+            },
+            PutString(str, _style) => {
+                let buf: GlkOwnedBuffer = Into::<GlkOwnedBuffer>::into(str);
+                self.do_operation(PutBuffer(&(&buf).into()))
+            },
+            SetPosition(mode, pos) => {
+                let new_pos: i32 = match mode {
+                    SeekMode::Current => self.pos as i32 + pos,
+                    SeekMode::End => self.len as i32 + pos,
+                    SeekMode::Start => pos,
+                };
+                self.pos = new_pos.clamp(0, self.len as i32) as usize;
+                Ok(0)
+            },
+        }
+    }
+
     fn file_path(&self) -> GlkResult<'_, &CString> {
         self.path.as_ref().ok_or(NotFileStream)
-    }
-
-    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {
-        if let FileMode::Write | FileMode::WriteAppend = self.fmode {
-            return Err(ReadFromWriteOnly);
-        }
-        let read_length = min(buf.len(), self.len - self.pos);
-        if read_length == 0 {
-            return Ok(0);
-        }
-        self.buf.copy_to_buffer(self.pos, buf, 0, read_length);
-        self.pos += read_length;
-        self.read_count += read_length;
-        Ok(read_length as u32)
-    }
-
-    fn get_char(&mut self, uni: bool) -> GlkResult<'_, i32> {
-        if let FileMode::Write | FileMode::WriteAppend = self.fmode {
-            return Err(ReadFromWriteOnly);
-        }
-        if self.pos < self.len {
-            self.read_count += 1;
-            let ch = self.buf.get_u32(self.pos);
-            self.pos += 1;
-            return Ok(if !uni && ch > MAX_LATIN1 {QUESTION_MARK} else {ch} as i32);
-        }
-        Ok(-1)
-    }
-
-    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {
-        if let FileMode::Write | FileMode::WriteAppend = self.fmode {
-            return Err(ReadFromWriteOnly);
-        }
-        let read_length: isize = min(buf.len() as isize - 1, (self.len - self.pos) as isize);
-        if read_length < 0 {
-            return Ok(0);
-        }
-        let mut i: usize = 0;
-        while i < read_length as usize {
-            let ch = self.buf.get_u32(self.pos);
-            self.pos += 1;
-            buf.set_u32(i, ch);
-            i += 1;
-            if ch == 10 {
-                break;
-            }
-        }
-        buf.set_u32(i, GLK_NULL);
-        self.read_count += i;
-        Ok(i as u32)
-    }
-
-    fn get_position(&self) -> u32 {
-        self.pos as u32
-    }
-
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()> {
-        if let FileMode::Read = self.fmode {
-            return Err(WriteToReadOnly);
-        }
-        let buf_len = buf.len();
-        self.write_count += buf_len;
-        if self.pos + buf_len > self.len && self.expandable {
-            self.expand(buf_len);
-        }
-        let write_length = min(buf_len, self.len - self.pos);
-        if write_length > 0 {
-            self.buf.copy_from_buffer(self.pos, buf, 0, write_length);
-            self.pos += write_length;
-        }
-        Ok(())
-    }
-
-    fn put_char(&mut self, ch: u32) -> GlkResult<'_, ()> {
-        if let FileMode::Read = self.fmode {
-            return Err(WriteToReadOnly);
-        }
-        self.write_count += 1;
-        if self.pos == self.len && self.expandable {
-            self.expand(1);
-        }
-        if self.pos < self.len {
-            self.buf.set_u32(self.pos, ch);
-            self.pos += 1;
-        }
-        Ok(())
-    }
-
-    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<'_, ()> {
-        let buf: GlkOwnedBuffer = str.into();
-        self.put_buffer(&(&buf).into())
-    }
-
-    fn set_position(&mut self, mode: SeekMode, pos: i32) {
-        let new_pos: i32 = match mode {
-            SeekMode::Current => self.pos as i32 + pos,
-            SeekMode::End => self.len as i32 + pos,
-            SeekMode::Start => pos,
-        };
-        self.pos = new_pos.clamp(0, self.len as i32) as usize;
     }
 
     fn write_count(&self) -> usize {
@@ -286,59 +290,43 @@ where T: Clone + Default, Box<[T]>: GlkArray {
         self.str.close()
     }
 
+    fn do_operation(&mut self, op: StreamOperation) -> GlkResult<'_, i32> {
+        match op {
+            PutBuffer(buf) => {
+                self.changed = true;
+                if self.str.pos + buf.len() > self.str.len {
+                    self.expand(buf.len());
+                }
+            },
+            PutChar(_) => {
+                self.changed = true;
+                if self.str.pos == self.str.len {
+                    self.expand(1);
+                }
+            },
+            PutString(str, _) => {
+                let buf: GlkOwnedBuffer = Into::<GlkOwnedBuffer>::into(str);
+                return self.do_operation(PutBuffer(&(&buf).into()))
+            },
+            SetPosition(mode, pos) => {
+                // Despite the Glk spec saying that it's illegal to specify a position after the end of a file (5.4) this is needed by Bocfel, and seemingly supported by all libc based Glk interpreters, so we might need to expand first
+                // See https://github.com/iftechfoundation/ifarchive-if-specs/issues/17
+                let new_pos = match mode {
+                    SeekMode::Current => self.str.pos as i32 + pos,
+                    SeekMode::End => self.str.len as i32 + pos,
+                    SeekMode::Start => pos,
+                } as usize;
+                if new_pos > self.str.len {
+                    self.expand(new_pos - self.str.len);
+                }
+            },
+            _ => {},
+        }
+        self.str.do_operation(op)
+    }
+
     fn file_path(&self) -> GlkResult<'_, &CString> {
         self.str.file_path()
-    }
-
-    fn get_buffer(&mut self, buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {
-        self.str.get_buffer(buf)
-    }
-
-    fn get_char(&mut self, uni: bool) -> GlkResult<'_, i32> {
-        self.str.get_char(uni)
-    }
-
-    fn get_line(&mut self, buf: &mut GlkBufferMut) -> GlkResult<'_, u32> {
-        self.str.get_line(buf)
-    }
-
-    fn get_position(&self) -> u32 {
-        self.str.get_position()
-    }
-
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()> {
-        self.changed = true;
-        if self.str.pos + buf.len() > self.str.len {
-            self.expand(buf.len());
-        }
-        self.str.put_buffer(buf)
-    }
-
-    fn put_char(&mut self, ch: u32) -> GlkResult<'_, ()> {
-        self.changed = true;
-        if self.str.pos == self.str.len {
-            self.expand(1);
-        }
-        self.str.put_char(ch)
-    }
-
-    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<'_, ()> {
-        let buf: GlkOwnedBuffer = str.into();
-        self.put_buffer(&(&buf).into())
-    }
-
-    fn set_position(&mut self, mode: SeekMode, pos: i32) {
-        // Despite the Glk spec saying that it's illegal to specify a position after the end of a file (5.4) this is needed by Bocfel, and seemingly supported by all libc based Glk interpreters, so we might need to expand first
-        // See https://github.com/iftechfoundation/ifarchive-if-specs/issues/17
-        let new_pos = match mode {
-            SeekMode::Current => self.str.pos as i32 + pos,
-            SeekMode::End => self.str.len as i32 + pos,
-            SeekMode::Start => pos,
-        } as usize;
-        if new_pos > self.str.len {
-            self.expand(new_pos - self.str.len);
-        }
-        self.str.set_position(mode, pos);
     }
 
     fn write_count(&self) -> usize {
@@ -353,19 +341,14 @@ pub struct NullStream {
 }
 
 impl StreamOperations for NullStream {
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()> {
-        self.write_count += buf.len();
-        Ok(())
-    }
-
-    fn put_char(&mut self, _: u32) -> GlkResult<'_, ()> {
-        self.write_count += 1;
-        Ok(())
-    }
-
-    fn put_string(&mut self, str: &str, _style: Option<u32>) -> GlkResult<'_, ()> {
-        self.write_count += str.chars().count();
-        Ok(())
+    fn do_operation(&mut self, op: StreamOperation) -> GlkResult<'_, i32> {
+        match op {
+            PutBuffer(buf) => self.write_count += buf.len(),
+            PutChar(_) => self.write_count += 1,
+            PutString(str, _) => self.write_count += str.chars().count(),
+            _ => {},
+        };
+        Ok(if let GetChar(_) = op {-1} else {0})
     }
 
     fn write_count(&self) -> usize {
@@ -390,49 +373,37 @@ impl WindowStream {
 }
 
 impl StreamOperations for WindowStream {
-    fn put_buffer(&mut self, buf: &GlkBuffer) -> GlkResult<'_, ()> {
-        let win: GlkWindow = (&self.win).into();
-        let mut win = win.lock().unwrap();
-        if let Some(TextInputType::Line) = win.input.text_input_type {
-            return Err(PendingLineInput);
+    fn do_operation(&mut self, op: StreamOperation) -> GlkResult<'_, i32> {
+        if let GetChar(_) = &op {
+            return Ok(-1)
         }
-        self.write_count += buf.len();
-        win.put_string(&buf.to_string(), None);
-        if let Some(str) = &win.echostr {
-            let str: GlkStream = str.into();
-            str.lock().unwrap().put_buffer(buf)?;
+        if let PutBuffer(_) | PutChar(_) | PutString(_, _) = op {
+            let win: GlkWindow = (&self.win).into();
+            let mut win = win.lock().unwrap();
+            if let Some(TextInputType::Line) = win.input.text_input_type {
+                return Err(PendingLineInput);
+            }
+            match op {
+                PutBuffer(buf) => {
+                    self.write_count += buf.len();
+                    win.put_string(&buf.to_string(), None);
+                },
+                PutChar(ch) => {
+                    self.write_count += 1;
+                    win.put_string(&char::from_u32(ch).unwrap().to_string(), None);
+                },
+                PutString(str, style) => {
+                    self.write_count += str.chars().count();
+                    win.put_string(str, style);
+                },
+                _ => {},
+            };
+            if let Some(str) = &win.echostr {
+                let str: GlkStream = str.into();
+                str.lock().unwrap().do_operation(op)?;
+            }
         }
-        Ok(())
-    }
-
-    fn put_char(&mut self, ch: u32) -> GlkResult<'_, ()> {
-        let win: GlkWindow = (&self.win).into();
-        let mut win = win.lock().unwrap();
-        if let Some(TextInputType::Line) = win.input.text_input_type {
-            return Err(PendingLineInput);
-        }
-        self.write_count += 1;
-        win.put_string(&char::from_u32(ch).unwrap().to_string(), None);
-        if let Some(str) = &win.echostr {
-            let str: GlkStream = str.into();
-            str.lock().unwrap().put_char(ch)?;
-        }
-        Ok(())
-    }
-
-    fn put_string(&mut self, str: &str, style: Option<u32>) -> GlkResult<'_, ()> {
-        let win: GlkWindow = (&self.win).into();
-        let mut win = win.lock().unwrap();
-        if let Some(TextInputType::Line) = win.input.text_input_type {
-            return Err(PendingLineInput);
-        }
-        self.write_count += str.chars().count();
-        win.put_string(str, style);
-        if let Some(echostr) = &win.echostr {
-            let echostr: GlkStream = echostr.into();
-            echostr.lock().unwrap().put_string(str, style)?;
-        }
-        Ok(())
+        Ok(0)
     }
 
     fn write_count(&self) -> usize {

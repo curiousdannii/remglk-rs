@@ -328,27 +328,27 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_get_buffer_stream<'a>(str: &GlkStream, buf: &mut [u8]) -> GlkResult<'a, u32> {
-        lock!(str).get_buffer(&mut GlkBufferMut::U8(buf))
+        do_stream_operation(str, StreamOperation::GetBuffer(&mut GlkBufferMut::U8(buf))).map(|res| res as u32)
     }
 
     pub fn glk_get_buffer_stream_uni<'a>(str: &GlkStream, buf: &mut [u32]) -> GlkResult<'a, u32> {
-        lock!(str).get_buffer(&mut GlkBufferMut::U32(buf))
+        do_stream_operation(str, StreamOperation::GetBuffer(&mut GlkBufferMut::U32(buf))).map(|res| res as u32)
     }
 
     pub fn glk_get_char_stream(str: &GlkStream) -> GlkResult<'_, i32> {
-        lock!(str).get_char(false)
+        do_stream_operation(str, StreamOperation::GetChar(false))
     }
 
     pub fn glk_get_char_stream_uni(str: &GlkStream) -> GlkResult<'_, i32> {
-        lock!(str).get_char(true)
+        do_stream_operation(str, StreamOperation::GetChar(true))
     }
 
     pub fn glk_get_line_stream<'a>(str: &GlkStream, buf: &mut [u8]) -> GlkResult<'a, u32> {
-        lock!(str).get_line(&mut GlkBufferMut::U8(buf))
+        do_stream_operation(str, StreamOperation::GetLine(&mut GlkBufferMut::U8(buf))).map(|res| res as u32)
     }
 
     pub fn glk_get_line_stream_uni<'a>(str: &GlkStream, buf: &mut [u32]) -> GlkResult<'a, u32> {
-        lock!(str).get_line(&mut GlkBufferMut::U32(buf))
+        do_stream_operation(str, StreamOperation::GetLine(&mut GlkBufferMut::U32(buf))).map(|res| res as u32)
     }
 
     pub fn glk_image_draw(win: &GlkWindow, image: u32, val1: i32, val2: i32) -> u32 {
@@ -378,43 +378,35 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<'_, ()> {
-        self.glk_put_buffer_stream(current_stream!(self), buf)
+        Self::glk_put_buffer_stream(current_stream!(self), buf)
     }
 
-    pub fn glk_put_buffer_stream<'a>(&mut self, str: &GlkStream, buf: &[u8]) -> GlkResult<'a, ()> {
-        let mut str = lock!(str);
-        str.put_buffer(&GlkBuffer::U8(buf))?;
-        Ok(())
+    pub fn glk_put_buffer_stream<'a>(str: &GlkStream, buf: &[u8]) -> GlkResult<'a, ()> {
+        do_stream_operation(str, StreamOperation::PutBuffer(&GlkBuffer::U8(buf))).and(Ok(()))
     }
 
-    pub fn glk_put_buffer_stream_uni<'a>(&mut self, str: &GlkStream, buf: &[u32]) -> GlkResult<'a, ()> {
-        let mut str = lock!(str);
-        str.put_buffer(&GlkBuffer::U32(buf))?;
-        Ok(())
+    pub fn glk_put_buffer_stream_uni<'a>(str: &GlkStream, buf: &[u32]) -> GlkResult<'a, ()> {
+        do_stream_operation(str, StreamOperation::PutBuffer(&GlkBuffer::U32(buf))).and(Ok(()))
     }
 
     pub fn glk_put_buffer_uni(&mut self, buf: &[u32]) -> GlkResult<'_, ()> {
-        self.glk_put_buffer_stream_uni(current_stream!(self), buf)
+        Self::glk_put_buffer_stream_uni(current_stream!(self), buf)
     }
 
     pub fn glk_put_char(&mut self, ch: u8) -> GlkResult<'_, ()> {
-        self.glk_put_char_stream(current_stream!(self), ch)
+        Self::glk_put_char_stream(current_stream!(self), ch)
     }
 
-    pub fn glk_put_char_stream(&mut self, str: &GlkStream, ch: u8) -> GlkResult<'_, ()> {
-        let mut str = lock!(str);
-        str.put_char(ch as u32)?;
-        Ok(())
+    pub fn glk_put_char_stream(str: &GlkStream, ch: u8) -> GlkResult<'_, ()> {
+        do_stream_operation(str, StreamOperation::PutChar(ch as u32)).and(Ok(()))
     }
 
-    pub fn glk_put_char_stream_uni(&mut self, str: &GlkStream, ch: u32) -> GlkResult<'_, ()> {
-        let mut str = lock!(str);
-        str.put_char(ch)?;
-        Ok(())
+    pub fn glk_put_char_stream_uni(str: &GlkStream, ch: u32) -> GlkResult<'_, ()> {
+        do_stream_operation(str, StreamOperation::PutChar(ch)).and(Ok(()))
     }
 
     pub fn glk_put_char_uni(&mut self, ch: u32) -> GlkResult<'_, ()> {
-        self.glk_put_char_stream_uni(current_stream!(self), ch)
+        Self::glk_put_char_stream_uni(current_stream!(self), ch)
     }
 
     pub fn glk_request_char_event(&self, win: &GlkWindow) -> GlkResult<'_, ()> {
@@ -670,7 +662,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stream_get_position(str: &GlkStream) -> u32 {
-        lock!(str).get_position()
+        do_stream_operation(str, StreamOperation::GetPosition).unwrap() as u32
     }
 
     pub fn glk_stream_get_rock(str: &GlkStream) -> GlkResult<'_, u32> {
@@ -722,7 +714,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stream_set_position(str: &GlkStream, pos: i32, mode: SeekMode) {
-        lock!(str).set_position(mode, pos);
+        do_stream_operation(str, StreamOperation::SetPosition(mode, pos)).unwrap();
     }
 
     pub fn glk_stylehint_clear(&mut self, wintype: WindowType, style: u32, hint: u32) {
@@ -1481,8 +1473,7 @@ where S: Default + GlkSystem {
         let str = create_stream_from_buffer(data, binary, mode, uni, Some(fileref))?;
 
         if mode == FileMode::WriteAppend {
-            let mut str = lock!(str);
-            str.set_position(SeekMode::End, 0);
+            do_stream_operation(&str, StreamOperation::SetPosition(SeekMode::End, 0)).unwrap();
         }
 
         self.streams.register(&str, rock);
@@ -1580,9 +1571,7 @@ where S: Default + GlkSystem {
             input_linebreak.push('\n');
             win.put_string(&input_linebreak, Some(style_Input));
             if let Some(str) = &win.echostr {
-                let str: GlkStream = str.into();
-                let mut str = lock!(str);
-                str.put_string(&input_linebreak, Some(style_Input))?;
+                do_stream_operation(&str.into(), StreamOperation::PutString(&input_linebreak, Some(style_Input)))?;
             }
         }
 
@@ -1981,6 +1970,11 @@ fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unico
         }
     });
     Ok(str)
+}
+
+// Route all stream operations here so that we minimise the number of mutex invocations
+fn do_stream_operation<'a>(str: &'a GlkStream, op: StreamOperation) -> GlkResult<'a, i32> {
+    lock!(str).do_operation(op)
 }
 
 fn glkdate_to_timestamp(date: &GlkDate, timezone: TimeZone) -> Timestamp {

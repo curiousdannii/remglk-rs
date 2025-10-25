@@ -271,14 +271,14 @@ pub extern "C" fn glk_put_buffer(buf: BufferU8Ptr, len: u32) {
 #[no_mangle]
 pub extern "C" fn glk_put_buffer_stream(str: StreamPtr, buf: BufferU8Ptr, len: u32) {
     if len > 0 {
-        GLKAPI.lock().unwrap().glk_put_buffer_stream(&from_ptr(str), glk_buffer(buf, len)).ok();
+        GlkApi::glk_put_buffer_stream(&from_ptr(str), glk_buffer(buf, len)).ok();
     }
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_buffer_stream_uni(str: StreamPtr, buf: BufferU32Ptr, len: u32) {
     if len > 0 {
-        GLKAPI.lock().unwrap().glk_put_buffer_stream_uni(&from_ptr(str), glk_buffer(buf, len)).ok();
+        GlkApi::glk_put_buffer_stream_uni(&from_ptr(str), glk_buffer(buf, len)).ok();
     }
 }
 
@@ -296,12 +296,12 @@ pub extern "C" fn glk_put_char(ch: u8) {
 
 #[no_mangle]
 pub extern "C" fn glk_put_char_stream(str: StreamPtr, ch: u8) {
-    GLKAPI.lock().unwrap().glk_put_char_stream(&from_ptr(str), ch).ok();
+    GlkApi::glk_put_char_stream(&from_ptr(str), ch).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_char_stream_uni(str: StreamPtr, ch: u32) {
-    GLKAPI.lock().unwrap().glk_put_char_stream_uni(&from_ptr(str), ch).ok();
+    GlkApi::glk_put_char_stream_uni(&from_ptr(str), ch).ok();
 }
 
 #[no_mangle]
@@ -316,12 +316,12 @@ pub extern "C" fn glk_put_string(cstr: CStringU8Ptr) {
 
 #[no_mangle]
 pub extern "C" fn glk_put_string_stream(str: StreamPtr, cstr: CStringU8Ptr) {
-    GLKAPI.lock().unwrap().glk_put_buffer_stream(&from_ptr(str), cstring_u8(cstr)).ok();
+    GlkApi::glk_put_buffer_stream(&from_ptr(str), cstring_u8(cstr)).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_string_stream_uni(str: StreamPtr, cstr: CStringU32Ptr) {
-    GLKAPI.lock().unwrap().glk_put_buffer_stream_uni(&from_ptr(str), cstring_u32(cstr)).ok();
+    GlkApi::glk_put_buffer_stream_uni(&from_ptr(str), cstring_u32(cstr)).ok();
 }
 
 #[no_mangle]
