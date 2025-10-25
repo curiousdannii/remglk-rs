@@ -15,6 +15,7 @@ pub mod constants;
 mod filerefs;
 pub mod objects;
 pub mod protocol;
+mod protocol_impl;
 mod schannels;
 mod streams;
 mod windows;

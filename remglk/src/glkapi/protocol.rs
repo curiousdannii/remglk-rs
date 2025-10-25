@@ -13,9 +13,10 @@ use std::collections::HashMap;
 use std::ops::Not;
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use super::*;
+use protocol_impl::*;
 
 /* The GlkOte protocol has two parts:
  * 1. GlkOte sends events to GlkApi/RemGlk
@@ -256,150 +257,6 @@ pub struct NormalisedMetrics {
     pub width: f64,
 }
 
-impl Default for NormalisedMetrics {
-    fn default() -> Self {
-        NormalisedMetrics {
-            buffercharheight: 1.0,
-            buffercharwidth: 1.0,
-            buffermarginx: 0.0,
-            buffermarginy: 0.0,
-            graphicsmarginx: 0.0,
-            graphicsmarginy: 0.0,
-            gridcharheight: 1.0,
-            gridcharwidth: 1.0,
-            gridmarginx: 0.0,
-            gridmarginy: 0.0,
-            height: 50.0,
-            inspacingx: 0.0,
-            inspacingy: 0.0,
-            width: 80.0,
-        }
-    }
-}
-
-impl NormalisedMetrics {
-    fn apply_unnormalised(&mut self, metrics: &Metrics) {
-        if let Some(val) = metrics.buffercharheight {
-            self.buffercharheight = val;
-        }
-        if let Some(val) = metrics.buffercharwidth {
-            self.buffercharwidth = val;
-        }
-        if let Some(val) = metrics.buffermarginx {
-            self.buffermarginx = val;
-        }
-        if let Some(val) = metrics.buffermarginy {
-            self.buffermarginy = val;
-        }
-        if let Some(val) = metrics.graphicsmarginx {
-            self.graphicsmarginx = val;
-        }
-        if let Some(val) = metrics.graphicsmarginy {
-            self.graphicsmarginy = val;
-        }
-        if let Some(val) = metrics.gridcharheight {
-            self.gridcharheight = val;
-        }
-        if let Some(val) = metrics.gridcharwidth {
-            self.gridcharwidth = val;
-        }
-        if let Some(val) = metrics.gridmarginx {
-            self.gridmarginx = val;
-        }
-        if let Some(val) = metrics.gridmarginy {
-            self.gridmarginy = val;
-        }
-        self.height = metrics.height;
-        if let Some(val) = metrics.inspacingx {
-            self.inspacingx = val;
-        }
-        if let Some(val) = metrics.inspacingy {
-            self.inspacingy = val;
-        }
-        self.width = metrics.width;
-    }
-}
-
-impl From<Metrics> for GlkResult<'static, NormalisedMetrics> {
-    fn from(metrics: Metrics) -> Self {
-        if let Some(val) = metrics.outspacing {
-            if val > 0.0 {
-                return Err(OutspacingMustBeZero);
-            }
-        }
-        if let Some(val) = metrics.outspacingx {
-            if val > 0.0 {
-                return Err(OutspacingMustBeZero);
-            }
-        }
-        if let Some(val) = metrics.outspacingy {
-            if val > 0.0 {
-                return Err(OutspacingMustBeZero);
-            }
-        }
-
-        let mut normalised_metrics = NormalisedMetrics::default();
-
-        if let Some(val) = metrics.charheight {
-            normalised_metrics.buffercharheight = val;
-            normalised_metrics.gridcharheight = val;
-        }
-        if let Some(val) = metrics.charwidth {
-            normalised_metrics.buffercharwidth = val;
-            normalised_metrics.gridcharwidth = val;
-        }
-
-        if let Some(val) = metrics.margin {
-            normalised_metrics.buffermarginx = val;
-            normalised_metrics.buffermarginy = val;
-            normalised_metrics.graphicsmarginx = val;
-            normalised_metrics.graphicsmarginy = val;
-            normalised_metrics.gridmarginx = val;
-            normalised_metrics.gridmarginy = val;
-        }
-        if let Some(val) = metrics.buffermargin {
-            normalised_metrics.buffermarginx = val;
-            normalised_metrics.buffermarginy = val;
-        }
-        if let Some(val) = metrics.graphicsmargin {
-            normalised_metrics.graphicsmarginx = val;
-            normalised_metrics.graphicsmarginy = val;
-        }
-        if let Some(val) = metrics.gridmargin {
-            normalised_metrics.gridmarginx = val;
-            normalised_metrics.gridmarginy = val;
-        }
-        if let Some(val) = metrics.marginx {
-            normalised_metrics.buffermarginx = val;
-            normalised_metrics.graphicsmarginx = val;
-            normalised_metrics.gridmarginx = val;
-        }
-        if let Some(val) = metrics.marginy {
-            normalised_metrics.buffermarginy = val;
-            normalised_metrics.graphicsmarginy = val;
-            normalised_metrics.gridmarginy = val;
-        }
-
-        if let Some(val) = metrics.spacing {
-            normalised_metrics.inspacingx = val;
-            normalised_metrics.inspacingy = val;
-        }
-        if let Some(val) = metrics.inspacing {
-            normalised_metrics.inspacingx = val;
-            normalised_metrics.inspacingy = val;
-        }
-        if let Some(val) = metrics.spacingx {
-            normalised_metrics.inspacingx = val;
-        }
-        if let Some(val) = metrics.spacingy {
-            normalised_metrics.inspacingy = val;
-        }
-
-        normalised_metrics.apply_unnormalised(&metrics);
-        Ok(normalised_metrics)
-    }
-}
-
 /** GlkApi/RemGlk->GlkOte content updates */
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -483,15 +340,6 @@ pub struct TextualWindowUpdate {
     pub fg: Option<String>,
 }
 
-impl TextualWindowUpdate {
-    pub fn new(id: u32) -> Self {
-        TextualWindowUpdate {
-            id,
-            ..Default::default()
-        }
-    }
-}
-
 /** Buffer window content update */
 #[derive(Serialize)]
 pub struct BufferWindowContentUpdate {
@@ -514,15 +362,6 @@ pub struct BufferWindowParagraphUpdate {
     /** Paragraph breaks after floating images */
     #[serde(skip_serializing_if = "Not::not")]
     pub flowbreak: bool,
-}
-
-impl BufferWindowParagraphUpdate {
-    pub fn new(textrun: TextRun) -> Self {
-        BufferWindowParagraphUpdate {
-            content: vec![LineData::TextRun(textrun)],
-            ..Default::default()
-        }
-    }
 }
 
 /** Graphics window content update */
@@ -642,36 +481,6 @@ pub struct TextRun {
     pub text: String,
 }
 
-impl TextRun {
-    pub fn new(text: &str) -> Self {
-        TextRun {
-            text: text.to_string(),
-            ..Default::default()
-        }
-    }
-
-    /** Clone a text run, sharing CSS */
-    pub fn clone(&self, text: &str) -> Self {
-        TextRun {
-            css_styles: self.css_styles.as_ref().cloned(),
-            hyperlink: self.hyperlink,
-            style: self.style,
-            text: text.to_string(),
-        }
-    }
-}
-
-// Two TextRuns are considered equal if everything except their text matches...
-impl PartialEq for TextRun {
-    fn eq(&self, other: &Self) -> bool {
-        self.hyperlink == other.hyperlink && self.style == other.style && match (&self.css_styles, &other.css_styles) {
-            (Some(self_styles), Some(other_styles)) => Arc::ptr_eq(self_styles, other_styles),
-            (None, None) => true,
-            _ => false,
-        }
-    }
-}
-
 /** Windows with active input */
 #[derive(Default, Serialize)]
 pub struct InputUpdate {
@@ -705,15 +514,6 @@ pub struct InputUpdate {
     /** Grid window coordinate Y */
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ypos: Option<u32>,
-}
-
-impl InputUpdate {
-    pub fn new(id: u32) -> Self {
-        InputUpdate {
-            id,
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(Default, Serialize)]
@@ -772,10 +572,6 @@ pub struct SpecialInput {
     #[serde(rename = "type")]
     #[serde(serialize_with = "emit_fileref_prompt")]
     pub specialtype: (),
-}
-
-fn emit_fileref_prompt<S: Serializer>(_: &(), s: S) -> Result<S::Ok, S::Error> {
-    s.serialize_str("fileref_prompt")
 }
 
 /** Updates to window (new windows, or changes to their arrangements) */
