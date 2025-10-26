@@ -3,7 +3,7 @@
 Glk Streams
 ===========
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -24,10 +24,8 @@ pub type GlkStreamWeak = GlkObjectWeak<Stream>;
 
 #[enum_dispatch]
 pub enum Stream {
-    ArrayBackedU8(ArrayBackedStream<u8>),
-    ArrayBackedU32(ArrayBackedStream<u32>),
-    FileStreamU8(FileStream<u8>),
-    FileStreamU32(FileStream<u32>),
+    ArrayBacked(ArrayBackedStream),
+    FileStream(FileStream),
     Null(NullStream),
     Window(WindowStream),
 }
@@ -73,9 +71,8 @@ pub trait StreamOperations {
 /** A fixed-length stream based on a buffer (a boxed slice).
     ArrayBackedStreams are used for memory and resource streams, and are the basis of file streams.
 */
-#[derive(Default)]
-pub struct ArrayBackedStream<T> {
-    buf: Box<[T]>,
+pub struct ArrayBackedStream {
+    buf: GlkOwnedBuffer,
     /** Whether we need to check if we should expand the active buffer region before writing */
     expandable: bool,
     fmode: FileMode,
@@ -91,8 +88,8 @@ pub struct ArrayBackedStream<T> {
     write_count: usize,
 }
 
-impl<T> ArrayBackedStream<T> {
-    pub fn new(buf: Box<[T]>, fmode: FileMode, fileref: Option<&GlkFileRef>) -> ArrayBackedStream<T> {
+impl ArrayBackedStream {
+    pub fn new(buf: GlkOwnedBuffer, fmode: FileMode, fileref: Option<&GlkFileRef>) -> ArrayBackedStream {
         let buf_len = buf.len();
         let path = fileref.map(|fileref| {
             let fileref = lock!(fileref);
@@ -120,13 +117,12 @@ impl<T> ArrayBackedStream<T> {
         }
     }
 
-    pub fn take_buffer(&mut self) -> Box<[T]> {
+    pub fn take_buffer(&mut self) -> GlkOwnedBuffer {
         mem::take(&mut self.buf)
     }
 }
 
-impl<T> StreamOperations for ArrayBackedStream<T>
-where Box<[T]>: GlkArray {
+impl StreamOperations for ArrayBackedStream {
     fn close(&self) -> StreamResultCounts {
         StreamResultCounts {
             read_count: self.read_count as u32,
@@ -244,17 +240,15 @@ where Box<[T]>: GlkArray {
 /** Writable FileStreams are based on array backed streams, but can grow in length.
     Read-only file streams just use an ArrayBackedStream directly.
 */
-#[derive(Default)]
-pub struct FileStream<T> {
+pub struct FileStream {
     binary: bool,
     pub changed: bool,
     pub path: String,
-    str: ArrayBackedStream<T>,
+    str: ArrayBackedStream,
 }
 
-impl<T> FileStream<T>
-where T: Clone + Default, Box<[T]>: GlkArray {
-    pub fn new(fileref_glkobj: &GlkFileRef, buf: Box<[T]>, fmode: FileMode) -> FileStream<T> {
+impl FileStream {
+    pub fn new(fileref_glkobj: &GlkFileRef, buf: GlkOwnedBuffer, fmode: FileMode) -> FileStream {
         debug_assert!(fmode != FileMode::Read);
         let str = ArrayBackedStream::new(buf, fmode, Some(fileref_glkobj));
         let fileref = lock!(fileref_glkobj);
@@ -272,9 +266,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
         if end_pos > max_len {
             // Expand the vec by at least 100
             max_len += max(end_pos - max_len, 100);
-            let mut buf = mem::take(&mut self.str.buf).into_vec();
-            buf.resize(max_len, T::default());
-            self.str.buf = buf.into_boxed_slice();
+            self.str.buf.resize(max_len);
         }
         self.str.expand(increase);
     }
@@ -284,8 +276,7 @@ where T: Clone + Default, Box<[T]>: GlkArray {
     }
 }
 
-impl<T> StreamOperations for FileStream<T>
-where T: Clone + Default, Box<[T]>: GlkArray {
+impl StreamOperations for FileStream {
     fn close(&self) -> StreamResultCounts {
         self.str.close()
     }

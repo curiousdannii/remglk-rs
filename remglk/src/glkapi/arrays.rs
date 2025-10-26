@@ -3,13 +3,15 @@
 Array helpers
 =============
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
 */
 
 use std::fmt::Display;
+
+use enum_dispatch::enum_dispatch;
 
 use super::*;
 
@@ -26,6 +28,7 @@ pub enum GlkBufferMut<'a> {
 }
 
 /** An owned buffer that won't be known when the owning object is created, such as window text input buffers */
+#[enum_dispatch]
 pub enum GlkOwnedBuffer {
     U8(Box<[u8]>),
     U32(Box<[u32]>),
@@ -76,6 +79,21 @@ impl GlkOwnedBuffer {
         }
     }
 
+    pub fn resize(&mut self, len: usize) {
+        match self {
+            GlkOwnedBuffer::U8(buf) => {
+                let mut vec = mem::take(buf).into_vec();
+                vec.resize(len, u8::default());
+                let _ = mem::replace(buf, vec.into_boxed_slice());
+            },
+            GlkOwnedBuffer::U32(buf) => {
+                let mut vec = mem::take(buf).into_vec();
+                vec.resize(len, u32::default());
+                let _ = mem::replace(buf, vec.into_boxed_slice());
+            },
+        }
+    }
+
     pub fn to_string(&self, len: usize) -> String {
         match self {
             GlkOwnedBuffer::U8(buf) => u8slice_to_string(&buf[..len]),
@@ -90,6 +108,12 @@ impl<'a> Display for GlkBuffer<'a> {
             GlkBuffer::U8(buf) => f.write_str(&u8slice_to_string(buf)),
             GlkBuffer::U32(buf) => f.write_str(&u32slice_to_string(buf)),
         }
+    }
+}
+
+impl Default for GlkOwnedBuffer {
+    fn default() -> Self {
+        GlkOwnedBuffer::U8(Box::new([]))
     }
 }
 
@@ -136,6 +160,7 @@ pub fn set_buffer(src: &GlkBuffer, src_offset: usize, dest: &mut GlkBufferMut, d
 }
 
 /** Helper functions for Glk arrays (meaning boxed slices) */
+#[enum_dispatch(GlkOwnedBuffer)]
 pub trait GlkArray {
     fn copy_from_buffer(&mut self, self_offset: usize, buf: &GlkBuffer, buf_offset: usize, len: usize);
     fn copy_to_buffer(&self, self_offset: usize, buf: &mut GlkBufferMut, buf_offset: usize, len: usize);

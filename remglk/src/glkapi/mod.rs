@@ -647,8 +647,7 @@ where S: Default + GlkSystem {
 
         let disprock = str.array_disprock;
         match str.deref_mut().deref_mut() {
-            Stream::ArrayBackedU8(str) => self.unretain_array(GlkOwnedBuffer::U8(str.take_buffer()), disprock),
-            Stream::ArrayBackedU32(str) => self.unretain_array(GlkOwnedBuffer::U32(str.take_buffer()), disprock),
+            Stream::ArrayBacked(str) => self.unretain_array(str.take_buffer(), disprock),
             _ => {},
         };
 
@@ -688,7 +687,7 @@ where S: Default + GlkSystem {
             }),
             None => None,
         };
-        self.create_memory_stream(buf, fmode, rock, disprock)
+        self.create_memory_stream(buf.map(|buf| GlkOwnedBuffer::U8(buf)), fmode, rock, disprock)
     }
 
     pub fn glk_stream_open_memory_uni(&mut self, buf: Option<Box<[u32]>>, fmode: FileMode, rock: u32) -> GlkResult<'_, GlkStream> {
@@ -698,7 +697,7 @@ where S: Default + GlkSystem {
             }),
             None => None,
         };
-        self.create_memory_stream(buf, fmode, rock, disprock)
+        self.create_memory_stream(buf.map(|buf| GlkOwnedBuffer::U32(buf)), fmode, rock, disprock)
     }
 
     pub fn glk_stream_open_resource(&mut self, filenum: u32, rock: u32) -> GlkResult<'_, Option<GlkStream>> {
@@ -1481,13 +1480,12 @@ where S: Default + GlkSystem {
         Ok(Some(str))
     }
 
-    fn create_memory_stream<T>(&mut self, buf: Option<Box<[T]>>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<'_, GlkStream>
-    where Stream: From<ArrayBackedStream<T>> {
+    fn create_memory_stream(&mut self, buf: Option<GlkOwnedBuffer>, fmode: FileMode, rock: u32, disprock: Option<DispatchRock>) -> GlkResult<'_, GlkStream> {
         if fmode == FileMode::WriteAppend {
             return Err(IllegalFilemode);
         }
         let str = GlkObject::new(match buf {
-            Some(buf) => ArrayBackedStream::<T>::new(buf, fmode, None).into(),
+            Some(buf) => ArrayBackedStream::new(buf, fmode, None).into(),
             None => NullStream::default().into(),
         });
         if disprock.is_some() {
@@ -1957,16 +1955,10 @@ fn create_stream_from_buffer(buf: Box<[u8]>, binary: bool, mode: FileMode, unico
     };
 
     let str = GlkObject::new(if mode == FileMode::Read {
-        match data {
-            GlkOwnedBuffer::U8(buf) => ArrayBackedStream::<u8>::new(buf, mode, fileref).into(),
-            GlkOwnedBuffer::U32(buf) => ArrayBackedStream::<u32>::new(buf, mode, fileref).into(),
-        }
+        ArrayBackedStream::new(data, mode, fileref).into()
     }
     else {
-        match data {
-            GlkOwnedBuffer::U8(buf) => FileStream::<u8>::new(fileref.unwrap(), buf, mode).into(),
-            GlkOwnedBuffer::U32(buf) => FileStream::<u32>::new(fileref.unwrap(), buf, mode).into(),
-        }
+        FileStream::new(fileref.unwrap(), data, mode).into()
     });
     Ok(str)
 }
@@ -2037,19 +2029,16 @@ fn normalise_window_dimension(val: f64) -> usize {
 }
 
 fn stream_to_file_buffer(str: &mut Stream) -> Option<(&str, Box<[u8]>)> {
-    fn inner_processor<T>(str: &mut FileStream<T>) -> Option<(&str, Box<[u8]>)>
-    where T: Clone + Default, Box<[T]>: GlkArray {
-        if str.changed {
-            str.changed = false;
-            Some((&str.path, str.to_file_buffer()))
-        }
-        else {
-            None
-        }
-    }
     match str {
-        Stream::FileStreamU8(str) => inner_processor(str),
-        Stream::FileStreamU32(str) => inner_processor(str),
+        Stream::FileStream(str) => {
+            if str.changed {
+                str.changed = false;
+                Some((&str.path, str.to_file_buffer()))
+            }
+            else {
+                None
+            }
+        },
         _ => None,
     }
 }
