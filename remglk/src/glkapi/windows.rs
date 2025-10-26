@@ -3,7 +3,7 @@
 Glk Windows
 ===========
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -38,9 +38,9 @@ pub struct Window {
 #[enum_dispatch]
 pub enum WindowData {
     Blank(BlankWindow),
-    Buffer(TextWindow<BufferWindow>),
+    Buffer(BufferWindow),
     Graphics(GraphicsWindow),
-    Grid(TextWindow<GridWindow>),
+    Grid(GridWindow),
     Pair(PairWindow),
 }
 
@@ -157,69 +157,6 @@ pub struct BlankWindow {}
 impl WindowOperations for BlankWindow {}
 
 #[derive(Default)]
-pub struct TextWindow<T>
-where T: Default + WindowOperations {
-    pub data: T,
-    pub line_input_buffer: Option<GlkOwnedBuffer>,
-    pub request_echo_line_input: bool,
-    sent_stylehints: bool,
-    stylehints: WindowStyles,
-}
-
-impl<T> TextWindow<T>
-where T: Default + WindowOperations {
-    pub fn new(stylehints: &WindowStyles) -> Self {
-        TextWindow::<T> {
-            request_echo_line_input: true,
-            stylehints: stylehints.clone(),
-            ..Default::default()
-        }
-    }
-}
-
-impl<T> WindowOperations for TextWindow<T>
-where T: Default + WindowOperations {
-    fn clear(&mut self) -> Option<u32> {
-        self.data.clear()
-    }
-
-    fn put_string(&mut self, str: &str, style: Option<u32>) {
-        self.data.put_string(str, style);
-    }
-
-    fn set_colours(&mut self, fg: u32, bg: u32) {
-        self.data.set_colours(fg, bg);
-    }
-
-    fn set_css(&mut self, name: &str, val: Option<&CSSValue>) {
-        self.data.set_css(name, val);
-    }
-
-    fn set_hyperlink(&mut self, val: u32) {
-        self.data.set_hyperlink(val);
-    }
-
-    fn set_style(&mut self, val: u32) {
-        self.data.set_style(val);
-    }
-
-    fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
-        if !self.sent_stylehints && !self.stylehints.is_empty() {
-            self.sent_stylehints = true;
-            update.size.styles = Some(self.stylehints.clone());
-        }
-
-        // Fill in the maxlen as we didn't have access to it in Window.update
-        if let Some(buf) = &self.line_input_buffer {
-            if let Some(TextInputType::Line) = update.input.text_input_type {
-                update.input.maxlen = Some(buf.len() as u32);
-            }
-        }
-
-        self.data.update(update)
-    }
-}
-
 pub struct BufferWindow {
     cleared: bool,
     cleared_bg: Option<u32>,
@@ -228,9 +165,22 @@ pub struct BufferWindow {
     pub echo_line_input: bool,
     last_bg: Option<u32>,
     last_fg: Option<u32>,
+    pub line_input_buffer: Option<GlkOwnedBuffer>,
+    sent_stylehints: bool,
+    stylehints: WindowStyles,
 }
 
 impl BufferWindow {
+    pub fn new(stylehints: &WindowStyles) -> Self {
+        BufferWindow {
+            cleared: true,
+            content: vec![BufferWindowParagraphUpdate::new(TextRun::default())],
+            echo_line_input: true,
+            stylehints: stylehints.clone(),
+            ..Default::default()
+        }
+    }
+
     fn clear_content(&mut self, new: Option<&TextRun>) {
         let new = new.unwrap_or_else(|| self.last_textrun()).clone("");
         self.content = vec![BufferWindowParagraphUpdate {
@@ -326,6 +276,19 @@ impl WindowOperations for BufferWindow {
     }
 
     fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
+        // Send stylehints once
+        if !self.sent_stylehints && !self.stylehints.is_empty() {
+            self.sent_stylehints = true;
+            update.size.styles = Some(self.stylehints.clone());
+        }
+
+        // Fill in the maxlen as we didn't have access to it in Window.update
+        if let Some(buf) = &self.line_input_buffer {
+            if let Some(TextInputType::Line) = update.input.text_input_type {
+                update.input.maxlen = Some(buf.len() as u32);
+            }
+        }
+
         // Clone the textrun now because the css_style could get deleted in cleanup_paragraph_styles
         let last_textrun = self.last_textrun().clone("");
 
@@ -353,20 +316,6 @@ impl WindowOperations for BufferWindow {
 
         self.clear_content(Some(&last_textrun));
         update
-    }
-}
-
-impl Default for BufferWindow {
-    fn default() -> Self {
-        BufferWindow {
-            cleared: true,
-            cleared_bg: None,
-            cleared_fg: None,
-            content: vec![BufferWindowParagraphUpdate::new(TextRun::default())],
-            echo_line_input: true,
-            last_bg: None,
-            last_fg: None,
-        }
     }
 }
 
@@ -411,7 +360,10 @@ pub struct GridWindow {
     pub height: usize,
     last_bg: Option<u32>,
     last_fg: Option<u32>,
+    pub line_input_buffer: Option<GlkOwnedBuffer>,
     lines: Vec<GridLine>,
+    sent_stylehints: bool,
+    stylehints: WindowStyles,
     pub width: usize,
     pub x: usize,
     pub y: usize,
@@ -424,6 +376,13 @@ struct GridLine {
 }
 
 impl GridWindow {
+    pub fn new(stylehints: &WindowStyles) -> Self {
+        GridWindow {
+            stylehints: stylehints.clone(),
+            ..Default::default()
+        }
+    }
+
     /** Fit the cursor within the window; returns true if the cursor is actually outside the window */
     fn fit_cursor(&mut self) -> bool {
         if self.x >= self.width {
@@ -519,6 +478,19 @@ impl WindowOperations for GridWindow {
     }
 
     fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
+        // Send stylehints once
+        if !self.sent_stylehints && !self.stylehints.is_empty() {
+            self.sent_stylehints = true;
+            update.size.styles = Some(self.stylehints.clone());
+        }
+
+        // Fill in the maxlen as we didn't have access to it in Window.update
+        if let Some(buf) = &self.line_input_buffer {
+            if let Some(TextInputType::Line) = update.input.text_input_type {
+                update.input.maxlen = Some(buf.len() as u32);
+            }
+        }
+
         if self.lines.iter().any(|line| line.changed) {
             let mut grid_content = GridWindowContentUpdate {
                 base: TextualWindowUpdate::new(update.id),

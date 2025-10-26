@@ -584,7 +584,7 @@ where S: Default + GlkSystem {
     pub fn glk_set_echo_line_event(win: &GlkWindow, val: u32) {
         let mut win = lock!(win);
         if let WindowData::Buffer(data) = &mut win.data {
-            data.data.echo_line_input = val > 0;
+            data.echo_line_input = val > 0;
         }
     }
 
@@ -906,7 +906,7 @@ where S: Default + GlkSystem {
     pub fn glk_window_flow_break(win: &GlkWindow) {
         let mut win = lock!(win);
         if let WindowData::Buffer(data) = &mut win.data {
-            data.data.set_flow_break();
+            data.set_flow_break();
         }
     }
 
@@ -967,7 +967,7 @@ where S: Default + GlkSystem {
                 normalise_window_dimension((win.wbox.right - win.wbox.left - self.metrics.buffermarginx) / self.metrics.buffercharwidth),
             ),
             WindowData::Graphics(data) => (data.height, data.width),
-            WindowData::Grid(data) => (data.data.height, data.data.width),
+            WindowData::Grid(data) => (data.height, data.width),
             _ => (0, 0),
         }
     }
@@ -987,8 +987,8 @@ where S: Default + GlkSystem {
     pub fn glk_window_move_cursor(win: &GlkWindow, xpos: usize, ypos: usize) -> GlkResult<'_, ()> {
         let mut win = lock!(win);
         if let WindowData::Grid(data) = &mut win.data {
-            data.data.x = xpos;
-            data.data.y = ypos;
+            data.x = xpos;
+            data.y = ypos;
             Ok(())
         }
         else {
@@ -1027,10 +1027,10 @@ where S: Default + GlkSystem {
             WindowType::Blank => BlankWindow {}.into(),
             WindowType::Buffer => {
                 self.buffer_window_count += 1;
-                TextWindow::<BufferWindow>::new(&self.stylehints_buffer).into()
+                BufferWindow::new(&self.stylehints_buffer).into()
             },
             WindowType::Graphics => GraphicsWindow::default().into(),
-            WindowType::Grid => TextWindow::<GridWindow>::new(&self.stylehints_grid).into(),
+            WindowType::Grid => GridWindow::new(&self.stylehints_grid).into(),
             _ => {return Err(InvalidWindowType);}
         };
         // TODO: try new_cyclic
@@ -1522,7 +1522,7 @@ where S: Default + GlkSystem {
         let mut win = lock!(win);
         match &mut win.data {
             WindowData::Buffer(data) => {
-                data.data.put_image(BufferWindowImage {
+                data.put_image(BufferWindowImage {
                     alignment: image_alignment(val1),
                     alttext: None,
                     height,
@@ -1559,8 +1559,8 @@ where S: Default + GlkSystem {
     fn handle_line_input(&mut self, win_glkobj: &GlkWindow, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<'_, GlkEvent> {
         let mut win = lock!(win_glkobj);
         let (request_echo_line_input, mut line_input_buffer) = match &mut win.data {
-            WindowData::Buffer(data) => (data.request_echo_line_input, data.line_input_buffer.take().unwrap()),
-            WindowData::Grid(data) => (data.request_echo_line_input, data.line_input_buffer.take().unwrap()),
+            WindowData::Buffer(data) => (data.echo_line_input, data.line_input_buffer.take().unwrap()),
+            WindowData::Grid(data) => (true, data.line_input_buffer.take().unwrap()),
             _ => unreachable!(),
         };
 
@@ -1611,7 +1611,7 @@ where S: Default + GlkSystem {
             WindowData::Grid(win) => {
                 let height = normalise_window_dimension((boxheight - self.metrics.gridmarginy) / self.metrics.gridcharheight);
                 let width = normalise_window_dimension((boxwidth - self.metrics.gridmarginx) / self.metrics.gridcharwidth);
-                win.data.update_size(height, width);
+                win.update_size(height, width);
             },
             WindowData::Pair(win) => {
                 let (min, max, mut splitwidth) = if win.vertical {
@@ -1774,7 +1774,6 @@ where S: Default + GlkSystem {
         match win.data {
             WindowData::Buffer(ref mut data) => {
                 data.line_input_buffer = Some(buf);
-                data.request_echo_line_input = data.data.echo_line_input;
             },
             WindowData::Grid(ref mut data) => {
                 data.line_input_buffer = Some(buf);
