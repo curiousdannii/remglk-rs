@@ -81,7 +81,7 @@ impl Window {
             input_update.text_input_type = self.input.text_input_type;
             if text_input_type == TextInputType::Line {
                 input_update.initial = self.input.initial.take();
-                //input_update.terminators = self.input.terminators.clone();
+                input_update.terminators = self.input.terminators.clone();
             }
         }
 
