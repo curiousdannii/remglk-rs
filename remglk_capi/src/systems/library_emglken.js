@@ -70,6 +70,11 @@ const EMGLKEN_JS = {
         })
     },
 
+    emglken_file_delete_sync(path_ptr, path_len) {
+        const path = UTF8ToString(path_ptr, path_len)
+        Dialog.delete(path)
+    },
+
     emglken_file_exists__async: true,
     emglken_file_exists(path_ptr, path_len) {
         return Asyncify.handleAsync(async () => {
@@ -84,6 +89,10 @@ const EMGLKEN_JS = {
             await Dialog.write(emglken_files)
             emglken_files = {}
         })
+    },
+
+    emglken_file_flush_sync() {
+        Dialog.write(emglken_files)
     },
 
     emglken_file_read__async: true,

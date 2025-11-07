@@ -189,7 +189,7 @@ where S: Default + GlkSystem {
         self.exited = true;
         self.delete_temp_files();
         let update = self.update();
-        self.system.send_glkote_update(update);
+        self.system.send_glkote_update(update, true);
     }
 
     pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
@@ -208,7 +208,7 @@ where S: Default + GlkSystem {
             ..Default::default()
         });
         let update = self.update();
-        self.system.send_glkote_update(update);
+        self.system.send_glkote_update(update, false);
         let event = self.system.get_glkote_event();
         if let Some(event) = event {
             let res = self.handle_event(event)?;
@@ -550,7 +550,7 @@ where S: Default + GlkSystem {
 
     pub fn glk_select(&mut self) -> GlkResult<'_, GlkEvent> {
         let update = self.update();
-        self.system.send_glkote_update(update);
+        self.system.send_glkote_update(update, false);
         let event = self.system.get_glkote_event();
         if let Some(event) = event {
             self.handle_event(event)
@@ -1432,7 +1432,7 @@ where S: Default + GlkSystem {
 
         // TODO: Autorestore state
 
-        self.flush_file_streams();
+        self.write_file_streams();
 
         Update::State(state)
     }
@@ -1512,7 +1512,7 @@ where S: Default + GlkSystem {
     fn delete_temp_files(&mut self) {
         for file_num in 0..self.tempfile_counter {
             let path = self.temp_file_path(file_num);
-            self.system.file_delete(&path);
+            self.system.file_delete_sync(&path);
         }
     }
 
@@ -1542,16 +1542,6 @@ where S: Default + GlkSystem {
             },
             _ => 0,
         }
-    }
-
-    fn flush_file_streams(&mut self) {
-        for str in self.streams.iter() {
-            let mut str = lock!(str);
-            if let Some((fileref, buf)) = stream_to_file_buffer(&mut str) {
-                self.system.file_write_buffer(fileref, buf);
-            }
-        }
-        self.system.flush_writeable_files();
     }
 
     fn handle_line_input(&mut self, win_glkobj: &GlkWindow, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<'_, GlkEvent> {
@@ -1811,6 +1801,15 @@ where S: Default + GlkSystem {
                 }
             },
         };
+    }
+
+    fn write_file_streams(&mut self) {
+        for str in self.streams.iter() {
+            let mut str = lock!(str);
+            if let Some((fileref, buf)) = stream_to_file_buffer(&mut str) {
+                self.system.file_write_buffer(fileref, buf);
+            }
+        }
     }
 }
 

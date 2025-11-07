@@ -41,6 +41,11 @@ impl GlkSystem for StandardSystem {
         let _ = fs::remove_file(Path::new(path));
     }
 
+    fn file_delete_sync(&mut self, path: &str) {
+        self.cache.remove(path);
+        let _ = fs::remove_file(Path::new(path));
+    }
+
     fn file_exists(&mut self, path: &str) -> bool {
         self.cache.contains_key(path) || Path::new(path).exists()
     }
@@ -59,13 +64,6 @@ impl GlkSystem for StandardSystem {
         self.cache.insert(path.to_string(), buf);
     }
 
-    fn flush_writeable_files(&mut self) {
-        for (filename, buf) in self.cache.drain() {
-            let _ = fs::write(filename, buf);
-        }
-        self.cache.shrink_to(4);
-    }
-
     fn get_glkote_event(&mut self) -> Option<Event> {
         // Read a line from stdin
         let stdin = io::stdin();
@@ -80,7 +78,13 @@ impl GlkSystem for StandardSystem {
         None
     }
 
-    fn send_glkote_update(&mut self, update: Update) {
+    fn send_glkote_update(&mut self, update: Update, _: bool) {
+        // Flush files
+        for (filename, buf) in self.cache.drain() {
+            let _ = fs::write(filename, buf);
+        }
+        self.cache.shrink_to(4);
+
         // Send the update
         let output = serde_json::to_string(&update).unwrap();
         println!("{}", output);

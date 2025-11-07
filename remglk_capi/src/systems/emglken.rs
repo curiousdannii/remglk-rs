@@ -32,8 +32,10 @@ extern "C" {
     fn emglken_buffer_to_title_case(buffer_ptr: *mut u32, buffer_len: usize, initlen: usize, lowerrest: bool) -> usize;
     fn emglken_buffer_to_upper_case(buffer_ptr: *mut u32, buffer_len: usize, initlen: usize) -> usize;
     fn emglken_file_delete(path_ptr: *const u8, path_len: usize);
+    fn emglken_file_delete_sync(path_ptr: *const u8, path_len: usize);
     fn emglken_file_exists(path_ptr: *const u8, path_len: usize) -> bool;
     fn emglken_file_flush();
+    fn emglken_file_flush_sync();
     fn emglken_file_read(path_ptr: *const u8, path_len: usize, buffer: *mut EmglkenBuffer) -> bool;
     fn emglken_file_write_buffer(path_ptr: *const u8, path_len: usize, buf_ptr: *const u8, buf_len: usize);
     fn emglken_get_dirs(buffer: *mut EmglkenBuffer);
@@ -58,6 +60,10 @@ impl GlkSystem for EmglkenSystem {
     fn file_delete(&mut self, path: &str) {
         self.cache.remove(path);
         unsafe {emglken_file_delete(path.as_ptr(), path.len())};
+    }
+
+    fn file_delete_sync(&mut self, path: &str) {
+        unsafe {emglken_file_delete_sync(path.as_ptr(), path.len())};
     }
 
     fn file_exists(&mut self, path: &str) -> bool {
@@ -85,25 +91,30 @@ impl GlkSystem for EmglkenSystem {
         self.cache.insert(path.to_string(), buf);
     }
 
-    fn flush_writeable_files(&mut self) {
-        for (path, buf) in &self.cache {
-            unsafe {emglken_file_write_buffer(path.as_ptr(), path.len(), buf.as_ptr(), buf.len())};
-        }
-        // Signal we've written all the files
-        unsafe {emglken_file_flush()};
-        self.cache.clear();
-        self.cache.shrink_to(4);
-    }
-
     fn get_glkote_event(&mut self) -> Option<Event> {
         let mut buf: MaybeUninit<EmglkenBuffer> = MaybeUninit::uninit();
         unsafe {emglken_get_glkote_event(buf.as_mut_ptr())};
         Some(buffer_to_protocol_struct(buf))
     }
 
-    fn send_glkote_update(&mut self, update: Update) {
+    #[inline(always)]
+    fn send_glkote_update(&mut self, update: Update, sync: bool) {
+        // Flush files
+        for (path, buf) in &self.cache {
+            unsafe {emglken_file_write_buffer(path.as_ptr(), path.len(), buf.as_ptr(), buf.len())};
+        }
+        // Signal we've written all the files
+        if sync {
+            unsafe {emglken_file_flush_sync()};
+        }
+        else {
+            unsafe {emglken_file_flush()};
+        }
+        self.cache.clear();
+        self.cache.shrink_to(4);
+
         // Send the update
-        let json = serde_json::to_string(&update).unwrap();
+        let json = update_to_string(&update);
         unsafe {emglken_send_glkote_update(json.as_ptr(), json.len())};
     }
 
@@ -193,4 +204,9 @@ fn buffer_to_boxed_slice(buffer: MaybeUninit<EmglkenBuffer>) -> Box<[u8]> {
 fn buffer_to_protocol_struct<T: DeserializeOwned>(buffer: MaybeUninit<EmglkenBuffer>) -> T {
     let data = buffer_to_boxed_slice(buffer);
     serde_json::from_slice(&data).unwrap()
+}
+
+#[inline(never)]
+fn update_to_string(update: &Update) -> String {
+    serde_json::to_string(&update).unwrap()
 }
