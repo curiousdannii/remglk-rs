@@ -92,7 +92,6 @@ impl ArrayBackedStream {
     pub fn new(buf: GlkOwnedBuffer, fmode: FileMode, fileref: Option<&GlkFileRef>) -> ArrayBackedStream {
         let buf_len = buf.len();
         let path = fileref.map(|fileref| {
-            let fileref = lock!(fileref);
             CString::new(&fileref.path[..]).unwrap()
         });
         ArrayBackedStream {
@@ -248,10 +247,9 @@ pub struct FileStream {
 }
 
 impl FileStream {
-    pub fn new(fileref_glkobj: &GlkFileRef, buf: GlkOwnedBuffer, fmode: FileMode) -> FileStream {
+    pub fn new(fileref: &GlkFileRef, buf: GlkOwnedBuffer, fmode: FileMode) -> FileStream {
         debug_assert!(fmode != FileMode::Read);
-        let str = ArrayBackedStream::new(buf, fmode, Some(fileref_glkobj));
-        let fileref = lock!(fileref_glkobj);
+        let str = ArrayBackedStream::new(buf, fmode, Some(fileref));
         FileStream {
             binary: fileref.binary,
             changed: false,

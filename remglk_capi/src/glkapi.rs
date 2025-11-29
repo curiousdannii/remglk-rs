@@ -24,8 +24,8 @@ type BufferMutU8Ptr = *mut u8;
 type BufferMutU32Ptr = *mut u32;
 type CStringU8Ptr = *const i8;
 type CStringU32Ptr = *const u32;
-pub type FileRefPtr = *const Mutex<GlkObjectMetadata<FileRef>>;
-pub type SchannelPtr = *const Mutex<GlkObjectMetadata<SoundChannel>>;
+pub type FileRefPtr = *const Mutex<GlkObjectMetadata<GlkFileRef>>;
+pub type SchannelPtr = *const Mutex<GlkObjectMetadata<GlkSoundChannel>>;
 pub type StreamPtr = *const Mutex<GlkObjectMetadata<Stream>>;
 pub type WindowPtr = *const Mutex<GlkObjectMetadata<Window>>;
 
@@ -152,7 +152,7 @@ pub extern "C" fn glk_fileref_create_by_prompt(usage: u32, fmode: FileMode, rock
 
 #[no_mangle]
 pub extern "C" fn glk_fileref_create_from_fileref(usage: u32, fileref: FileRefPtr, rock: u32) -> FileRefPtr {
-    let result = GLKAPI.lock().unwrap().glk_fileref_create_from_fileref(usage, &from_ptr(fileref), rock);
+    let result = GLKAPI.lock().unwrap().glk_fileref_create_from_fileref(usage, &lock!(from_ptr(fileref)), rock);
     to_owned(result)
 }
 
@@ -164,7 +164,7 @@ pub extern "C" fn glk_fileref_create_temp(usage: u32, rock: u32) -> FileRefPtr {
 
 #[no_mangle]
 pub extern "C" fn glk_fileref_delete_file(fileref: FileRefPtr) {
-    GLKAPI.lock().unwrap().glk_fileref_delete_file(&from_ptr(fileref));
+    GLKAPI.lock().unwrap().glk_fileref_delete_file(&lock!(from_ptr(fileref)));
 }
 
 #[no_mangle]
@@ -174,12 +174,12 @@ pub extern "C" fn glk_fileref_destroy(fileref: FileRefPtr) {
 
 #[no_mangle]
 pub extern "C" fn glk_fileref_does_file_exist(fileref: FileRefPtr) -> u32 {
-    GLKAPI.lock().unwrap().glk_fileref_does_file_exist(&from_ptr(fileref)) as u32
+    GLKAPI.lock().unwrap().glk_fileref_does_file_exist(&lock!(from_ptr(fileref))) as u32
 }
 
 #[no_mangle]
 pub extern "C" fn glk_fileref_get_rock(fileref: FileRefPtr) -> u32 {
-    GlkApi::glk_fileref_get_rock(&from_ptr(fileref)).unwrap()
+    GlkApi::glk_fileref_get_rock(&lock!(from_ptr(fileref)))
 }
 
 #[no_mangle]
@@ -385,7 +385,7 @@ pub extern "C" fn glk_schannel_destroy(schannel: SchannelPtr) {
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_get_rock(schannel: SchannelPtr) -> u32 {
-    GlkApi::glk_schannel_get_rock(&from_ptr(schannel)).unwrap()
+    GlkApi::glk_schannel_get_rock(&lock!(from_ptr(schannel)))
 }
 
 #[no_mangle]
@@ -405,17 +405,17 @@ pub extern "C" fn glk_schannel_iterate(schannel: SchannelPtr, rock_ptr: *mut u32
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_pause(schannel: SchannelPtr) {
-    GLKAPI.lock().unwrap().glk_schannel_pause(&from_ptr(schannel));
+    GLKAPI.lock().unwrap().glk_schannel_pause(&mut lock!(from_ptr(schannel)));
 }
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_play(schannel: SchannelPtr, snd: u32) -> u32 {
-    GLKAPI.lock().unwrap().glk_schannel_play(&from_ptr(schannel), snd)
+    GLKAPI.lock().unwrap().glk_schannel_play(&mut lock!(from_ptr(schannel)), snd)
 }
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_play_ext(schannel: SchannelPtr, snd: u32, repeats: u32, notify: u32) -> u32 {
-    GLKAPI.lock().unwrap().glk_schannel_play_ext(&from_ptr(schannel), snd, repeats, notify)
+    GLKAPI.lock().unwrap().glk_schannel_play_ext(&mut lock!(from_ptr(schannel)), snd, repeats, notify)
 }
 
 #[no_mangle]
@@ -425,22 +425,22 @@ pub extern "C" fn glk_schannel_play_multi(schannels: *const SchannelPtr, schanne
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_set_volume(schannel: SchannelPtr, vol: u32) {
-    GLKAPI.lock().unwrap().glk_schannel_set_volume(&from_ptr(schannel), vol);
+    GLKAPI.lock().unwrap().glk_schannel_set_volume(&mut lock!(from_ptr(schannel)), vol);
 }
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_set_volume_ext(schannel: SchannelPtr, vol: u32, duration: u32, notify: u32) {
-    GLKAPI.lock().unwrap().glk_schannel_set_volume_ext(&from_ptr(schannel), vol, duration, notify);
+    GLKAPI.lock().unwrap().glk_schannel_set_volume_ext(&mut lock!(from_ptr(schannel)), vol, duration, notify);
 }
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_stop(schannel: SchannelPtr) {
-    GLKAPI.lock().unwrap().glk_schannel_stop(&from_ptr(schannel));
+    GLKAPI.lock().unwrap().glk_schannel_stop(&mut lock!(from_ptr(schannel)));
 }
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_unpause(schannel: SchannelPtr) {
-    GLKAPI.lock().unwrap().glk_schannel_unpause(&from_ptr(schannel));
+    GLKAPI.lock().unwrap().glk_schannel_unpause(&mut lock!(from_ptr(schannel)));
 }
 
 #[no_mangle]
@@ -553,13 +553,13 @@ pub extern "C" fn glk_stream_iterate(str: StreamPtr, rock_ptr: *mut u32) -> Stre
 
 #[no_mangle]
 pub extern "C" fn glk_stream_open_file(fileref: FileRefPtr, mode: FileMode, rock: u32) -> StreamPtr {
-    let result = GLKAPI.lock().unwrap().glk_stream_open_file(&from_ptr(fileref), mode, rock);
+    let result = GLKAPI.lock().unwrap().glk_stream_open_file(&lock!(from_ptr(fileref)), mode, rock);
     to_owned_opt(result.unwrap())
 }
 
 #[no_mangle]
 pub extern "C" fn glk_stream_open_file_uni(fileref: FileRefPtr, mode: FileMode, rock: u32) -> StreamPtr {
-    let result = GLKAPI.lock().unwrap().glk_stream_open_file_uni(&from_ptr(fileref), mode, rock);
+    let result = GLKAPI.lock().unwrap().glk_stream_open_file_uni(&lock!(from_ptr(fileref)), mode, rock);
     to_owned_opt(result.unwrap())
 }
 

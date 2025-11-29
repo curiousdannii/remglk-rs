@@ -13,14 +13,15 @@ use super::*;
 
 pub const SCHANNEL_MAX_VOL: f64 = 65536.0;
 
-pub type SoundChannelRef = GlkObject<SoundChannel>;
+pub type GlkSoundChannelShared = GlkObject<GlkSoundChannel>;
+pub type GlkSoundChannelMetadata = GlkObjectMetadata<GlkSoundChannel>;
 
 #[derive(Default)]
-pub struct SoundChannel {
+pub struct GlkSoundChannel {
     pub ops: Vec<protocol::SoundChannelOperation>,
 }
 
-impl GlkObjectClass for SoundChannel {
+impl GlkObjectClass for GlkSoundChannel {
     fn get_object_class_id() -> u32 {
         3
     }

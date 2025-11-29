@@ -77,6 +77,14 @@ pub fn write_ptr<T>(ptr: *mut T, val: T) {
     }
 }
 
+macro_rules! lock {
+    ($str: expr) => {
+        // We don't want to actually wait for a Mutex to be unlocked, so call try_lock
+        $str.try_lock().unwrap()
+    }
+}
+pub(crate) use lock;
+
 // Buffer and C string helpers
 pub fn glk_buffer<'a, T>(buf: *const T, buflen: u32) -> &'a [T]
 where T: Clone {

@@ -25,11 +25,11 @@ type UnregisterCallbackGeneric = extern "C" fn(*const c_void, u32, DispatchRock)
 #[no_mangle]
 pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCallbackGeneric, unregister_cb: UnregisterCallbackGeneric) {
     let mut glkapi = GLKAPI.lock().unwrap();
-    let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<FileRef>>(register_cb);
-    let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<FileRef>>(unregister_cb);
+    let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<GlkFileRef>>(register_cb);
+    let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<GlkFileRef>>(unregister_cb);
     glkapi.filerefs.set_callbacks(register, unregister);
-    let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<SoundChannel>>(register_cb);
-    let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<SoundChannel>>(unregister_cb);
+    let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<GlkSoundChannel>>(register_cb);
+    let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<GlkSoundChannel>>(unregister_cb);
     glkapi.schannels.set_callbacks(register, unregister);
     let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<Stream>>(register_cb);
     let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<Stream>>(unregister_cb);

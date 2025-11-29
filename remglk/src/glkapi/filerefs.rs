@@ -13,19 +13,20 @@ use std::ffi::CString;
 
 use super::*;
 
-pub type GlkFileRef = GlkObject<FileRef>;
+pub type GlkFileRefShared = GlkObject<GlkFileRef>;
+pub type GlkFileRefMetadata = GlkObjectMetadata<GlkFileRef>;
 
 #[derive(Default)]
-pub struct FileRef {
+pub struct GlkFileRef {
     pub binary: bool,
     pub path: String,
     pub path_c: CString,
 }
 
-impl FileRef {
+impl GlkFileRef {
     pub fn new(path: String, usage: u32) -> Self {
         let path_c = CString::new(&path[..]).unwrap();
-        FileRef {
+        GlkFileRef {
             binary: (usage & fileusage_TextMode) == 0,
             path,
             path_c,
@@ -33,7 +34,7 @@ impl FileRef {
     }
 }
 
-impl GlkObjectClass for FileRef {
+impl GlkObjectClass for GlkFileRef {
     fn get_object_class_id() -> u32 {
         2
     }

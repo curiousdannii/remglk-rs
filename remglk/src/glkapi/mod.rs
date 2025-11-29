@@ -46,9 +46,9 @@ pub use streams::StreamOperations;
 use windows::*;
 
 // Expose for so they can be turned into pointers
-pub use filerefs::FileRef;
+pub use filerefs::GlkFileRef;
 pub use objects::{GlkObject, GlkObjectMetadata};
-pub use schannels::SoundChannel;
+pub use schannels::GlkSoundChannel;
 pub use streams::Stream;
 pub use windows::Window;
 
@@ -58,7 +58,7 @@ where S: Default + GlkSystem {
     buffer_window_count: u32,
     current_stream: Option<GlkStreamWeak>,
     exited: bool,
-    pub filerefs: GlkObjectStore<FileRef>,
+    pub filerefs: GlkObjectStore<GlkFileRef>,
     pub dirs: Directories,
     gen: u32,
     metrics: NormalisedMetrics,
@@ -67,7 +67,7 @@ where S: Default + GlkSystem {
     pub retain_array_callbacks_u32: Option<RetainArrayCallbacks<u32>>,
     root_window: Option<GlkWindowWeak>,
     page_margin: PageMargin,
-    pub schannels: GlkObjectStore<SoundChannel>,
+    pub schannels: GlkObjectStore<GlkSoundChannel>,
     schannels_changed: bool,
     special: Option<SpecialInput>,
     pub streams: GlkObjectStore<Stream>,
@@ -192,13 +192,13 @@ where S: Default + GlkSystem {
         self.system.send_glkote_update(update, true);
     }
 
-    pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
+    pub fn glk_fileref_create_by_name(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRefShared {
         let filetype = file_type(usage & fileusage_TypeMask);
         let path = self.dirs.working.join(clean_filename(filename, filetype)).to_str().unwrap().to_owned();
         self.create_fileref(path, rock, usage)
     }
 
-    pub fn glk_fileref_create_by_prompt(&mut self, usage: u32, fmode: FileMode, rock: u32) -> GlkResult<'_, Option<GlkFileRef>> {
+    pub fn glk_fileref_create_by_prompt(&mut self, usage: u32, fmode: FileMode, rock: u32) -> GlkResult<'_, Option<GlkFileRefShared>> {
         let filetype = file_type(usage & fileusage_TypeMask);
         self.special = Some(SpecialInput {
             filemode: fmode,
@@ -231,36 +231,34 @@ where S: Default + GlkSystem {
         Ok(None)
     }
 
-    pub fn glk_fileref_create_from_fileref(&mut self, usage: u32, fileref: &GlkFileRef, rock: u32) -> GlkFileRef {
-        let fileref = lock!(fileref);
+    pub fn glk_fileref_create_from_fileref(&mut self, usage: u32, fileref: &GlkFileRef, rock: u32) -> GlkFileRefShared {
         self.create_fileref(fileref.path.clone(), rock, usage)
     }
 
-    pub fn glk_fileref_create_temp(&mut self, usage: u32, rock: u32) -> GlkFileRef {
+    pub fn glk_fileref_create_temp(&mut self, usage: u32, rock: u32) -> GlkFileRefShared {
         let path = self.temp_file_path(self.tempfile_counter);
         self.tempfile_counter += 1;
         self.create_fileref(path, rock, usage)
     }
 
     pub fn glk_fileref_delete_file(&mut self, fileref: &GlkFileRef) {
-        let fileref = lock!(fileref);
         self.system.file_delete(&fileref.path);
     }
 
-    pub fn glk_fileref_destroy(&mut self, fileref: GlkFileRef) {
+    pub fn glk_fileref_destroy(&mut self, fileref: GlkFileRefShared) {
         self.filerefs.unregister(fileref);
     }
 
     pub fn glk_fileref_does_file_exist(&mut self, fileref: &GlkFileRef) -> bool {
-        let fileref = lock!(fileref);
         self.system.file_exists(&fileref.path)
     }
 
-    pub fn glk_fileref_get_rock(fileref: &GlkFileRef) -> GlkResult<'_, u32> {
-        Ok(lock!(fileref).rock)
+    pub fn glk_fileref_get_rock(fileref: &GlkFileRefMetadata) -> u32 {
+        fileref.rock
     }
 
-    pub fn glk_fileref_iterate(&self, fileref: Option<&GlkFileRef>) -> Option<GlkFileRef> {
+    // TODO!
+    pub fn glk_fileref_iterate(&self, fileref: Option<&GlkFileRefShared>) -> Option<GlkFileRefShared> {
         self.filerefs.iterate(fileref)
     }
 
@@ -444,15 +442,15 @@ where S: Default + GlkSystem {
         self.timer.started = if msecs > 0 {Some(SystemTime::now())} else {None}
     }
 
-    pub fn glk_schannel_create(&mut self, rock: u32) -> SoundChannelRef {
+    pub fn glk_schannel_create(&mut self, rock: u32) -> GlkSoundChannelShared {
         self.schannels_changed = true;
-        let schannel = SoundChannel::default();
+        let schannel = GlkSoundChannel::default();
         let schannel_glkobj = GlkObject::new(schannel);
         self.schannels.register(&schannel_glkobj, rock);
         schannel_glkobj
     }
 
-    pub fn glk_schannel_create_ext(&mut self, rock: u32, vol: u32) -> SoundChannelRef {
+    pub fn glk_schannel_create_ext(&mut self, rock: u32, vol: u32) -> GlkSoundChannelShared {
         let schannel_glkobj = self.glk_schannel_create(rock);
         {
             let mut schannel = lock!(schannel_glkobj);
@@ -464,31 +462,29 @@ where S: Default + GlkSystem {
         schannel_glkobj
     }
 
-    pub fn glk_schannel_destroy(&mut self, schannel: SoundChannelRef) {
+    pub fn glk_schannel_destroy(&mut self, schannel: GlkSoundChannelShared) {
         self.schannels_changed = true;
         self.schannels.unregister(schannel);
     }
 
-    pub fn glk_schannel_get_rock(schannel: &SoundChannelRef) -> GlkResult<'_, u32> {
-        Ok(lock!(schannel).rock)
+    pub fn glk_schannel_get_rock(schannel: &GlkSoundChannelMetadata) -> u32 {
+        schannel.rock
     }
 
-    pub fn glk_schannel_iterate(&self, schannel: Option<&SoundChannelRef>) -> Option<SoundChannelRef> {
+    pub fn glk_schannel_iterate(&self, schannel: Option<&GlkSoundChannelShared>) -> Option<GlkSoundChannelShared> {
         self.schannels.iterate(schannel)
     }
 
-    pub fn glk_schannel_pause(&mut self, schannel: &SoundChannelRef) {
+    pub fn glk_schannel_pause(&mut self, schannel: &mut GlkSoundChannel) {
         self.schannels_changed = true;
-        let mut schannel = lock!(schannel);
         schannel.ops.push(SoundChannelOperation::Pause);
     }
 
-    pub fn glk_schannel_play(&mut self, schannel: &SoundChannelRef, snd: u32) -> u32 {
+    pub fn glk_schannel_play(&mut self, schannel: &mut GlkSoundChannel, snd: u32) -> u32 {
         self.glk_schannel_play_ext(schannel, snd, 1, 0)
     }
 
-    pub fn glk_schannel_play_ext(&mut self, schannel: &SoundChannelRef, snd: u32, repeats: u32, notify: u32) -> u32 {
-        let mut schannel = lock!(schannel);
+    pub fn glk_schannel_play_ext(&mut self, schannel: &mut GlkSoundChannel, snd: u32, repeats: u32, notify: u32) -> u32 {
         if repeats == 0 {
             schannel.ops.push(SoundChannelOperation::Stop);
         }
@@ -515,20 +511,20 @@ where S: Default + GlkSystem {
         1
     }
 
-    pub fn glk_schannel_play_multi(&mut self, schannels: Vec<SoundChannelRef>, sounds: &[u32], notify: u32) -> u32 {
+    pub fn glk_schannel_play_multi(&mut self, schannels: Vec<GlkSoundChannelShared>, sounds: &[u32], notify: u32) -> u32 {
         zip(schannels, sounds).fold(0, |acc, sound| {
             let (schannel, &snd) = sound;
-            acc + self.glk_schannel_play_ext(&schannel, snd, 1, notify)
+            let mut schannel = lock!(schannel);
+            acc + self.glk_schannel_play_ext(&mut schannel, snd, 1, notify)
         })
     }
 
-    pub fn glk_schannel_set_volume(&mut self, schannel: &SoundChannelRef, vol: u32) {
+    pub fn glk_schannel_set_volume(&mut self, schannel: &mut GlkSoundChannel, vol: u32) {
         self.glk_schannel_set_volume_ext(schannel, vol, 0, 0);
     }
 
-    pub fn glk_schannel_set_volume_ext(&mut self, schannel: &SoundChannelRef, vol: u32, duration: u32, notify: u32) {
+    pub fn glk_schannel_set_volume_ext(&mut self, schannel: &mut GlkSoundChannel, vol: u32, duration: u32, notify: u32) {
         self.schannels_changed = true;
-        let mut schannel = lock!(schannel);
         schannel.ops.push(SoundChannelOperation::Volume(SetVolumeOperation {
             dur: if duration > 0 {Some(duration)} else {None},
             notify: if notify > 0 {Some(notify)} else {None},
@@ -536,15 +532,13 @@ where S: Default + GlkSystem {
         }));
     }
 
-    pub fn glk_schannel_stop(&mut self, schannel: &SoundChannelRef) {
+    pub fn glk_schannel_stop(&mut self, schannel: &mut GlkSoundChannel) {
         self.schannels_changed = true;
-        let mut schannel = lock!(schannel);
         schannel.ops.push(SoundChannelOperation::Stop);
     }
 
-    pub fn glk_schannel_unpause(&mut self, schannel: &SoundChannelRef) {
+    pub fn glk_schannel_unpause(&mut self, schannel: &mut GlkSoundChannel) {
         self.schannels_changed = true;
-        let mut schannel = lock!(schannel);
         schannel.ops.push(SoundChannelOperation::Unpause);
     }
 
@@ -1194,7 +1188,7 @@ where S: Default + GlkSystem {
         window_stream_operation!(str, set_colours, fg, bg);
     }
 
-    pub fn glkunix_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRef {
+    pub fn glkunix_fileref_create_by_name_uncleaned(&mut self, usage: u32, filename: String, rock: u32) -> GlkFileRefShared {
         let path = self.dirs.system_cwd.join(filename).to_str().unwrap().to_owned();
         self.create_fileref(path, rock, usage)
     }
@@ -1439,18 +1433,15 @@ where S: Default + GlkSystem {
 
     // Internal functions
 
-    fn create_fileref(&mut self, path: String, rock: u32, usage: u32) -> GlkFileRef {
-        let fref = FileRef::new(path, usage);
+    fn create_fileref(&mut self, path: String, rock: u32, usage: u32) -> GlkFileRefShared {
+        let fref = GlkFileRef::new(path, usage);
         let fref_glkobj = GlkObject::new(fref);
         self.filerefs.register(&fref_glkobj, rock);
         fref_glkobj
     }
 
     fn create_file_stream(&mut self, fileref: &GlkFileRef, mode: FileMode, rock: u32, uni: bool) -> GlkResult<'_, Option<GlkStream>> {
-        let (binary, path) = {
-            let fileref = lock!(fileref);
-            (fileref.binary, fileref.path.clone())
-        };
+        let path = fileref.path.clone();
         if mode == FileMode::Read && !self.system.file_exists(&path) {
             return Ok(None);
         }
@@ -1469,7 +1460,7 @@ where S: Default + GlkSystem {
         let data = data?;
 
         // Create an appopriate stream
-        let str = create_stream_from_buffer(data, binary, mode, uni, Some(fileref))?;
+        let str = create_stream_from_buffer(data, fileref.binary, mode, uni, Some(fileref))?;
 
         if mode == FileMode::WriteAppend {
             do_stream_operation(&str, StreamOperation::SetPosition(SeekMode::End, 0)).unwrap();
