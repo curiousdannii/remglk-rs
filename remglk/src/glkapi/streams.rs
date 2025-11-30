@@ -353,7 +353,7 @@ pub struct WindowStream {
 }
 
 impl WindowStream {
-    pub fn new(win: &GlkWindow) -> Self {
+    pub fn new(win: &GlkWindowShared) -> Self {
         WindowStream {
             win: win.downgrade(),
             ..Default::default()
@@ -367,7 +367,7 @@ impl StreamOperations for WindowStream {
             return Ok(-1)
         }
         if let PutBuffer(_) | PutChar(_) | PutString(_, _) = op {
-            let win: GlkWindow = (&self.win).into();
+            let win: GlkWindowShared = (&self.win).into();
             let mut win = win.lock().unwrap();
             if let Some(TextInputType::Line) = win.input.text_input_type {
                 return Err(PendingLineInput);

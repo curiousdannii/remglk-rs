@@ -3,12 +3,13 @@
 Glk objects & dispatch
 ======================
 
-Copyright (c) 2024 Dannii Willis
+Copyright (c) 2025 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
 */
 
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
@@ -86,7 +87,7 @@ pub struct GlkObjectStore<T> {
     first: Option<GlkObjectWeak<T>>,
     object_class: u32,
     register_cb: Option<DispatchRegisterCallback<T>>,
-    store: Vec<GlkObject<T>>,
+    store: HashMap<u32, GlkObject<T>>,
     unregister_cb: Option<DispatchUnregisterCallback<T>>,
 }
 
@@ -98,18 +99,17 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
             first: None,
             object_class: T::get_object_class_id(),
             register_cb: None,
-            store: vec![],
+            store: HashMap::new(),
             unregister_cb: None,
         }
     }
 
     pub fn get_by_id(&self, id: u32) -> Option<GlkObject<T>> {
-        let pos = self.store.iter().position(|obj| obj.lock().unwrap().id == id);
-        pos.map(|id| self.store[id].clone())
+        self.store.get(&id).map(|obj| obj.clone())
     }
 
     pub fn iter(&self) -> impl Iterator<Item=&GlkObject<T>>{
-        self.store.iter()
+        self.store.values()
     }
 
     pub fn iterate(&self, obj: Option<&GlkObject<T>>) -> Option<GlkObject<T>> {
@@ -127,16 +127,17 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
     pub fn register(&mut self, obj_glkobj: &GlkObject<T>, rock: u32) {
         let obj_ptr = obj_glkobj.as_ptr();
         let mut obj = obj_glkobj.lock().unwrap();
-        obj.id = self.counter;
-        obj.rock = rock;
+        let id = self.counter;
         self.counter += 1;
+        obj.id = id;
+        obj.rock = rock;
         if let Some(register_cb) = self.register_cb {
             obj.disprock = Some(register_cb(obj_ptr, self.object_class));
         }
         match self.first.as_ref() {
             None => {
                 self.first = Some(obj_glkobj.downgrade());
-                self.store.push(obj_glkobj.clone());
+                self.store.insert(id, obj_glkobj.clone());
             },
             Some(old_first) => {
                 obj.next = Some(old_first.clone());
@@ -144,7 +145,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
                 let mut old_first = old_first.lock().unwrap();
                 old_first.prev = Some(obj_glkobj.downgrade());
                 self.first = Some(obj_glkobj.downgrade());
-                self.store.push(obj_glkobj.clone());
+                self.store.insert(id, obj_glkobj.clone());
             }
         };
     }
@@ -152,7 +153,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
     pub fn set_callbacks(&mut self, register_cb: DispatchRegisterCallback<T>, unregister_cb: DispatchUnregisterCallback<T>) {
         self.register_cb = Some(register_cb);
         self.unregister_cb = Some(unregister_cb);
-        for obj in self.store.iter() {
+        for obj in self.store.values() {
             let obj_ptr = obj.as_ptr();
             let mut obj = obj.lock().unwrap();
             obj.disprock = Some(register_cb(obj_ptr, self.object_class));
@@ -163,6 +164,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
     pub fn unregister(&mut self, obj_glkobj: GlkObject<T>) {
         let obj_ptr = obj_glkobj.as_ptr();
         let obj = obj_glkobj.lock().unwrap();
+        let id = obj.id;
         let prev = obj.prev();
         let next = obj.next();
         if let Some(prev) = &prev {
@@ -183,7 +185,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
             drop(obj);
             self.unregister_cb.unwrap()(obj_ptr, self.object_class, disprock);
         }
-        self.store.swap_remove(self.store.iter().position(|obj| obj == &obj_glkobj).unwrap());
+        self.store.remove(&id).unwrap();
         assert!(Arc::strong_count(&obj_glkobj) == 1, "Dangling strong reference to obj (ptr {:?}, class {}) after it was unregistered", obj_glkobj.as_ptr(), self.object_class);
     }
 }

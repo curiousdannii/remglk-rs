@@ -34,8 +34,8 @@ pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCal
     let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<Stream>>(register_cb);
     let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<Stream>>(unregister_cb);
     glkapi.streams.set_callbacks(register, unregister);
-    let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<Window>>(register_cb);
-    let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<Window>>(unregister_cb);
+    let register = mem::transmute::<RegisterCallbackGeneric, DispatchRegisterCallback<GlkWindow>>(register_cb);
+    let unregister = mem::transmute::<UnregisterCallbackGeneric, DispatchUnregisterCallback<GlkWindow>>(unregister_cb);
     glkapi.windows.set_callbacks(register, unregister);
 }
 

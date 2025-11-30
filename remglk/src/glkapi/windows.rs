@@ -18,11 +18,12 @@ use enum_dispatch::enum_dispatch;
 use super::*;
 
 /** A `Window` wrapped in an `Arc<Mutex>>` */
-pub type GlkWindow = GlkObject<Window>;
-pub type GlkWindowWeak = GlkObjectWeak<Window>;
+pub type GlkWindowShared = GlkObject<GlkWindow>;
+pub type GlkWindowMetadata = GlkObjectMetadata<GlkWindow>;
+pub type GlkWindowWeak = GlkObjectWeak<GlkWindow>;
 
 #[derive(Default)]
-pub struct Window {
+pub struct GlkWindow {
     pub data: WindowData,
     pub echostr: Option<GlkStreamWeak>,
     pub id: u32,
@@ -52,9 +53,9 @@ pub struct WindowUpdate {
     pub size: protocol::WindowUpdate,
 }
 
-impl Window {
-    pub fn new(data: WindowData, id: u32, rock: u32, wintype: WindowType) -> (GlkWindow, GlkStream) {
-        let win = GlkObject::new(Window {
+impl GlkWindow {
+    pub fn new(data: WindowData, id: u32, rock: u32, wintype: WindowType) -> (GlkWindowShared, GlkStream) {
+        let win = GlkObject::new(GlkWindow {
             data,
             id,
             input: InputUpdate::new(id),
@@ -107,14 +108,14 @@ impl Window {
     }
 }
 
-impl Deref for Window {
+impl Deref for GlkWindow {
     type Target = WindowData;
     fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
-impl DerefMut for Window {
+impl DerefMut for GlkWindow {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
@@ -126,7 +127,7 @@ impl Default for WindowData {
     }
 }
 
-impl GlkObjectClass for Window {
+impl GlkObjectClass for GlkWindow {
     fn get_object_class_id() -> u32 {
         0
     }
@@ -563,7 +564,7 @@ pub struct PairWindow {
 }
 
 impl PairWindow {
-    pub fn new(keywin: &GlkWindow, method: u32, size: u32) -> Self {
+    pub fn new(keywin: &GlkWindowShared, method: u32, size: u32) -> Self {
         let dir = method & winmethod_DirMask;
         PairWindow {
             backward: dir == winmethod_Left || dir == winmethod_Above,

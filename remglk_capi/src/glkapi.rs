@@ -27,7 +27,7 @@ type CStringU32Ptr = *const u32;
 pub type FileRefPtr = *const Mutex<GlkObjectMetadata<GlkFileRef>>;
 pub type SchannelPtr = *const Mutex<GlkObjectMetadata<GlkSoundChannel>>;
 pub type StreamPtr = *const Mutex<GlkObjectMetadata<Stream>>;
-pub type WindowPtr = *const Mutex<GlkObjectMetadata<Window>>;
+pub type WindowPtr = *const Mutex<GlkObjectMetadata<GlkWindow>>;
 
 #[cfg(target_os = "emscripten")]
 #[path = "systems/emglken.rs"]
@@ -68,23 +68,23 @@ pub extern "C" fn glk_buffer_to_upper_case_uni(buf: BufferMutU32Ptr, len: u32, i
 
 #[no_mangle]
 pub extern "C" fn glk_cancel_char_event(win: WindowPtr) {
-    GlkApi::glk_cancel_char_event(&from_ptr(win));
+    GlkApi::glk_cancel_char_event(&mut lock!(from_ptr(win)));
 }
 
 #[no_mangle]
 pub extern "C" fn glk_cancel_hyperlink_event(win: WindowPtr) {
-    GlkApi::glk_cancel_hyperlink_event(&from_ptr(win));
+    GlkApi::glk_cancel_hyperlink_event(&mut lock!(from_ptr(win)));
 }
 
 #[no_mangle]
 pub extern "C" fn glk_cancel_line_event(win: WindowPtr, ev_ptr: *mut GlkEvent) {
-    let res: GlkEvent = GLKAPI.lock().unwrap().glk_cancel_line_event(&from_ptr(win)).unwrap().into();
+    let res: GlkEvent = GLKAPI.lock().unwrap().glk_cancel_line_event(&mut lock!(from_ptr(win))).unwrap().into();
     write_ptr(ev_ptr, res);
 }
 
 #[no_mangle]
 pub extern "C" fn glk_cancel_mouse_event(win: WindowPtr) {
-    GlkApi::glk_cancel_mouse_event(&from_ptr(win));
+    GlkApi::glk_cancel_mouse_event(&mut lock!(from_ptr(win)));
 }
 
 #[no_mangle]
@@ -242,12 +242,12 @@ pub extern "C" fn glk_get_line_stream_uni(str: StreamPtr, buf: BufferMutU32Ptr, 
 
 #[no_mangle]
 pub extern "C" fn glk_image_draw(win: WindowPtr, image: u32, val1: i32, val2: i32) -> u32 {
-    GlkApi::glk_image_draw(&from_ptr(win), image, val1, val2)
+    GlkApi::glk_image_draw(&mut lock!(from_ptr(win)), image, val1, val2)
 }
 
 #[no_mangle]
 pub extern "C" fn glk_image_draw_scaled(win: WindowPtr, image: u32, val1: i32, val2: i32, width: u32, height: u32) -> u32 {
-    GlkApi::glk_image_draw_scaled(&from_ptr(win), image, val1, val2, width, height)
+    GlkApi::glk_image_draw_scaled(&mut lock!(from_ptr(win)), image, val1, val2, width, height)
 }
 
 #[no_mangle]
@@ -331,34 +331,34 @@ pub extern "C" fn glk_put_string_uni(cstr: CStringU32Ptr) {
 
 #[no_mangle]
 pub extern "C" fn glk_request_char_event(win: WindowPtr) {
-    GLKAPI.lock().unwrap().glk_request_char_event(&from_ptr(win)).unwrap();
+    GLKAPI.lock().unwrap().glk_request_char_event(&mut lock!(from_ptr(win))).unwrap();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_request_char_event_uni(win: WindowPtr) {
-    GLKAPI.lock().unwrap().glk_request_char_event_uni(&from_ptr(win)).unwrap();
+    GLKAPI.lock().unwrap().glk_request_char_event_uni(&mut lock!(from_ptr(win))).unwrap();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_request_hyperlink_event(win: WindowPtr) {
-    GlkApi::glk_request_hyperlink_event(&from_ptr(win));
+    GlkApi::glk_request_hyperlink_event(&mut lock!(from_ptr(win)));
 }
 
 #[no_mangle]
 pub extern "C" fn glk_request_line_event(win: WindowPtr, buf: BufferMutU8Ptr, len: u32, initlen: u32) {
     let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
-    GLKAPI.lock().unwrap().glk_request_line_event(&from_ptr(win), buf, initlen).unwrap();
+    GLKAPI.lock().unwrap().glk_request_line_event(&mut lock!(from_ptr(win)), buf, initlen).unwrap();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_request_line_event_uni(win: WindowPtr, buf: BufferMutU32Ptr, len: u32, initlen: u32) {
     let buf = unsafe{Box::from_raw(glk_buffer_mut(buf, len))};
-    GLKAPI.lock().unwrap().glk_request_line_event_uni(&from_ptr(win), buf, initlen).unwrap();
+    GLKAPI.lock().unwrap().glk_request_line_event_uni(&mut lock!(from_ptr(win)), buf, initlen).unwrap();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_request_mouse_event(win: WindowPtr) {
-    GlkApi::glk_request_mouse_event(&from_ptr(win));
+    GlkApi::glk_request_mouse_event(&mut lock!(from_ptr(win)));
 }
 
 #[no_mangle]
@@ -457,7 +457,7 @@ pub extern "C" fn glk_select_poll(ev_ptr: *mut GlkEvent) {
 
 #[no_mangle]
 pub extern "C" fn glk_set_echo_line_event(win: WindowPtr, val: u32) {
-    GlkApi::glk_set_echo_line_event(&from_ptr(win), val);
+    GlkApi::glk_set_echo_line_event(&mut lock!(from_ptr(win)), val);
 }
 
 #[no_mangle]
@@ -491,7 +491,7 @@ pub extern "C" fn glk_set_terminators_line_event(win: WindowPtr, keycodes_ptr: *
     else {
         None
     };
-    GlkApi::glk_set_terminators_line_event(&from_ptr(win), terminators);
+    GlkApi::glk_set_terminators_line_event(&mut lock!(from_ptr(win)), terminators);
 }
 
 #[no_mangle]
@@ -647,7 +647,7 @@ pub extern "C" fn glk_time_to_date_utc(time_ptr: *const GlkTime, date_ptr: *mut 
 
 #[no_mangle]
 pub extern "C" fn glk_window_clear(win: WindowPtr) {
-    GLKAPI.lock().unwrap().glk_window_clear(&from_ptr(win));
+    GLKAPI.lock().unwrap().glk_window_clear(&mut lock!(from_ptr(win)));
 }
 
 #[no_mangle]
@@ -658,12 +658,12 @@ pub extern "C" fn glk_window_close(win: WindowPtr, result_ptr: *mut StreamResult
 
 #[no_mangle]
 pub extern "C" fn glk_window_erase_rect(win: WindowPtr, left: i32, top: i32, width: u32, height: u32) {
-    GlkApi::glk_window_erase_rect(&from_ptr(win), left, top, width, height).unwrap();
+    GlkApi::glk_window_erase_rect(&mut lock!(from_ptr(win)), left, top, width, height).unwrap();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_fill_rect(win: WindowPtr, colour: u32, left: i32, top: i32, width: u32, height: u32) {
-    GlkApi::glk_window_fill_rect(&from_ptr(win), colour, left, top, width, height).unwrap();
+    GlkApi::glk_window_fill_rect(&mut lock!(from_ptr(win)), colour, left, top, width, height).unwrap();
 }
 
 #[no_mangle]
@@ -728,7 +728,7 @@ pub extern "C" fn glk_window_get_type(win: WindowPtr) -> WindowType {
 
 #[no_mangle]
 pub extern "C" fn glk_window_iterate(win: WindowPtr, rock_ptr: *mut u32) -> WindowPtr {
-    let win: Option<GlkObject<Window>> = from_ptr_opt(win);
+    let win: Option<GlkObject<GlkWindow>> = from_ptr_opt(win);
     let next = GLKAPI.lock().unwrap().glk_window_iterate(win.as_ref());
     let (obj, rock) = if let Some(obj) = next {
         let rock = obj.lock().unwrap().rock;
