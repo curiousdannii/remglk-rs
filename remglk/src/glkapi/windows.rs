@@ -54,7 +54,7 @@ pub struct WindowUpdate {
 }
 
 impl GlkWindow {
-    pub fn new(data: WindowData, id: u32, rock: u32, wintype: WindowType) -> (GlkWindowShared, GlkStream) {
+    pub fn new(data: WindowData, id: u32, rock: u32, wintype: WindowType) -> (GlkWindowShared, GlkStreamShared) {
         let win = GlkObject::new(GlkWindow {
             data,
             id,

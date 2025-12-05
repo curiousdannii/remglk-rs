@@ -26,7 +26,7 @@ type CStringU8Ptr = *const i8;
 type CStringU32Ptr = *const u32;
 pub type FileRefPtr = *const Mutex<GlkObjectMetadata<GlkFileRef>>;
 pub type SchannelPtr = *const Mutex<GlkObjectMetadata<GlkSoundChannel>>;
-pub type StreamPtr = *const Mutex<GlkObjectMetadata<Stream>>;
+pub type StreamPtr = *const Mutex<GlkObjectMetadata<GlkStream>>;
 pub type WindowPtr = *const Mutex<GlkObjectMetadata<GlkWindow>>;
 
 #[cfg(target_os = "emscripten")]
@@ -184,17 +184,7 @@ pub extern "C" fn glk_fileref_get_rock(fileref: FileRefPtr) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn glk_fileref_iterate(fileref: FileRefPtr, rock_ptr: *mut u32) -> FileRefPtr {
-    let fileref = from_ptr_opt(fileref);
-    let next = GLKAPI.lock().unwrap().glk_fileref_iterate(fileref.as_ref());
-    let (obj, rock) = if let Some(obj) = next {
-        let rock = obj.lock().unwrap().rock;
-        (Some(obj), rock)
-    }
-    else {
-        (None, 0)
-    };
-    write_ptr(rock_ptr, rock);
-    borrow(obj.as_ref())
+    iterate!(fileref, rock_ptr, glk_fileref_iterate)
 }
 
 #[no_mangle]
@@ -212,32 +202,32 @@ pub extern "C" fn glk_gestalt_ext(sel: u32, val: u32, buf: BufferMutU32Ptr, len:
 
 #[no_mangle]
 pub extern "C" fn glk_get_buffer_stream(str: StreamPtr, buf: BufferMutU8Ptr, len: u32) -> u32 {
-    GlkApi::glk_get_buffer_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
+    GlkApi::glk_get_buffer_stream(&mut lock!(from_ptr(str)), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_buffer_stream_uni(str: StreamPtr, buf: BufferMutU32Ptr, len: u32) -> u32 {
-    GlkApi::glk_get_buffer_stream_uni(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
+    GlkApi::glk_get_buffer_stream_uni(&mut lock!(from_ptr(str)), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_char_stream_uni(str: StreamPtr) -> i32 {
-    GlkApi::glk_get_char_stream_uni(&from_ptr(str)).unwrap()
+    GlkApi::glk_get_char_stream_uni(&mut lock!(from_ptr(str))).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_char_stream(str: StreamPtr) -> i32 {
-    GlkApi::glk_get_char_stream(&from_ptr(str)).unwrap()
+    GlkApi::glk_get_char_stream(&mut lock!(from_ptr(str))).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_line_stream(str: StreamPtr, buf: BufferMutU8Ptr, len: u32) -> u32 {
-    GlkApi::glk_get_line_stream(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
+    GlkApi::glk_get_line_stream(&mut lock!(from_ptr(str)), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn glk_get_line_stream_uni(str: StreamPtr, buf: BufferMutU32Ptr, len: u32) -> u32 {
-    GlkApi::glk_get_line_stream_uni(&from_ptr(str), glk_buffer_mut(buf, len)).unwrap()
+    GlkApi::glk_get_line_stream_uni(&mut lock!(from_ptr(str)), glk_buffer_mut(buf, len)).unwrap()
 }
 
 #[no_mangle]
@@ -271,14 +261,14 @@ pub extern "C" fn glk_put_buffer(buf: BufferU8Ptr, len: u32) {
 #[no_mangle]
 pub extern "C" fn glk_put_buffer_stream(str: StreamPtr, buf: BufferU8Ptr, len: u32) {
     if len > 0 {
-        GlkApi::glk_put_buffer_stream(&from_ptr(str), glk_buffer(buf, len)).ok();
+        GlkApi::glk_put_buffer_stream(&mut lock!(from_ptr(str)), glk_buffer(buf, len)).ok();
     }
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_buffer_stream_uni(str: StreamPtr, buf: BufferU32Ptr, len: u32) {
     if len > 0 {
-        GlkApi::glk_put_buffer_stream_uni(&from_ptr(str), glk_buffer(buf, len)).ok();
+        GlkApi::glk_put_buffer_stream_uni(&mut lock!(from_ptr(str)), glk_buffer(buf, len)).ok();
     }
 }
 
@@ -296,12 +286,12 @@ pub extern "C" fn glk_put_char(ch: u8) {
 
 #[no_mangle]
 pub extern "C" fn glk_put_char_stream(str: StreamPtr, ch: u8) {
-    GlkApi::glk_put_char_stream(&from_ptr(str), ch).ok();
+    GlkApi::glk_put_char_stream(&mut lock!(from_ptr(str)), ch).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_char_stream_uni(str: StreamPtr, ch: u32) {
-    GlkApi::glk_put_char_stream_uni(&from_ptr(str), ch).ok();
+    GlkApi::glk_put_char_stream_uni(&mut lock!(from_ptr(str)), ch).ok();
 }
 
 #[no_mangle]
@@ -316,12 +306,12 @@ pub extern "C" fn glk_put_string(cstr: CStringU8Ptr) {
 
 #[no_mangle]
 pub extern "C" fn glk_put_string_stream(str: StreamPtr, cstr: CStringU8Ptr) {
-    GlkApi::glk_put_buffer_stream(&from_ptr(str), cstring_u8(cstr)).ok();
+    GlkApi::glk_put_buffer_stream(&mut lock!(from_ptr(str)), cstring_u8(cstr)).ok();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_put_string_stream_uni(str: StreamPtr, cstr: CStringU32Ptr) {
-    GlkApi::glk_put_buffer_stream_uni(&from_ptr(str), cstring_u32(cstr)).ok();
+    GlkApi::glk_put_buffer_stream_uni(&mut lock!(from_ptr(str)), cstring_u32(cstr)).ok();
 }
 
 #[no_mangle]
@@ -390,17 +380,7 @@ pub extern "C" fn glk_schannel_get_rock(schannel: SchannelPtr) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn glk_schannel_iterate(schannel: SchannelPtr, rock_ptr: *mut u32) -> SchannelPtr {
-    let schannel = from_ptr_opt(schannel);
-    let next = GLKAPI.lock().unwrap().glk_schannel_iterate(schannel.as_ref());
-    let (obj, rock) = if let Some(obj) = next {
-        let rock = obj.lock().unwrap().rock;
-        (Some(obj), rock)
-    }
-    else {
-        (None, 0)
-    };
-    write_ptr(rock_ptr, rock);
-    borrow(obj.as_ref())
+    iterate!(schannel, rock_ptr, glk_schannel_iterate)
 }
 
 #[no_mangle]
@@ -467,7 +447,7 @@ pub extern "C" fn glk_set_hyperlink(val: u32) {
 
 #[no_mangle]
 pub extern "C" fn glk_set_hyperlink_stream(str: StreamPtr, val: u32) {
-    GlkApi::glk_set_hyperlink_stream(&from_ptr(str), val);
+    GlkApi::glk_set_hyperlink_stream(&mut lock!(from_ptr(str)), val);
 }
 
 #[no_mangle]
@@ -480,7 +460,7 @@ pub extern "C" fn glk_set_style(val: u32) {
 
 #[no_mangle]
 pub extern "C" fn glk_set_style_stream(str: StreamPtr, val: u32) {
-    GlkApi::glk_set_style_stream(&from_ptr(str), val);
+    GlkApi::glk_set_style_stream(&mut lock!(from_ptr(str)), val);
 }
 
 #[no_mangle]
@@ -528,27 +508,17 @@ pub extern "C" fn glk_stream_get_current() -> StreamPtr {
 
 #[no_mangle]
 pub extern "C" fn glk_stream_get_position(str: StreamPtr) -> u32 {
-    GlkApi::glk_stream_get_position(&from_ptr(str))
+    GlkApi::glk_stream_get_position(&mut lock!(from_ptr(str)))
 }
 
 #[no_mangle]
 pub extern "C" fn glk_stream_get_rock(str: StreamPtr) -> u32 {
-    GlkApi::glk_stream_get_rock(&from_ptr(str)).unwrap()
+    GlkApi::glk_stream_get_rock(&lock!(from_ptr(str)))
 }
 
 #[no_mangle]
 pub extern "C" fn glk_stream_iterate(str: StreamPtr, rock_ptr: *mut u32) -> StreamPtr {
-    let str = from_ptr_opt(str);
-    let next = GLKAPI.lock().unwrap().glk_stream_iterate(str.as_ref());
-    let (obj, rock) = if let Some(obj) = next {
-        let rock = obj.lock().unwrap().rock;
-        (Some(obj), rock)
-    }
-    else {
-        (None, 0)
-    };
-    write_ptr(rock_ptr, rock);
-    borrow(obj.as_ref())
+    iterate!(str, rock_ptr, glk_stream_iterate)
 }
 
 #[no_mangle]
@@ -606,7 +576,7 @@ pub extern "C" fn glk_stream_set_current(str: StreamPtr) {
 
 #[no_mangle]
 pub extern "C" fn glk_stream_set_position(str: StreamPtr, pos: i32, mode: SeekMode) {
-    GlkApi::glk_stream_set_position(&from_ptr(str), pos, mode);
+    GlkApi::glk_stream_set_position(&mut lock!(from_ptr(str)), pos, mode);
 }
 
 #[no_mangle]
@@ -668,12 +638,12 @@ pub extern "C" fn glk_window_fill_rect(win: WindowPtr, colour: u32, left: i32, t
 
 #[no_mangle]
 pub extern "C" fn glk_window_flow_break(win: WindowPtr) {
-    GlkApi::glk_window_flow_break(&from_ptr(win));
+    GlkApi::glk_window_flow_break(&mut lock!(from_ptr(win)));
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_arrangement(win: WindowPtr, method_ptr: *mut u32, size_ptr: *mut u32, keywin_ptr: *mut WindowPtr) {
-    let (method, size, keywin) = GlkApi::glk_window_get_arrangement(&from_ptr(win)).unwrap();
+    let (method, size, keywin) = GlkApi::glk_window_get_arrangement(&lock!(from_ptr(win))).unwrap();
     write_ptr(method_ptr, method);
     write_ptr(size_ptr, size);
     write_ptr(keywin_ptr, borrow(Some(&keywin)));
@@ -681,19 +651,19 @@ pub extern "C" fn glk_window_get_arrangement(win: WindowPtr, method_ptr: *mut u3
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_echo_stream(win: WindowPtr) -> StreamPtr {
-    let result = GlkApi::glk_window_get_echo_stream(&from_ptr(win));
+    let result = GlkApi::glk_window_get_echo_stream(&lock!(from_ptr(win)));
     borrow(result.as_ref())
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_parent(win: WindowPtr) -> WindowPtr {
-    let result = GlkApi::glk_window_get_parent(&from_ptr(win));
+    let result = GlkApi::glk_window_get_parent(&lock!(from_ptr(win)));
     borrow(result.as_ref())
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_rock(win: WindowPtr) -> u32 {
-    GlkApi::glk_window_get_rock(&from_ptr(win)).unwrap()
+    GlkApi::glk_window_get_rock(&lock!(from_ptr(win)))
 }
 
 #[no_mangle]
@@ -710,40 +680,30 @@ pub extern "C" fn glk_window_get_sibling(win: WindowPtr) -> WindowPtr {
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_size(win: WindowPtr, width_ptr: *mut u32, height_ptr: *mut u32) {
-    let (height, width) = GLKAPI.lock().unwrap().glk_window_get_size(&from_ptr(win));
+    let (height, width) = GLKAPI.lock().unwrap().glk_window_get_size(&lock!(from_ptr(win)));
     write_ptr(height_ptr, height as u32);
     write_ptr(width_ptr, width as u32);
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_stream(win: WindowPtr) -> StreamPtr {
-    let result = GlkApi::glk_window_get_stream(&from_ptr(win));
+    let result = GlkApi::glk_window_get_stream(&lock!(from_ptr(win)));
     borrow(Some(&result))
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_get_type(win: WindowPtr) -> WindowType {
-    GlkApi::glk_window_get_type(&from_ptr(win))
+    GlkApi::glk_window_get_type(&lock!(from_ptr(win)))
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_iterate(win: WindowPtr, rock_ptr: *mut u32) -> WindowPtr {
-    let win: Option<GlkObject<GlkWindow>> = from_ptr_opt(win);
-    let next = GLKAPI.lock().unwrap().glk_window_iterate(win.as_ref());
-    let (obj, rock) = if let Some(obj) = next {
-        let rock = obj.lock().unwrap().rock;
-        (Some(obj), rock)
-    }
-    else {
-        (None, 0)
-    };
-    write_ptr(rock_ptr, rock);
-    borrow(obj.as_ref())
+    iterate!(win, rock_ptr, glk_window_iterate)
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_move_cursor(win: WindowPtr, xpos: u32, ypos: u32) {
-    GlkApi::glk_window_move_cursor(&from_ptr(win), xpos as usize, ypos as usize).unwrap();
+    GlkApi::glk_window_move_cursor(&mut lock!(from_ptr(win)), xpos as usize, ypos as usize).unwrap();
 }
 
 #[no_mangle]
@@ -759,12 +719,12 @@ pub extern "C" fn glk_window_set_arrangement(win: WindowPtr, method: u32, size: 
 
 #[no_mangle]
 pub extern "C" fn glk_window_set_background_color(win: WindowPtr, colour: u32) {
-    GlkApi::glk_window_set_background_color(&from_ptr(win), colour).unwrap();
+    GlkApi::glk_window_set_background_color(&mut lock!(from_ptr(win)), colour).unwrap();
 }
 
 #[no_mangle]
 pub extern "C" fn glk_window_set_echo_stream(win: WindowPtr, str: StreamPtr) {
-    GlkApi::glk_window_set_echo_stream(&from_ptr(win), from_ptr_opt(str).as_ref())
+    GlkApi::glk_window_set_echo_stream(&mut lock!(from_ptr(win)), from_ptr_opt(str).as_ref())
 }
 
 // Extensions
@@ -776,7 +736,7 @@ pub extern "C" fn garglk_set_reversevideo(val: u32) {
 
 #[no_mangle]
 pub extern "C" fn garglk_set_reversevideo_stream(str: StreamPtr, val: u32) {
-    GlkApi::garglk_set_reversevideo_stream(&from_ptr(str), val);
+    GlkApi::garglk_set_reversevideo_stream(&mut lock!(from_ptr(str)), val);
 }
 
 #[no_mangle]
@@ -786,7 +746,7 @@ pub extern "C" fn garglk_set_zcolors(fg: u32, bg: u32) {
 
 #[no_mangle]
 pub extern "C" fn garglk_set_zcolors_stream(str: StreamPtr, fg: u32, bg: u32) {
-    GlkApi::garglk_set_zcolors_stream(&from_ptr(str), fg, bg);
+    GlkApi::garglk_set_zcolors_stream(&mut lock!(from_ptr(str)), fg, bg);
 }
 
 /** A Glk event */
@@ -809,3 +769,26 @@ impl From<glkapi::GlkEvent> for GlkEvent {
         }
     }
 }
+
+macro_rules! iterate {
+    ($obj: expr, $rock_ptr: expr, $func: ident) => {
+        {
+            let obj = from_ptr_opt($obj);
+            let glkapi = GLKAPI.lock().unwrap();
+            let next = match obj {
+                Some(obj) => glkapi.$func(Some(&lock!(obj))),
+                None => glkapi.$func(None),
+            };
+            let (obj, rock) = if let Some(obj) = next {
+                let rock = lock!(obj).rock;
+                (Some(obj), rock)
+            }
+            else {
+                (None, 0)
+            };
+            write_ptr($rock_ptr, rock);
+            borrow(obj.as_ref())
+        }
+    }
+}
+pub(crate) use iterate;

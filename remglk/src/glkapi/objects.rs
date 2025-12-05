@@ -112,9 +112,9 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
         self.store.values()
     }
 
-    pub fn iterate(&self, obj: Option<&GlkObject<T>>) -> Option<GlkObject<T>> {
+    pub fn iterate(&self, obj: Option<&GlkObjectMetadata<T>>) -> Option<GlkObject<T>> {
         let next_weak = match obj {
-            Some(obj) => obj.lock().unwrap().next.as_ref().cloned(),
+            Some(obj) => obj.next.as_ref().cloned(),
             None => self.first.clone(),
         };
         next_weak.map(|obj| (&obj).into())

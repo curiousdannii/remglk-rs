@@ -19,24 +19,25 @@ use super::*;
 const GLK_NULL: u32 = 0;
 
 /** A `Stream` wrapped in an GlkObject (`Arc<Mutex>>`) */
-pub type GlkStream = GlkObject<Stream>;
-pub type GlkStreamWeak = GlkObjectWeak<Stream>;
+pub type GlkStreamShared = GlkObject<GlkStream>;
+pub type GlkStreamMetadata = GlkObjectMetadata<GlkStream>;
+pub type GlkStreamWeak = GlkObjectWeak<GlkStream>;
 
 #[enum_dispatch]
-pub enum Stream {
+pub enum GlkStream {
     ArrayBacked(ArrayBackedStream),
     FileStream(FileStream),
     Null(NullStream),
     Window(WindowStream),
 }
 
-impl Default for Stream {
+impl Default for GlkStream {
     fn default() -> Self {
-        Stream::Null(NullStream::default())
+        GlkStream::Null(NullStream::default())
     }
 }
 
-impl GlkObjectClass for Stream {
+impl GlkObjectClass for GlkStream {
     fn get_object_class_id() -> u32 {
         1
     }
@@ -55,7 +56,7 @@ pub enum StreamOperation<'a> {
 }
 use StreamOperation::*;
 
-#[enum_dispatch(Stream)]
+#[enum_dispatch(GlkStream)]
 pub trait StreamOperations {
     fn close(&self) -> StreamResultCounts {
         StreamResultCounts {
@@ -388,7 +389,7 @@ impl StreamOperations for WindowStream {
                 _ => {},
             };
             if let Some(str) = &win.echostr {
-                let str: GlkStream = str.into();
+                let str: GlkStreamShared = str.into();
                 str.lock().unwrap().do_operation(op)?;
             }
         }

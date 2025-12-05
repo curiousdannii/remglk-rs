@@ -84,12 +84,16 @@ pub enum GlkApiError {
 }
 pub type GlkResult<'a, T> = Result<T, GlkApiError>;
 
-macro_rules! current_stream {
-    ($self: expr) => {
-        $self.current_stream.as_ref().map(|str| Into::<GlkStream>::into(str)).as_ref().ok_or(NoCurrentStream)?
+macro_rules! current_stream_fn {
+    ($self: expr, $fn: expr) => {
+        {
+            let str = $self.current_stream.as_ref().map(|str| Into::<GlkStreamShared>::into(str)).ok_or(NoCurrentStream)?;
+            let mut str = lock!(str);
+            $fn(&mut str)
+        }
     };
 }
-pub(crate) use current_stream;
+pub(crate) use current_stream_fn;
 
 macro_rules! lock {
     ($str: expr) => {
