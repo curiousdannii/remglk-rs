@@ -68,6 +68,7 @@ pub struct ImageInfo {
     pub height: u32,
     pub image: u32,
     pub width: u32,
+    pub alttext: Option<String>,
 }
 
 extern "C" {
@@ -129,9 +130,23 @@ pub fn get_image_info(image: u32) -> Option<ImageInfo> {
         return None;
     }
     let info = unsafe {info.assume_init()};
+
+    // Extract alt text from the C string
+    let alttext = if info.alttext.is_null() {
+        None
+    } else {
+        unsafe {
+            let c_str = std::ffi::CStr::from_ptr(info.alttext);
+            c_str.to_str()
+                .ok()
+                .map(|s| s.to_string())
+        }
+    };
+
     Some(ImageInfo {
         height: info.height,
         image,
         width: info.width,
+        alttext,
     })
 }
