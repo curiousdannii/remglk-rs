@@ -9,10 +9,15 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+#![allow(non_upper_case_globals)]
+
 pub mod constants;
 mod iff;
 
 use std::{collections::HashMap, u32};
+
+use four_cc::FourCC;
+use pb_imgsize as imgsize;
 
 use crate::glkapi;
 use glkapi::*;
@@ -28,21 +33,38 @@ pub struct BlorbMap {
     stream: GlkStreamWeak,
 }
 
-#[derive(Default)]
 struct BlorbChunk {
-    chunktype: u32,
+    chunktype: FourCC,
     data: Option<Box<[u8]>>,
     description: Option<String>,
+    height: u32,
     length: u32,
     number: u32,
     offset: u32,
-    usage: u32,
+    usage: FourCC,
+    width: u32,
+}
+
+impl BlorbChunk {
+    fn new() -> Self {
+        Self {
+            chunktype: FourCC::from(0),
+            data: None,
+            description: None,
+            height: 0,
+            length: 0,
+            number: 0,
+            offset: 0,
+            usage: FourCC::from(0),
+            width: 0,
+        }
+    }
 }
 
 /** The result struct for loading a Blorb chunk */
 pub struct BlorbChunkResult<'a> {
     pub chunknum: u32,
-    pub chunktype: u32,
+    pub chunktype: FourCC,
     pub data: BlorbResultData<'a>,
     pub length: u32,
 }
@@ -53,7 +75,7 @@ pub enum BlorbResultData<'a> {
 
 pub struct BlorbResourceChunk {
     pub binary: bool,
-    pub data: &'static [u8],
+    pub data: Box<[u8]>,
 }
 
 /** Image information */
@@ -82,7 +104,7 @@ impl BlorbMap {
         setpos(&mut str, ridx_chunk.offset + 8);
         let count = read4(&mut str);
         for _ in 1..=count {
-            let usage = read4(&mut str);
+            let usage = read_four_cc(&mut str);
             let number = read4(&mut str);
             let start = read4(&mut str);
             resources.insert(start, (usage, number));
@@ -94,12 +116,12 @@ impl BlorbMap {
                 setpos(&mut str, chunk.offset + 8);
                 let count = read4(&mut str);
                 for _ in 1..=count {
-                    let usage = read4(&mut str);
+                    let usage = read_four_cc(&mut str);
                     let number = read4(&mut str);
                     let length = read4(&mut str);
                     let offset = getpos(&mut str);
                     let buf = getbuf(&mut str, offset, length);
-                    descriptions.insert((usage, number), buf.to_string(length as usize));
+                    descriptions.insert((usage, number), u8slice_to_string(&buf));
                 }
                 break;
             }
@@ -107,16 +129,18 @@ impl BlorbMap {
 
         // Loop through one more time to construct the list of chunks
         for iff_chunk in &iff_chunks {
-            let mut chunk = BlorbChunk::default();
+            let mut chunk = BlorbChunk::new();
+            // For FORM chunks we set the chunk type to the internal type, but the offset and length to the total
             if iff_chunk.chunktype == giblorb_ID_FORM {
                 setpos(&mut str, chunk.offset + 8);
-                chunk.chunktype = read4(&mut str);
-                chunk.length = iff_chunk.length;
+                chunk.chunktype = read_four_cc(&mut str);
+                chunk.length = iff_chunk.length + 8;
                 chunk.offset = iff_chunk.offset;
             }
+            // For regular chunks we set the offset and length to where the data begins
             else {
                 chunk.chunktype = iff_chunk.chunktype;
-                chunk.length = iff_chunk.length - 8;
+                chunk.length = iff_chunk.length;
                 chunk.offset = iff_chunk.offset + 8;
             }
             if let Some((usage, number)) = resources.remove(&iff_chunk.offset) {
@@ -124,6 +148,18 @@ impl BlorbMap {
                 chunk.usage = usage;
             }
             chunk.description = descriptions.remove(&(chunk.usage, chunk.number));
+            // Get some metadata
+            match iff_chunk.chunktype {
+                giblorb_ID_JPEG | giblorb_ID_PNG_ => {
+                    setpos(&mut str, chunk.offset);
+                    let data = getbuf(&mut str, chunk.offset, chunk.length);
+                    if let Ok(meta) = imgsize::read_bytes(&data) {
+                        chunk.height = meta.height;
+                        chunk.width = meta.width;
+                    }
+                },
+                _ => {},
+            };
             chunks.push(chunk);
         }
 
@@ -133,7 +169,7 @@ impl BlorbMap {
         })
     }
 
-    pub fn count_resources(&self, usage: u32) -> BlorbResult<(u32, u32, u32)> {
+    pub fn count_resources(&self, usage: FourCC) -> BlorbResult<(u32, u32, u32)> {
         let mut count: u32 = 0;
         let mut min: u32 = u32::MAX;
         let mut max: u32 = 0;
@@ -160,11 +196,7 @@ impl BlorbMap {
             let buf = chunk.data.get_or_insert_with(|| {
                 let str_glkobj = Into::<GlkStreamShared>::into(&self.stream);
                 let mut str = lock!(str_glkobj);
-                let buf = getbuf(&mut str, chunk.offset, chunk.length);
-                match buf {
-                    GlkOwnedBuffer::U8(buf) => buf,
-                    GlkOwnedBuffer::U32(_) => unreachable!(),
-                }
+                getbuf(&mut str, chunk.offset, chunk.length)
             });
             BlorbResultData::Data(buf)
         }
@@ -179,7 +211,7 @@ impl BlorbMap {
         })
     }
 
-    pub fn load_chunk_by_type<'a>(&'a mut self, method: u32, chunktype: u32, mut count: u32) -> BlorbResult<BlorbChunkResult<'a>> {
+    pub fn load_chunk_by_type<'a>(&'a mut self, method: u32, chunktype: FourCC, mut count: u32) -> BlorbResult<BlorbChunkResult<'a>> {
         for (i, chunk) in self.chunks.iter().enumerate() {
             if chunk.chunktype != chunktype {
                 continue;
@@ -193,7 +225,7 @@ impl BlorbMap {
         Err(giblorb_err_NotFound)
     }
 
-    pub fn load_resource<'a>(&'a mut self, method: u32, usage: u32, resnum: u32) -> BlorbResult<BlorbChunkResult<'a>> {
+    pub fn load_resource<'a>(&'a mut self, method: u32, usage: FourCC, resnum: u32) -> BlorbResult<BlorbChunkResult<'a>> {
         for (i, chunk) in self.chunks.iter().enumerate() {
             if chunk.usage == usage && chunk.number == resnum {
                 return self.load_chunk_by_number(method, i);
@@ -213,15 +245,39 @@ impl BlorbMap {
 
     // And some helper functions
 
-    pub fn get_blorb_resource(&self, usage: u32, resnum: u32) -> Option<&'static [u8]> {
-        todo!()
-    }
-
-    pub fn get_data_resource(&self, resnum: u32) -> Option<BlorbResourceChunk> {
-        todo!()
-    }
-
     pub fn get_image_info(&self, image: u32) -> Option<ImageInfo> {
-        todo!()
+        for chunk in &self.chunks {
+            if chunk.usage == giblorb_ID_Pict && chunk.number == image {
+                return Some(ImageInfo {
+                    alttext: chunk.description.clone(),
+                    height: chunk.height,
+                    image,
+                    width: chunk.width,
+                });
+            }
+        }
+        None
+    }
+
+    pub fn get_sound_format(&self, number: u32) -> Option<FourCC> {
+        for chunk in &self.chunks {
+            if chunk.usage == giblorb_ID_Snd_ && chunk.number == number {
+                return Some(chunk.chunktype);
+            }
+        }
+        None
+    }
+
+    pub fn read_data_resource(&self, number: u32) -> Option<BlorbResourceChunk> {
+        for chunk in &self.chunks {
+            if chunk.usage == giblorb_ID_Data && chunk.number == number {
+                let str_glkobj = Into::<GlkStreamShared>::into(&self.stream);
+                let mut str = lock!(str_glkobj);
+                let binary = chunk.chunktype != giblorb_ID_TEXT;
+                let data = getbuf(&mut str, chunk.offset, chunk.length);
+                return Some(BlorbResourceChunk {binary, data});
+            }
+        }
+        None
     }
 }

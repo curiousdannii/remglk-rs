@@ -9,6 +9,8 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use four_cc::FourCC;
+
 use remglk::blorb::*;
 use remglk::blorb::constants::*;
 
@@ -42,7 +44,7 @@ fn map_blorb_res(res: BlorbResult<()>) -> u32 {
 fn map_blorb_chunk_result(res: BlorbChunkResult) -> BlorbChunkResultC {
     BlorbChunkResultC {
         chunknum: res.chunknum,
-        chunktype: res.chunktype,
+        chunktype: res.chunktype.into(),
         data: match res.data {
             BlorbResultData::Data(data) => BlorbResultDataC {data: data.as_ptr()},
             BlorbResultData::Startpos(startpos) => BlorbResultDataC {startpos},
@@ -54,7 +56,7 @@ fn map_blorb_chunk_result(res: BlorbChunkResult) -> BlorbChunkResultC {
 #[no_mangle]
 pub extern "C" fn giblorb_count_resources(map: BlorbMapPtr, usage: u32, num_ptr: *mut u32, min_ptr: *mut u32, max_ptr: *mut u32) -> u32 {
     let map = unsafe {&mut (*map)};
-    match map.count_resources(usage) {
+    match map.count_resources(FourCC::from(usage)) {
         Ok((num, min, max)) => {
             write_ptr(num_ptr, num);
             write_ptr(min_ptr, min);
@@ -103,7 +105,7 @@ pub extern "C" fn giblorb_load_chunk_by_number(map: BlorbMapPtr, method: u32, re
 #[no_mangle]
 pub extern "C" fn giblorb_load_chunk_by_type(map: BlorbMapPtr, method: u32, resptr: *mut BlorbChunkResultC, chunktype: u32, count: u32) -> u32 {
     let map = unsafe {&mut (*map)};
-    match map.load_chunk_by_type(method, chunktype, count) {
+    match map.load_chunk_by_type(method, FourCC::from(chunktype), count) {
         Ok(res) => {
             write_ptr(resptr, map_blorb_chunk_result(res));
             giblorb_err_None
@@ -115,7 +117,7 @@ pub extern "C" fn giblorb_load_chunk_by_type(map: BlorbMapPtr, method: u32, resp
 #[no_mangle]
 pub extern "C" fn giblorb_load_resource(map: BlorbMapPtr, method: u32, resptr: *mut BlorbChunkResultC, usage: u32, resnum: u32) -> u32 {
     let map = unsafe {&mut (*map)};
-    match map.load_resource(method, usage, resnum) {
+    match map.load_resource(method, FourCC::from(usage), resnum) {
         Ok(res) => {
             write_ptr(resptr, map_blorb_chunk_result(res));
             giblorb_err_None

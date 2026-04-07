@@ -9,6 +9,8 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
+use four_cc::FourCC;
+
 use crate::glkapi;
 use glkapi::*;
 use glkapi::constants::*;
@@ -17,7 +19,7 @@ use glkapi::StreamOperation::*;
 use super::constants::*;
 
 pub struct IFFChunk {
-    pub chunktype: u32,
+    pub chunktype: FourCC,
     pub length: u32,
     pub offset: u32,
 }
@@ -26,7 +28,7 @@ pub struct IFFChunk {
 pub fn parse_iff(str: &mut GlkStream) -> Result<Vec<IFFChunk>, u32> {
 
     setpos(str, 0);
-    if read4(str) != giblorb_ID_FORM {
+    if read_four_cc(str) != giblorb_ID_FORM {
         return Err(giblorb_err_Format)
     }
     let length = read4(str);
@@ -35,25 +37,28 @@ pub fn parse_iff(str: &mut GlkStream) -> Result<Vec<IFFChunk>, u32> {
     let mut chunks = Vec::new();
     while getpos(str) <= length {
         let offset = getpos(str);
-        let chunktype = read4(str);
+        let chunktype = read_four_cc(str);
         let length = read4(str);
         chunks.push(IFFChunk {
             chunktype,
             length,
             offset,
         });
-        let newpos = offset + length + (if length % 2 > 0 {1} else {0});
+        let newpos = offset + 8 + length + (length % 2);
         setpos(str, newpos);
     }
     
     Ok(chunks)
 }
 
-pub fn getbuf(str: &mut GlkStream, offset: u32, length: u32) -> GlkOwnedBuffer {
+pub fn getbuf(str: &mut GlkStream, offset: u32, length: u32) -> Box<[u8]> {
     setpos(str, offset);
     let mut buf = GlkOwnedBuffer::new(false, length as usize);
     let _ = str.do_operation(GetBuffer(&mut (&mut buf).into()));
-    buf
+    match buf {
+        GlkOwnedBuffer::U8(buf) => buf,
+        GlkOwnedBuffer::U32(_) => unreachable!(),
+    }
 }
 
 pub fn getpos(str: &mut GlkStream) -> u32 {
@@ -69,4 +74,8 @@ pub fn read4(str: &mut GlkStream) -> u32 {
         | ((str.do_operation(GetChar(false)).unwrap() as u32) << 16)
         | ((str.do_operation(GetChar(false)).unwrap() as u32) << 8)
         | (str.do_operation(GetChar(false)).unwrap() as u32)
+}
+
+pub fn read_four_cc(str: &mut GlkStream) -> FourCC {
+    FourCC::from(read4(str))
 }

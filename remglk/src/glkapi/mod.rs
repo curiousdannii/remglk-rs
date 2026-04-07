@@ -29,6 +29,7 @@ use std::path::PathBuf;
 use std::str;
 use std::time::SystemTime;
 
+use four_cc::FourCC;
 use jiff::{Timestamp, ToSpan, tz::TimeZone};
 
 use super::*;
@@ -482,33 +483,24 @@ where S: Default + GlkSystem {
     pub fn glk_schannel_play_ext(&mut self, schannel: &mut GlkSoundChannel, snd: u32, repeats: u32, notify: u32) -> u32 {
         if repeats == 0 {
             schannel.ops.push(SoundChannelOperation::Stop);
+            self.schannels_changed = true;
+            return 1;
         }
-        else if let Some(map) = &self.blorb {
-            if let Some(data) = map.get_blorb_resource(giblorb_ID_Snd, snd) {
-                let id = &data[0..4];
+        if let Some(map) = &self.blorb {
+            if let Some(format) = map.get_sound_format(snd) {
                 // For now only support Ogg/Vorbis and AIFF
-                if id == b"OggS" || (id == b"FORM" && &data[8..12] == b"AIFF") {
+                if format == giblorb_ID_AIFF || format == giblorb_ID_OGGV {
                     schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
                         notify: if notify != 0 {Some(notify)} else {None},
                         repeats: if repeats != 1 {Some(repeats)} else {None},
                         snd,
                     }));
-                }
-                else {
-                    return 0;
+                    self.schannels_changed = true;
+                    return 1;
                 }
             }
-            else {
-                return 0;
-            }
         }
-        else {
-            return 0;
-        }
-        self.schannels_changed = true;
-        // TODO: check for previous play operations?
-        // TODO: return 0 for MOD resources?
-        1
+        0
     }
 
     pub fn glk_schannel_play_multi(&mut self, schannels: Vec<GlkSoundChannelShared>, sounds: &[u32], notify: u32) -> u32 {
@@ -1132,7 +1124,7 @@ where S: Default + GlkSystem {
 
     // Blorb functions
 
-    pub fn giblorb_count_resources(map: &BlorbMap, usage: u32) -> BlorbResult<(u32, u32, u32)> {
+    pub fn giblorb_count_resources(map: &BlorbMap, usage: FourCC) -> BlorbResult<(u32, u32, u32)> {
         map.count_resources(usage)
     }
 
@@ -1153,11 +1145,11 @@ where S: Default + GlkSystem {
         map.load_chunk_by_number(method, chunknum as usize)
     }
 
-    pub fn giblorb_load_chunk_by_type<'a>(map: &'a mut BlorbMap, method: u32, chunktype: u32, count: u32) -> BlorbResult<BlorbChunkResult<'a>> {
+    pub fn giblorb_load_chunk_by_type<'a>(map: &'a mut BlorbMap, method: u32, chunktype: FourCC, count: u32) -> BlorbResult<BlorbChunkResult<'a>> {
         map.load_chunk_by_type(method, chunktype, count)
     }
 
-    pub fn giblorb_load_resource<'a>(map: &'a mut BlorbMap, method: u32, usage: u32, resnum: u32) -> BlorbResult<BlorbChunkResult<'a>> {
+    pub fn giblorb_load_resource<'a>(map: &'a mut BlorbMap, method: u32, usage: FourCC, resnum: u32) -> BlorbResult<BlorbChunkResult<'a>> {
         map.load_resource(method, usage, resnum)
     }
 
@@ -1497,10 +1489,10 @@ where S: Default + GlkSystem {
 
     fn create_resource_stream(&mut self, filenum: u32, rock: u32, uni: bool) -> GlkResult<'_, Option<GlkStreamShared>> {
         if let Some(map) = &self.blorb {
-            let resource = map.get_data_resource(filenum);
+            let resource = map.read_data_resource(filenum);
             if let Some(resource) = resource {
                 // Create an appopriate stream
-                let str = create_stream_from_buffer(resource.data.into(), resource.binary, FileMode::Read, uni, None)?;
+                let str = create_stream_from_buffer(resource.data, resource.binary, FileMode::Read, uni, None)?;
                 self.streams.register(&str, rock);
                 return Ok(Some(str));
             }
