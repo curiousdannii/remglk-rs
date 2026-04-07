@@ -232,17 +232,17 @@ pub extern "C" fn glk_get_line_stream_uni(str: StreamPtr, buf: BufferMutU32Ptr, 
 
 #[no_mangle]
 pub extern "C" fn glk_image_draw(win: WindowPtr, image: u32, val1: i32, val2: i32) -> u32 {
-    GlkApi::glk_image_draw(&mut lock!(from_ptr(win)), image, val1, val2)
+    GLKAPI.lock().unwrap().glk_image_draw(&mut lock!(from_ptr(win)), image, val1, val2)
 }
 
 #[no_mangle]
 pub extern "C" fn glk_image_draw_scaled(win: WindowPtr, image: u32, val1: i32, val2: i32, width: u32, height: u32) -> u32 {
-    GlkApi::glk_image_draw_scaled(&mut lock!(from_ptr(win)), image, val1, val2, width, height)
+    GLKAPI.lock().unwrap().glk_image_draw_scaled(&mut lock!(from_ptr(win)), image, val1, val2, width, height)
 }
 
 #[no_mangle]
 pub extern "C" fn glk_image_get_info(image: u32, width_ptr: *mut u32, height_ptr: *mut u32) -> u32 {
-    let res = GlkApi::glk_image_get_info(image);
+    let res = GLKAPI.lock().unwrap().glk_image_get_info(image);
     if let Some(info) = res {
         write_ptr(height_ptr, info.height);
         write_ptr(width_ptr, info.width);

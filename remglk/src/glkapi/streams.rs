@@ -46,6 +46,7 @@ impl GlkObjectClass for GlkStream {
 /** A stream operation */
 pub enum StreamOperation<'a> {
     GetBuffer(&'a mut GlkBufferMut<'a>),
+    /** Read a byte, pass true for unicode */
     GetChar(bool),
     GetLine(&'a mut GlkBufferMut<'a>),
     GetPosition,

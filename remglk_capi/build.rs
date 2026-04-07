@@ -11,10 +11,8 @@ https://github.com/curiousdannii/remglk-rs
 
 fn main() {
     cc::Build::new()
-        .file("src/glk/gi_blorb.c")
         .file("src/glk/gi_debug.c")
         .file("src/glk/gi_dispa.c")
-        .file("src/glk/rgblorb.c")
         .file("src/glk/support.c")
         .warnings(false)
         .compile("miniglk");

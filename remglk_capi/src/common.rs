@@ -28,6 +28,15 @@ pub fn borrow<T>(obj: Option<&GlkObject<T>>) -> *const Mutex<GlkObjectMetadata<T
     }
 }
 
+pub fn borrow_any_opt<T>(obj: Option<&mut T>) -> *mut T {
+    if let Some(obj) = obj {
+        ptr::from_mut(obj)
+    }
+    else {
+        ptr::null_mut()
+    }
+}
+
 pub fn from_ptr<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> GlkObject<T> {
     unsafe {Arc::increment_strong_count(ptr);}
     reclaim(ptr)

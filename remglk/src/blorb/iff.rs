@@ -49,6 +49,13 @@ pub fn parse_iff(str: &mut GlkStream) -> Result<Vec<IFFChunk>, u32> {
     Ok(chunks)
 }
 
+pub fn getbuf(str: &mut GlkStream, offset: u32, length: u32) -> GlkOwnedBuffer {
+    setpos(str, offset);
+    let mut buf = GlkOwnedBuffer::new(false, length as usize);
+    let _ = str.do_operation(GetBuffer(&mut (&mut buf).into()));
+    buf
+}
+
 pub fn getpos(str: &mut GlkStream) -> u32 {
     str.do_operation(GetPosition).unwrap() as u32
 }

@@ -3,7 +3,7 @@
 Array helpers
 =============
 
-Copyright (c) 2025 Dannii Willis
+Copyright (c) 2026 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -68,6 +68,19 @@ impl GlkBufferMut<'_> {
 }
 
 impl GlkOwnedBuffer {
+    pub fn new(uni: bool, length: usize) -> Self {
+        if uni {
+            let mut buf: Vec<u32> = Vec::new();
+            buf.resize(length, 0);
+            return Self::U32(buf.into_boxed_slice())
+        }
+        else {
+            let mut buf: Vec<u8> = Vec::new();
+            buf.resize(length, 0);
+            return Self::U8(buf.into_boxed_slice())
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

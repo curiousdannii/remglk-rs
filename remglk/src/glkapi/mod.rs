@@ -34,6 +34,7 @@ use jiff::{Timestamp, ToSpan, tz::TimeZone};
 use super::*;
 pub use arrays::*;
 use blorb::*;
+use blorb::constants::*;
 pub use common::*;
 pub use GlkApiError::*;
 use constants::*;
@@ -42,19 +43,19 @@ use objects::*;
 use protocol::*;
 use schannels::*;
 use streams::*;
-pub use streams::StreamOperations;
 use windows::*;
 
 // Expose for so they can be turned into pointers
 pub use filerefs::GlkFileRef;
 pub use objects::{GlkObject, GlkObjectMetadata};
 pub use schannels::GlkSoundChannel;
-pub use streams::GlkStream;
+pub use streams::{StreamOperation, StreamOperations, GlkStream, GlkStreamShared, GlkStreamWeak};
 pub use windows::GlkWindow;
 
 #[derive(Default)]
 pub struct GlkApi<S>
 where S: Default + GlkSystem {
+    blorb: Option<BlorbMap>,
     buffer_window_count: u32,
     current_stream: Option<GlkStreamWeak>,
     exited: bool,
@@ -344,30 +345,31 @@ where S: Default + GlkSystem {
         str.do_operation(StreamOperation::GetLine(&mut GlkBufferMut::U32(buf))).map(|res| res as u32)
     }
 
-    pub fn glk_image_draw(win: &mut GlkWindow, image: u32, val1: i32, val2: i32) -> u32 {
-        let info = get_image_info(image);
-        if let Some(info) = info {
-            let height = info.height;
-            let width = info.width;
-            Self::draw_image(win, info, height, val1, val2, width)
+    pub fn glk_image_draw(&self, win: &mut GlkWindow, image: u32, val1: i32, val2: i32) -> u32 {
+        if let Some(map) = &self.blorb {
+            if let Some(info) = map.get_image_info(image) {
+                let height = info.height;
+                let width = info.width;
+                return Self::draw_image(win, info, height, val1, val2, width);
+            }
         }
-        else {
-            0
-        }
+        0
     }
 
-    pub fn glk_image_draw_scaled(win: &mut GlkWindow, image: u32, val1: i32, val2: i32, width: u32, height: u32) -> u32 {
-        let info = get_image_info(image);
-        if let Some(info) = info {
-            Self::draw_image(win, info, height, val1, val2, width)
+    pub fn glk_image_draw_scaled(&self, win: &mut GlkWindow, image: u32, val1: i32, val2: i32, width: u32, height: u32) -> u32 {
+        if let Some(map) = &self.blorb {
+            if let Some(info) = map.get_image_info(image) {
+                return Self::draw_image(win, info, height, val1, val2, width);
+            }
         }
-        else {
-            0
-        }
+        0
     }
 
-    pub fn glk_image_get_info(image: u32) -> Option<ImageInfo> {
-        get_image_info(image)
+    pub fn glk_image_get_info(&self, image: u32) -> Option<ImageInfo> {
+        if let Some(map) = &self.blorb {
+            return map.get_image_info(image);
+        }
+        None
     }
 
     pub fn glk_put_buffer(&mut self, buf: &[u8]) -> GlkResult<'_, ()> {
@@ -481,15 +483,20 @@ where S: Default + GlkSystem {
         if repeats == 0 {
             schannel.ops.push(SoundChannelOperation::Stop);
         }
-        else if let Some(data) = get_blorb_resource(giblorb_ID_Snd, snd) {
-            let id = &data[0..4];
-            // For now only support Ogg/Vorbis and AIFF
-            if id == b"OggS" || (id == b"FORM" && &data[8..12] == b"AIFF") {
-                schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
-                    notify: if notify != 0 {Some(notify)} else {None},
-                    repeats: if repeats != 1 {Some(repeats)} else {None},
-                    snd,
-                }));
+        else if let Some(map) = &self.blorb {
+            if let Some(data) = map.get_blorb_resource(giblorb_ID_Snd, snd) {
+                let id = &data[0..4];
+                // For now only support Ogg/Vorbis and AIFF
+                if id == b"OggS" || (id == b"FORM" && &data[8..12] == b"AIFF") {
+                    schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
+                        notify: if notify != 0 {Some(notify)} else {None},
+                        repeats: if repeats != 1 {Some(repeats)} else {None},
+                        snd,
+                    }));
+                }
+                else {
+                    return 0;
+                }
             }
             else {
                 return 0;
@@ -1123,6 +1130,52 @@ where S: Default + GlkSystem {
         win.echostr = str.map(|str| str.downgrade());
     }
 
+    // Blorb functions
+
+    pub fn giblorb_count_resources(map: &BlorbMap, usage: u32) -> BlorbResult<(u32, u32, u32)> {
+        map.count_resources(usage)
+    }
+
+    pub fn giblorb_create_map(str_glkobj: GlkStreamShared) -> BlorbResult<BlorbMap> {
+        BlorbMap::new(str_glkobj)
+    }
+
+    pub fn giblorb_destroy_map(map: BlorbMap) -> BlorbResult<()> {
+        drop(map);
+        Ok(())
+    }
+
+    pub fn giblorb_get_resource_map<'a>(&'a mut self) -> Option<&'a mut BlorbMap> {
+        self.blorb.as_mut()
+    }
+
+    pub fn giblorb_load_chunk_by_number<'a>(map: &'a mut BlorbMap, method: u32, chunknum: u32) -> BlorbResult<BlorbChunkResult<'a>> {
+        map.load_chunk_by_number(method, chunknum as usize)
+    }
+
+    pub fn giblorb_load_chunk_by_type<'a>(map: &'a mut BlorbMap, method: u32, chunktype: u32, count: u32) -> BlorbResult<BlorbChunkResult<'a>> {
+        map.load_chunk_by_type(method, chunktype, count)
+    }
+
+    pub fn giblorb_load_resource<'a>(map: &'a mut BlorbMap, method: u32, usage: u32, resnum: u32) -> BlorbResult<BlorbChunkResult<'a>> {
+        map.load_resource(method, usage, resnum)
+    }
+
+    pub fn giblorb_set_resource_map(&mut self, str_glkobj: GlkStreamShared) -> BlorbResult<()> {
+        let res = BlorbMap::new(str_glkobj)?;
+        self.blorb = Some(res);
+        Ok(())
+    }
+
+    pub fn giblorb_unload_chunk(map: &mut BlorbMap, chunknum: u32) -> BlorbResult<()> {
+        map.unload_chunk(chunknum as usize)
+    }
+
+    pub fn giblorb_unset_resource_map(&mut self) -> BlorbResult<()> {
+        self.blorb = None;
+        Ok(())
+    }
+
     // Extensions
 
     pub fn garglk_set_reversevideo(&self, val: u32) -> GlkResult<'_, ()> {
@@ -1443,16 +1496,16 @@ where S: Default + GlkSystem {
     }
 
     fn create_resource_stream(&mut self, filenum: u32, rock: u32, uni: bool) -> GlkResult<'_, Option<GlkStreamShared>> {
-        let resource = get_blorb_data_resource(filenum);
-        if let Some(resource) = resource {
-            // Create an appopriate stream
-            let str = create_stream_from_buffer(resource.data.into(), resource.binary, FileMode::Read, uni, None)?;
-            self.streams.register(&str, rock);
-            Ok(Some(str))
+        if let Some(map) = &self.blorb {
+            let resource = map.get_data_resource(filenum);
+            if let Some(resource) = resource {
+                // Create an appopriate stream
+                let str = create_stream_from_buffer(resource.data.into(), resource.binary, FileMode::Read, uni, None)?;
+                self.streams.register(&str, rock);
+                return Ok(Some(str));
+            }
         }
-        else {
-            Ok(None)
-        }
+        Ok(None)
     }
 
     fn delete_temp_files(&mut self) {
