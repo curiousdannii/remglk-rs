@@ -628,10 +628,9 @@ where S: Default + GlkSystem {
         }
 
         let disprock = str.array_disprock;
-        match str.deref_mut().deref_mut() {
-            GlkStream::ArrayBacked(str) => self.unretain_array(str.take_buffer(), disprock),
-            _ => {},
-        };
+        if let GlkStream::ArrayBacked(str) = str.deref_mut().deref_mut() {
+            self.unretain_array(str.take_buffer(), disprock);
+        }
 
         drop(str);
         self.streams.unregister(str_glkobj);
@@ -669,7 +668,7 @@ where S: Default + GlkSystem {
             }),
             None => None,
         };
-        self.create_memory_stream(buf.map(|buf| GlkOwnedBuffer::U8(buf)), fmode, rock, disprock)
+        self.create_memory_stream(buf.map(GlkOwnedBuffer::U8), fmode, rock, disprock)
     }
 
     pub fn glk_stream_open_memory_uni(&mut self, buf: Option<Box<[u32]>>, fmode: FileMode, rock: u32) -> GlkResult<'_, GlkStreamShared> {
@@ -679,7 +678,7 @@ where S: Default + GlkSystem {
             }),
             None => None,
         };
-        self.create_memory_stream(buf.map(|buf| GlkOwnedBuffer::U32(buf)), fmode, rock, disprock)
+        self.create_memory_stream(buf.map(GlkOwnedBuffer::U32), fmode, rock, disprock)
     }
 
     pub fn glk_stream_open_resource(&mut self, filenum: u32, rock: u32) -> GlkResult<'_, Option<GlkStreamShared>> {
@@ -1137,7 +1136,7 @@ where S: Default + GlkSystem {
         Ok(())
     }
 
-    pub fn giblorb_get_resource_map<'a>(&'a mut self) -> Option<&'a mut BlorbMap> {
+    pub fn giblorb_get_resource_map(&mut self) -> Option<&mut BlorbMap> {
         self.blorb.as_mut()
     }
 

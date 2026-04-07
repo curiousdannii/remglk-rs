@@ -14,7 +14,7 @@ https://github.com/curiousdannii/remglk-rs
 pub mod constants;
 mod iff;
 
-use std::{collections::HashMap, u32};
+use std::collections::HashMap;
 
 use four_cc::FourCC;
 use pb_imgsize as imgsize;

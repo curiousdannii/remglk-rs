@@ -16,8 +16,6 @@ use byteorder::{BigEndian, ByteOrder};
 use thiserror::Error;
 use widestring::Utf32String;
 
-use super::*;
-
 pub const MAX_LATIN1: u32 = 0xFF;
 pub const QUESTION_MARK: u32 = '?' as u32;
 

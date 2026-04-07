@@ -82,7 +82,7 @@ pub extern "C" fn giblorb_create_map(str: StreamPtr, newmap: BlorbMapPtr) -> u32
 pub extern "C" fn giblorb_destroy_map(map: BlorbMapPtr) -> u32 {
     let map = unsafe{Box::from_raw(map)};
     drop(map);
-    return giblorb_err_None;
+    giblorb_err_None
 }
 
 #[no_mangle]

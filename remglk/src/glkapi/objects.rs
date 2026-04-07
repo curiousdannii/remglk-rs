@@ -105,7 +105,7 @@ where T: Default + GlkObjectClass, GlkObject<T>: Default + Eq {
     }
 
     pub fn get_by_id(&self, id: u32) -> Option<GlkObject<T>> {
-        self.store.get(&id).map(|obj| obj.clone())
+        self.store.get(&id).cloned()
     }
 
     pub fn iter(&self) -> impl Iterator<Item=&GlkObject<T>>{

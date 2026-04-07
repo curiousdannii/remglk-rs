@@ -70,14 +70,12 @@ impl GlkBufferMut<'_> {
 impl GlkOwnedBuffer {
     pub fn new(uni: bool, length: usize) -> Self {
         if uni {
-            let mut buf: Vec<u32> = Vec::new();
-            buf.resize(length, 0);
-            return Self::U32(buf.into_boxed_slice())
+            let buf: Vec<u32> = vec![0; length];
+            Self::U32(buf.into_boxed_slice())
         }
         else {
-            let mut buf: Vec<u8> = Vec::new();
-            buf.resize(length, 0);
-            return Self::U8(buf.into_boxed_slice())
+            let buf: Vec<u8> = vec![0; length];
+            Self::U8(buf.into_boxed_slice())
         }
     }
 
