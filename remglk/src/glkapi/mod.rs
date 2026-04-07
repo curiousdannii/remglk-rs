@@ -1511,7 +1511,7 @@ where S: Default + GlkSystem {
             WindowData::Buffer(data) => {
                 data.put_image(BufferWindowImage {
                     alignment: image_alignment(val1),
-                    alttext: None,
+                    alttext: info.alttext,
                     height,
                     image: info.image,
                     hyperlink: None,
