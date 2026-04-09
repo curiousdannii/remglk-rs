@@ -3,7 +3,7 @@
 GlkApi constants
 ================
 
-Copyright (c) 2022 Dannii Willis
+Copyright (c) 2026 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -26,6 +26,7 @@ pub const gestalt_MouseInput: u32 = 4;
 pub const gestalt_Timer: u32 = 5;
 pub const gestalt_Graphics: u32 = 6;
 pub const gestalt_DrawImage: u32 = 7;
+pub const gestalt_DrawImageScale: u32 = 24;
 pub const gestalt_Sound: u32 = 8;
 pub const gestalt_SoundVolume: u32 = 9;
 pub const gestalt_SoundNotify: u32 = 10;
@@ -362,6 +363,15 @@ pub fn image_alignment(val: i32) -> BufferWindowImageAlignment {
         _ => BufferWindowImageAlignment::InlineUp,
     }
 }
+
+pub const imagerule_WidthOrig: u32 = 0x01;
+pub const imagerule_WidthFixed: u32 = 0x02;
+pub const imagerule_WidthRatio: u32 = 0x03;
+pub const imagerule_WidthMask: u32 = 0x03;
+pub const imagerule_HeightOrig: u32 = 0x04;
+pub const imagerule_HeightFixed: u32 = 0x08;
+pub const imagerule_AspectRatio: u32 = 0x0C;
+pub const imagerule_HeightMask: u32 = 0x0C;
 
 pub const zcolor_Default: u32 = 0xffffffff;
 pub const zcolor_Current: u32 = 0xfffffffe;

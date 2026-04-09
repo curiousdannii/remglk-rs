@@ -3,7 +3,7 @@
 The Glk API
 ===========
 
-Copyright (c) 2025 Dannii Willis
+Copyright (c) 2026 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -296,6 +296,8 @@ where S: Default + GlkSystem {
 
             gestalt_DrawImage => (self.support.graphics && (val == wintype_Graphics || val == wintype_TextBuffer)) as u32,
 
+            gestalt_DrawImageScale => self.support.graphicsext as u32,
+
             gestalt_Sound | gestalt_SoundVolume | gestalt_SoundNotify | gestalt_SoundMusic | gestalt_Sound2 => self.support.sounds as u32,
 
             gestalt_Hyperlinks => self.support.hyperlinks as u32,
@@ -349,9 +351,7 @@ where S: Default + GlkSystem {
     pub fn glk_image_draw(&self, win: &mut GlkWindow, image: u32, val1: i32, val2: i32) -> u32 {
         if let Some(map) = &self.blorb {
             if let Some(info) = map.get_image_info(image) {
-                let height = info.height;
-                let width = info.width;
-                return Self::draw_image(win, info, height, val1, val2, width);
+                return Self::draw_image(win, info, 0, imagerule_HeightOrig | imagerule_WidthOrig, 0x10000, val1, val2, 0);
             }
         }
         0
@@ -360,7 +360,17 @@ where S: Default + GlkSystem {
     pub fn glk_image_draw_scaled(&self, win: &mut GlkWindow, image: u32, val1: i32, val2: i32, width: u32, height: u32) -> u32 {
         if let Some(map) = &self.blorb {
             if let Some(info) = map.get_image_info(image) {
-                return Self::draw_image(win, info, height, val1, val2, width);
+                return Self::draw_image(win, info, height, imagerule_HeightFixed | imagerule_WidthFixed, 0x10000, val1, val2, width);
+            }
+        }
+        0
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn glk_image_draw_scaled_ext(&self, win: &mut GlkWindow, image: u32, val1: i32, val2: i32, width: u32, height: u32, imagerule: u32, maxwidth: u32) -> u32 {
+        if let Some(map) = &self.blorb {
+            if let Some(info) = map.get_image_info(image) {
+                return Self::draw_image(win, info, height, imagerule, maxwidth, val1, val2, width);
             }
         }
         0
@@ -1222,11 +1232,12 @@ where S: Default + GlkSystem {
         let mut glkevent = GlkEvent::default();
         match event.data {
             EventData::Init(data) => {
-                self.metrics = normalise_metrics(data.metrics)?;
+                self.metrics = normalise_metrics(*data.metrics)?;
                 for support in data.support {
                     match support.as_ref() {
                         "garglktext" => self.support.garglktext = true,
                         "graphics" => self.support.graphics = true,
+                        "graphicsext" => self.support.graphicsext = true,
                         "hyperlinks" => self.support.hyperlinks = true,
                         "sounds" => self.support.sounds = true,
                         "timer" => self.support.timers = true,
@@ -1236,7 +1247,7 @@ where S: Default + GlkSystem {
             },
 
             EventData::Arrange(data) => {
-                self.metrics = normalise_metrics(data.metrics)?;
+                self.metrics = normalise_metrics(*data.metrics)?;
                 if let Some(win) = self.root_window.as_ref() {
                     let win = Into::<GlkWindowShared>::into(win);
                     self.rearrange_window(&win, WindowBox {
@@ -1506,20 +1517,62 @@ where S: Default + GlkSystem {
         }
     }
 
-    fn draw_image(win: &mut GlkWindow, info: ImageInfo, height: u32, val1: i32, val2: i32, width: u32) -> u32 {
+    #[allow(clippy::too_many_arguments)]
+    fn draw_image(win: &mut GlkWindow, info: ImageInfo, mut height: u32, imagerule: u32, maxwidth: u32, val1: i32, val2: i32, mut width: u32) -> u32 {
+        let heightrule = imagerule & imagerule_HeightMask;
+        let widthrule = imagerule & imagerule_WidthMask;
+
+        if heightrule == imagerule_HeightOrig {
+            height = info.height;
+        }
+        if widthrule == imagerule_WidthOrig {
+            width = info.width;
+        }
+
         match &mut win.data {
             WindowData::Buffer(data) => {
+                let height = if heightrule == imagerule_AspectRatio {
+                    BufferWindowImageHeight {
+                        aspectheight: Some((info.height as f64) * ((height as f64) / (0x10000 as f64))),
+                        aspectwidth: Some(info.width),
+                        ..Default::default()
+                    }
+                }
+                else {
+                    BufferWindowImageHeight {
+                        height: Some(height),
+                        ..Default::default()
+                    }
+                };
+                let (width, winmaxwidth) = if widthrule == imagerule_WidthRatio {
+                    // Use the smaller of the width or maxwidth
+                    let ratio = if maxwidth > 0 {maxwidth.min(width)} else {width};
+                    (BufferWindowImageWidth::WidthRatio((ratio as f64) / (0x10000 as f64)), None)
+                }
+                else {
+                    (BufferWindowImageWidth::Width(width), Some(if maxwidth > 0 {Some((maxwidth as f64) / (0x10000 as f64))} else {None}))
+                };
                 data.put_image(BufferWindowImage {
                     alignment: image_alignment(val1),
                     alttext: info.alttext,
                     height,
                     image: info.image,
+                    // This will be set in `put_image`
                     hyperlink: None,
                     width,
+                    winmaxwidth,
                 });
                 1
             },
             WindowData::Graphics(data) => {
+                // Calculate the ratios now
+                if widthrule == imagerule_WidthRatio {
+                    width = ((data.width as f64) * (width as f64) / (0x10000 as f64)) as u32;
+                }
+                if heightrule == imagerule_AspectRatio {
+                    let aspect = ((info.height as f64) / (info.width as f64)) * ((height as f64) / (0x10000 as f64));
+                    height = ((width as f64) * aspect) as u32;
+                }
                 data.draw.push(GraphicsWindowOperation::Image(ImageOperation {
                     height,
                     image: info.image,
@@ -1899,6 +1952,7 @@ pub struct StreamResultCounts {
 struct SupportedFeatures {
     garglktext: bool,
     graphics: bool,
+    graphicsext: bool,
     hyperlinks: bool,
     sounds: bool,
     timers: bool,

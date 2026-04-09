@@ -205,7 +205,7 @@ impl BufferWindow {
         self.clone_last_textrun(true);
         let content = &mut self.content.last_mut().unwrap();
         let last_par = &mut content.content;
-        last_par.insert(last_par.len() - 1, LineData::Image(image));
+        last_par.insert(last_par.len() - 1, LineData::Image(Box::new(image)));
     }
 
     /** Return the last textrun, which must exist, and actually be a textrun not an image */

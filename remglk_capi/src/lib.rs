@@ -73,7 +73,7 @@ extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
     if library_args.autoinit {
         GLKAPI.lock().unwrap().handle_event(Event {
             data: EventData::Init(InitEvent {
-                metrics: Metrics {
+                metrics: Box::new(Metrics {
                     buffercharheight: Some(1.0),
                     buffercharwidth: Some(1.0),
                     gridcharheight: Some(1.0),
@@ -81,7 +81,7 @@ extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
                     height: 50.0,
                     width: 80.0,
                     ..Default::default()
-                },
+                }),
                 support: vec![
                     "garglktext".to_string(),
                     "graphics".to_string(),

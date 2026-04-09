@@ -60,7 +60,7 @@ pub type PartialInputs = Option<HashMap<u32, String>>;
 
 #[derive(Deserialize)]
 pub struct ArrangeEvent {
-    pub metrics: Metrics,
+    pub metrics: Box<Metrics>,
 }
 
 /** Character (single key) event */
@@ -93,7 +93,7 @@ pub struct HyperlinkEvent {
 /** Initilisation event */
 #[derive(Deserialize)]
 pub struct InitEvent {
-    pub metrics: Metrics,
+    pub metrics: Box<Metrics>,
     /** Capabilities list */
     pub support: Vec<String>,
 }
@@ -443,7 +443,7 @@ pub struct GridWindowLine {
 #[serde(tag = "special")]
 pub enum LineData {
     //StylePair(String, String),
-    Image(BufferWindowImage),
+    Image(Box<BufferWindowImage>),
     #[serde(untagged)]
     TextRun(TextRun),
 }
@@ -456,13 +456,34 @@ pub struct BufferWindowImage {
     /** Image alt text */
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alttext: Option<String>,
-    pub height: u32,
+    #[serde(flatten)]
+    pub height: BufferWindowImageHeight,
     /** Hyperlink value */
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hyperlink: Option<u32>,
     /** Image number */
     pub image: u32,
-    pub width: u32,
+    #[serde(flatten)]
+    pub width: BufferWindowImageWidth,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub winmaxwidth: Option<Option<f64>>,
+}
+
+#[derive(Clone, Default, Serialize)]
+pub struct BufferWindowImageHeight {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aspectheight: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aspectwidth: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BufferWindowImageWidth {
+    Width(u32),
+    WidthRatio(f64),
 }
 
 /** Text run */

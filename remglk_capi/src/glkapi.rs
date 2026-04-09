@@ -241,6 +241,11 @@ pub extern "C" fn glk_image_draw_scaled(win: WindowPtr, image: u32, val1: i32, v
 }
 
 #[no_mangle]
+pub extern "C" fn glk_image_draw_scaled_ext(win: WindowPtr, image: u32, val1: i32, val2: i32, width: u32, height: u32, imagerule: u32, maxwidth: u32) -> u32 {
+    GLKAPI.lock().unwrap().glk_image_draw_scaled_ext(&mut lock!(from_ptr(win)), image, val1, val2, width, height, imagerule, maxwidth)
+}
+
+#[no_mangle]
 pub extern "C" fn glk_image_get_info(image: u32, width_ptr: *mut u32, height_ptr: *mut u32) -> u32 {
     let res = GLKAPI.lock().unwrap().glk_image_get_info(image);
     if let Some(info) = res {
