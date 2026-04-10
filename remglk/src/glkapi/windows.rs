@@ -3,7 +3,7 @@
 Glk Windows
 ===========
 
-Copyright (c) 2025 Dannii Willis
+Copyright (c) 2026 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -308,8 +308,8 @@ impl WindowOperations for BufferWindow {
             };
             if self.cleared {
                 content_update.base.clear = true;
-                content_update.base.bg = self.cleared_bg.map(colour_code_to_css);
-                content_update.base.fg = self.cleared_fg.map(colour_code_to_css);
+                content_update.base.bg = Some(self.cleared_bg.map(colour_code_to_css));
+                content_update.base.fg = Some(self.cleared_fg.map(colour_code_to_css));
                 self.cleared = false;
             }
             update.content = Some(ContentUpdate::Buffer(content_update));
@@ -525,8 +525,8 @@ impl WindowOperations for GridWindow {
             };
             if self.cleared {
                 grid_content.base.clear = true;
-                grid_content.base.bg = self.cleared_bg.map(colour_code_to_css);
-                grid_content.base.fg = self.cleared_fg.map(colour_code_to_css);
+                grid_content.base.bg = Some(self.cleared_bg.map(colour_code_to_css));
+                grid_content.base.fg = Some(self.cleared_fg.map(colour_code_to_css));
                 self.cleared = false;
             }
             update.content = Some(ContentUpdate::Grid(grid_content));

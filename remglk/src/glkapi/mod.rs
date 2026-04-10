@@ -1410,7 +1410,7 @@ where S: Default + GlkSystem {
 
         let page_margin_bg = self.page_margin.get_page_margin_bg();
         if page_margin_bg != self.page_margin.transmitted {
-            state.page_margin_bg = page_margin_bg.map(colour_code_to_css);
+            state.page_margin_bg = Some(page_margin_bg.map(colour_code_to_css));
             self.page_margin.transmitted = page_margin_bg;
         }
 

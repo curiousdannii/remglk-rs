@@ -299,7 +299,7 @@ pub struct StateUpdate {
     pub input: Vec<InputUpdate>,
     /** Background colour for the page margin (ie, outside of the gameport); blank means remove the current background colour */
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub page_margin_bg: Option<String>,
+    pub page_margin_bg: Option<Option<String>>,
     /** Sound channels */
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub schannels: Vec<SoundChannelUpdate>,
@@ -334,10 +334,10 @@ pub struct TextualWindowUpdate {
     pub clear: bool,
     /** Background colour after clearing */
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bg: Option<String>,
+    pub bg: Option<Option<String>>,
     /** Foreground colour after clearing */
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fg: Option<String>,
+    pub fg: Option<Option<String>>,
 }
 
 /** Buffer window content update */
