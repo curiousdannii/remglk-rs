@@ -3,7 +3,7 @@
 Helper functions
 ================
 
-Copyright (c) 2025 Dannii Willis
+Copyright (c) 2026 Dannii Willis
 MIT licenced
 https://github.com/curiousdannii/remglk-rs
 
@@ -37,14 +37,20 @@ pub fn borrow_any_opt<T>(obj: Option<&mut T>) -> *mut T {
     }
 }
 
-pub fn from_ptr<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> GlkObject<T> {
+pub fn from_ptr<T>(ptr: *const Mutex<GlkObjectMetadata<T>>, funcname: &str) -> GlkObject<T> {
+    if ptr.is_null() {
+        panic!("Invalid (null) reference: {}", funcname)
+    }
     unsafe {Arc::increment_strong_count(ptr);}
-    reclaim(ptr)
+    reclaim(ptr, funcname)
 }
 
-pub fn from_ptr_array<T>(array_ptr: *const *const Mutex<GlkObjectMetadata<T>>, array_count: u32) -> Vec<GlkObject<T>> {
+pub fn from_ptr_array<T>(array_ptr: *const *const Mutex<GlkObjectMetadata<T>>, array_count: u32, funcname: &str) -> Vec<GlkObject<T>> {
+    if array_ptr.is_null() {
+        panic!("Invalid (null) reference!")
+    }
     let array = unsafe {slice::from_raw_parts(array_ptr, array_count as usize)};
-    array.iter().map(|ptr| from_ptr(*ptr)).collect()
+    array.iter().map(|ptr| from_ptr(*ptr, funcname)).collect()
 }
 
 pub fn from_ptr_opt<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> Option<GlkObject<T>> {
@@ -52,13 +58,13 @@ pub fn from_ptr_opt<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> Option<GlkObj
         None
     }
     else {
-        Some(from_ptr(ptr))
+        Some(from_ptr(ptr, ""))
     }
 }
 
-pub fn reclaim<T>(ptr: *const Mutex<GlkObjectMetadata<T>>) -> GlkObject<T> {
+pub fn reclaim<T>(ptr: *const Mutex<GlkObjectMetadata<T>>, funcname: &str) -> GlkObject<T> {
     if ptr.is_null() {
-        panic!("Invalid (null) reference!")
+        panic!("Invalid (null) reference: {}", funcname)
     }
     else {
         let obj = unsafe {Arc::from_raw(ptr)};

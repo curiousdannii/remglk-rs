@@ -42,28 +42,28 @@ pub unsafe extern "C" fn gidispatch_set_object_registry(register_cb: RegisterCal
 // The C function `gidispatch_get_objrock` takes a generic pointer, which we can't really deal with here in Rust, so support.c will handle calling the appropriate function
 #[no_mangle]
 pub extern "C" fn gidispatch_get_objrock_fileref(ptr: FileRefPtr) -> DispatchRock {
-    let obj = from_ptr(ptr);
+    let obj = from_ptr(ptr, "gidispatch_get_objrock_fileref");
     let obj = obj.lock().unwrap();
     obj.disprock.unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn gidispatch_get_objrock_schannel(ptr: SchannelPtr) -> DispatchRock {
-    let obj = from_ptr(ptr);
+    let obj = from_ptr(ptr, "gidispatch_get_objrock_schannel");
     let obj = obj.lock().unwrap();
     obj.disprock.unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn gidispatch_get_objrock_stream(ptr: StreamPtr) -> DispatchRock {
-    let obj = from_ptr(ptr);
+    let obj = from_ptr(ptr, "gidispatch_get_objrock_stream");
     let obj = obj.lock().unwrap();
     obj.disprock.unwrap()
 }
 
 #[no_mangle]
 pub extern "C" fn gidispatch_get_objrock_window(ptr: WindowPtr) -> DispatchRock {
-    let obj = from_ptr(ptr);
+    let obj = from_ptr(ptr, "gidispatch_get_objrock_window");
     let obj = obj.lock().unwrap();
     obj.disprock.unwrap()
 }

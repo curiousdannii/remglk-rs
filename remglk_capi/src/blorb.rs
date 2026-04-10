@@ -69,7 +69,7 @@ pub extern "C" fn giblorb_count_resources(map: BlorbMapPtr, usage: u32, num_ptr:
 
 #[no_mangle]
 pub extern "C" fn giblorb_create_map(str: StreamPtr, newmap: BlorbMapPtr) -> u32 {
-    match GlkApi::giblorb_create_map(from_ptr(str)) {
+    match GlkApi::giblorb_create_map(from_ptr(str, "giblorb_create_map")) {
         Ok(map) => {
             write_ptr(newmap, map);
             giblorb_err_None
@@ -128,7 +128,7 @@ pub extern "C" fn giblorb_load_resource(map: BlorbMapPtr, method: u32, resptr: *
 
 #[no_mangle]
 pub extern "C" fn giblorb_set_resource_map(str: StreamPtr) -> u32 {
-    map_blorb_res(GLKAPI.lock().unwrap().giblorb_set_resource_map(from_ptr(str)))
+    map_blorb_res(GLKAPI.lock().unwrap().giblorb_set_resource_map(from_ptr(str, "giblorb_set_resource_map")))
 }
 
 #[no_mangle]

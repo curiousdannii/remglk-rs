@@ -210,7 +210,7 @@ pub extern "C" fn glkunix_fileref_create_by_name_uncleaned(usage: u32, filename_
 
 #[no_mangle]
 pub extern "C" fn glkunix_fileref_get_filename(fileref: FileRefPtr) -> *const i8 {
-    let fileref = from_ptr(fileref);
+    let fileref = from_ptr(fileref, "glkunix_fileref_get_filename");
     let fileref = fileref.lock().unwrap();
     let result = &fileref.path_c;
     result.as_ptr()
@@ -224,7 +224,7 @@ pub extern "C" fn glkunix_set_base_file(filename_ptr: *const c_char) {
 
 #[no_mangle]
 pub extern "C" fn glkunix_stream_get_filename(str: StreamPtr) -> *const i8 {
-    let str = from_ptr(str);
+    let str = from_ptr(str, "glkunix_stream_get_filename");
     let str = str.lock().unwrap();
     let result = str.file_path().unwrap();
     result.as_ptr()
@@ -239,7 +239,7 @@ pub extern "C" fn glkunix_stream_open_pathname(filename_ptr: *const i8, textmode
 pub extern "C" fn glkunix_stream_open_pathname_gen(filename_ptr: *const i8, writemode: u32, textmode: u32, rock: u32) -> StreamPtr {
     // Remglk says this can only be called during glkunix_startup_code, but I don't think that's really necessary
     let fileref = glkunix_fileref_create_by_name_uncleaned(fileusage_Data | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename_ptr, 0);
-    let fileref = reclaim(fileref);
+    let fileref = reclaim(fileref, "glkunix_stream_open_pathname_gen");
     let mut glkapi = GLKAPI.lock().unwrap();
     let result = glkapi.glk_stream_open_file(&lock!(fileref), if writemode > 0 {FileMode::Write} else {FileMode::Read}, rock);
     glkapi.glk_fileref_destroy(fileref);
