@@ -211,13 +211,13 @@ pub extern "C" fn glk_get_buffer_stream_uni(str: StreamPtr, buf: BufferMutU32Ptr
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_char_stream_uni(str: StreamPtr) -> i32 {
-    GlkApi::glk_get_char_stream_uni(&mut lock!(from_ptr(str, "glk_get_char_stream_uni"))).unwrap()
+pub extern "C" fn glk_get_char_stream(str: StreamPtr) -> i32 {
+    GlkApi::glk_get_char_stream(&mut lock!(from_ptr(str, "glk_get_char_stream"))).unwrap()
 }
 
 #[no_mangle]
-pub extern "C" fn glk_get_char_stream(str: StreamPtr) -> i32 {
-    GlkApi::glk_get_char_stream(&mut lock!(from_ptr(str, "glk_get_char_stream"))).unwrap()
+pub extern "C" fn glk_get_char_stream_uni(str: StreamPtr) -> i32 {
+    GlkApi::glk_get_char_stream_uni(&mut lock!(from_ptr(str, "glk_get_char_stream_uni"))).unwrap()
 }
 
 #[no_mangle]

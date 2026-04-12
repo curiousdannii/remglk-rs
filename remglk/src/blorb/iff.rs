@@ -21,7 +21,10 @@ use super::constants::*;
 pub struct IFFChunk {
     pub chunktype: FourCC,
     pub length: u32,
-    pub offset: u32,
+    /** The offset of the chunk data */
+    pub offset_data: u32,
+    /** The offset of the chunk header */
+    pub offset_header: u32,
 }
 
 /** Parse an IFF file from a stream */
@@ -36,15 +39,16 @@ pub fn parse_iff(str: &mut GlkStream) -> Result<Vec<IFFChunk>, u32> {
 
     let mut chunks = Vec::new();
     while getpos(str) <= length {
-        let offset = getpos(str);
+        let offset_header = getpos(str);
         let chunktype = read_four_cc(str);
         let length = read4(str);
         chunks.push(IFFChunk {
             chunktype,
             length,
-            offset,
+            offset_data: offset_header + 8,
+            offset_header,
         });
-        let newpos = offset + 8 + length + (length % 2);
+        let newpos = offset_header + 8 + length + (length % 2);
         setpos(str, newpos);
     }
     
