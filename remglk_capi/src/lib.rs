@@ -69,6 +69,10 @@ extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
         return 0;
     }
 
+    if let Some(path) = library_args.resourcemap_path {
+        GLKAPI.lock().unwrap().giblorb_set_resource_map_from_json_map(path);
+    }
+
     // Wait for the initial event with the metrics
     if library_args.autoinit {
         GLKAPI.lock().unwrap().handle_event(Event {

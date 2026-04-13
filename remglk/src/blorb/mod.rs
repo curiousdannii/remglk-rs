@@ -16,6 +16,7 @@ mod iff;
 
 use four_cc::FourCC;
 use pb_imgsize as imgsize;
+use serde::Deserialize;
 
 use crate::glkapi;
 use glkapi::*;
@@ -29,7 +30,7 @@ pub type BlorbResult<T> = Result<T, u32>;
 pub struct BlorbMap {
     chunks: Vec<BlorbChunk>,
     resources: Vec<ResourceIndex>,
-    stream: GlkStreamWeak,
+    stream: Option<GlkStreamWeak>,
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -63,6 +64,17 @@ impl BlorbChunk {
             width: 0,
         }
     }
+}
+
+#[derive(Deserialize)]
+pub struct ResourceMapResource {
+    altttext: Option<String>,
+    format: String,
+    #[serde(default)]
+    height: u32,
+    id: u32,
+    #[serde(default)]
+    width: u32,
 }
 
 /** The result struct for loading a Blorb chunk */
@@ -177,8 +189,44 @@ impl BlorbMap {
         Ok(BlorbMap {
             chunks,
             resources,
-            stream: str_glkobj.downgrade(),
+            stream: Some(str_glkobj.downgrade()),
         })
+    }
+
+    /** Make a Blorb handler from Inform 7's new resource map */
+    pub fn new_from_resource_map(map: Vec<ResourceMapResource>) -> Self {
+        let mut chunks = Vec::new();
+        let mut resources = Vec::new();
+        for (chunknum, resource) in map.iter().enumerate() {
+            let (chunktype, usage) = match resource.format.as_str() {
+                "AIFF" => (giblorb_ID_AIFF, giblorb_ID_Snd_),
+                "JPEG" => (giblorb_ID_JPEG, giblorb_ID_Pict),
+                "MIDI" => (giblorb_ID_MIDI, giblorb_ID_Snd_),
+                "MP3" => (giblorb_ID_MP3_, giblorb_ID_Snd_),
+                "Ogg Vorbis" => (giblorb_ID_OGGV, giblorb_ID_Snd_),
+                "PNG" => (giblorb_ID_PNG_, giblorb_ID_Pict),
+                _ => (giblorb_ID_BINA, giblorb_ID_Data),
+            };
+            chunks.push(BlorbChunk {
+                chunktype,
+                data: None,
+                description: resource.altttext.clone(),
+                height: resource.height,
+                length: 0,
+                offset: 0,
+                width: resource.width,
+            });
+            resources.push(ResourceIndex {
+                chunknum,
+                number: resource.id,
+                usage,
+            });
+        }
+        BlorbMap {
+            chunks,
+            resources,
+            stream: None,
+        }
     }
 
     pub fn count_resources(&self, usage: FourCC) -> BlorbResult<(u32, u32, u32)> {
@@ -203,24 +251,29 @@ impl BlorbMap {
         if chunknum > self.chunks.len() {
             return Err(giblorb_err_NotFound);
         }
-        let chunk = &mut self.chunks[chunknum];
-        let data = if method == giblorb_method_Memory {
-            let buf = chunk.data.get_or_insert_with(|| {
-                let str_glkobj = Into::<GlkStreamShared>::into(&self.stream);
-                let mut str = lock!(str_glkobj);
-                getbuf(&mut str, chunk.offset, chunk.length)
-            });
-            BlorbResultData::Data(buf)
+        if let Some(stream) = &self.stream {
+            let chunk = &mut self.chunks[chunknum];
+            let data = if method == giblorb_method_Memory {
+                let buf = chunk.data.get_or_insert_with(|| {
+                    let str_glkobj = Into::<GlkStreamShared>::into(stream);
+                    let mut str = lock!(str_glkobj);
+                    getbuf(&mut str, chunk.offset, chunk.length)
+                });
+                BlorbResultData::Data(buf)
+            }
+            else {
+                BlorbResultData::Startpos(chunk.offset)
+            };
+            Ok(BlorbChunkResult {
+                chunknum: chunknum as u32,
+                data,
+                length: chunk.length,
+                chunktype: chunk.chunktype,
+            })
         }
         else {
-            BlorbResultData::Startpos(chunk.offset)
-        };
-        Ok(BlorbChunkResult {
-            chunknum: chunknum as u32,
-            data,
-            length: chunk.length,
-            chunktype: chunk.chunktype,
-        })
+            Err(giblorb_err_Read)
+        }
     }
 
     pub fn load_chunk_by_type<'a>(&'a mut self, method: u32, chunktype: FourCC, mut count: u32) -> BlorbResult<BlorbChunkResult<'a>> {
@@ -282,14 +335,16 @@ impl BlorbMap {
     }
 
     pub fn read_data_resource(&self, number: u32) -> Option<BlorbResourceChunk> {
-        for resource in &self.resources {
-            if resource.usage == giblorb_ID_Data && resource.number == number {
-                let chunk = &self.chunks[resource.chunknum];
-                let str_glkobj = Into::<GlkStreamShared>::into(&self.stream);
-                let mut str = lock!(str_glkobj);
-                let binary = chunk.chunktype != giblorb_ID_TEXT;
-                let data = getbuf(&mut str, chunk.offset, chunk.length);
-                return Some(BlorbResourceChunk {binary, data});
+        if let Some(stream) = &self.stream {
+            for resource in &self.resources {
+                if resource.usage == giblorb_ID_Data && resource.number == number {
+                    let chunk = &self.chunks[resource.chunknum];
+                    let str_glkobj = Into::<GlkStreamShared>::into(stream);
+                    let mut str = lock!(str_glkobj);
+                    let binary = chunk.chunktype != giblorb_ID_TEXT;
+                    let data = getbuf(&mut str, chunk.offset, chunk.length);
+                    return Some(BlorbResourceChunk {binary, data});
+                }
             }
         }
         None

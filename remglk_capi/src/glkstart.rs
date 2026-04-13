@@ -38,6 +38,7 @@ pub enum ArgProcessingResults {
 #[derive(Default)]
 pub struct LibraryOptions {
     pub autoinit: bool,
+    pub resourcemap_path: Option<String>,
 }
 
 /** Process the command line arguments */
@@ -121,6 +122,11 @@ pub fn process_args(args: Vec<String>) -> ArgProcessingResults {
             // And now to process the library arguments
             if arg == "-autoinit" {
                 library_args.autoinit = true;
+                continue;
+            }
+
+            if arg == "-resourcemap" {
+                library_args.resourcemap_path = Some(args_iter.next().ok_or(ArgError::NoValue(arg.to_string()))?.to_string());
                 continue;
             }
 

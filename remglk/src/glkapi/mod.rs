@@ -498,8 +498,8 @@ where S: Default + GlkSystem {
         }
         if let Some(map) = &self.blorb {
             if let Some(format) = map.get_sound_format(snd) {
-                // For now only support Ogg/Vorbis and AIFF
-                if format == giblorb_ID_AIFF || format == giblorb_ID_OGGV {
+                // For now only support AIFF, MP3, and Ogg/Vorbis
+                if format == giblorb_ID_AIFF || format == giblorb_ID_MP3_ || format == giblorb_ID_OGGV {
                     schannel.ops.push(SoundChannelOperation::Play(PlayOperation {
                         notify: if notify != 0 {Some(notify)} else {None},
                         repeats: if repeats != 1 {Some(repeats)} else {None},
@@ -1166,6 +1166,15 @@ where S: Default + GlkSystem {
         let res = BlorbMap::new(str_glkobj)?;
         self.blorb = Some(res);
         Ok(())
+    }
+
+    pub fn giblorb_set_resource_map_from_json_map(&mut self, map_path: String) {
+        let map = self.system.file_read(&map_path);
+        if let Some(map) = map {
+            let map = serde_json::from_slice(&map).unwrap();
+            let blorb = BlorbMap::new_from_resource_map(map);
+            self.blorb = Some(blorb);
+        }
     }
 
     pub fn giblorb_unload_chunk(map: &mut BlorbMap, chunknum: u32) -> BlorbResult<()> {
