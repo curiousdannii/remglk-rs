@@ -33,6 +33,7 @@ typedef int32_t glsi32;
 #define GLK_MODULE_DATETIME
 #define GLK_MODULE_RESOURCE_STREAM
 #define GLK_MODULE_GARGLKTEXT
+#define GLK_MODULE_EXTRA_STYLES
 
 /* Define a macro for a function attribute that indicates a function that
     never returns. (E.g., glk_exit().) We try to do this only in C compilers
@@ -82,6 +83,7 @@ typedef struct glk_schannel_struct *schanid_t;
 #define gestalt_DrawImageScale (24)
 #define gestalt_GarglkText (0x1100)
 #define gestalt_Stylehints (0x1101)
+#define gestalt_ExtraStyles (0x1102)
 
 #define evtype_None (0)
 #define evtype_Timer (1)

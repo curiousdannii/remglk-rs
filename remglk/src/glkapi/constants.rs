@@ -45,6 +45,7 @@ pub const gestalt_ResourceStream: u32 = 22;
 pub const gestalt_GraphicsCharInput: u32 = 23;
 pub const gestalt_GarglkText: u32 = 0x1100;
 pub const gestalt_Stylehints: u32 = 0x1101;
+pub const gestalt_ExtraStyles: u32 = 0x1102;
 
 pub const keycode_Unknown: u32 = 0xffffffff;
 pub const keycode_Left: u32 = 0xfffffffe;
@@ -159,7 +160,7 @@ pub const style_Input: u32 = 8;
 pub const style_User1: u32 = 9;
 pub const style_User2: u32 = 10;
 pub const style_NUMSTYLES: u32 = 11;
-pub fn style_name(style: u32) -> &'static str {
+pub const fn style_name(style: u32) -> &'static str {
     match style {
         style_Normal => "normal",
         style_Emphasized => "emphasized",
@@ -172,13 +173,19 @@ pub fn style_name(style: u32) -> &'static str {
         style_Input => "input",
         style_User1 => "user1",
         style_User2 => "user2",
-        _ => "normal",
+        _ => panic!("extra style"),
     }
 }
 pub fn serialize_style_name<S>(style: &u32, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
-    let res = style_name(*style);
-    s.serialize_str(res)
+    if style <= &style_User2 {
+        s.serialize_str(style_name(*style))
+    }
+    else {
+        let mut res = String::from("user");
+        res.push_str(&style.to_string());
+        s.serialize_str(&res)
+    }
 }
 
 pub const wintype_AllTypes: u32 = 0;

@@ -320,6 +320,8 @@ where S: Default + GlkSystem {
 
             gestalt_GarglkText | gestalt_Stylehints => self.support.garglktext as u32,
 
+            gestalt_ExtraStyles => 1,
+
             _ => 0,
         }
     }
@@ -708,7 +710,11 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stylehint_clear(&mut self, wintype: WindowType, style: u32, hint: u32) {
-        let selector = format!(".Style_{}{}", style_name(style), if hint <= stylehint_Justification {"_par"} else {""});
+        if hint >= stylehint_NUMHINTS {
+            return;
+        }
+
+        let selector = style_selector(style, hint);
         let remove_styles = |stylehints: &mut WindowStyles| {
             if stylehints.contains_key(&selector) {
                 let props = stylehints.get_mut(&selector).unwrap();
@@ -731,7 +737,7 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stylehint_set(&mut self, wintype: WindowType, style: u32, hint: u32, value: i32) {
-        if style >= style_NUMSTYLES || hint >= stylehint_NUMHINTS {
+        if hint >= stylehint_NUMHINTS {
             return;
         }
 
@@ -748,7 +754,7 @@ where S: Default + GlkSystem {
         };
 
         let stylehints = if wintype == WindowType::Buffer {&mut self.stylehints_buffer} else {&mut self.stylehints_grid};
-        let selector = format!(".Style_{}{}", style_name(style), if hint <= stylehint_Justification {"_par"} else {""});
+        let selector = style_selector(style, hint);
 
         #[allow(non_upper_case_globals)]
         let css_value = match hint {
@@ -2100,6 +2106,23 @@ fn stream_to_file_buffer(str: &mut GlkStream) -> Option<(&str, Box<[u8]>)> {
         },
         _ => None,
     }
+}
+
+/** Get the standard CSS selector for a stylehint */
+fn style_selector(style: u32, hint: u32) -> String {
+    let mut res = String::with_capacity(23);
+    res.push_str(".Style_");
+    if style <= style_User2 {
+        res.push_str(style_name(style));
+    }
+    else {
+        res.push_str("user");
+        res.push_str(&style.to_string());
+    }
+    if hint <= stylehint_Justification {
+        res.push_str("_par");
+    }
+    res
 }
 
 /** Run a window function on a stream, and the window's echo stream; must be given a locked GlkStream */
