@@ -157,7 +157,7 @@ impl GlkSystem for EmglkenSystem {
 
     fn get_now() -> Timestamp {
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
-        Timestamp::from_second(now.as_secs() as i64).unwrap()
+        Timestamp::new(now.as_secs() as i64, now.subsec_nanos() as i32).unwrap()
     }
 
     fn set_base_file(dirs: &mut Directories, path: String) {
