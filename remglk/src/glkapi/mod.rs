@@ -1061,20 +1061,24 @@ where S: Default + GlkSystem {
         if let WindowData::Pair(data) = &mut win.data {
             // Check the keywin is valid
             if let Some(keywin_glkobj) = keywin {
-                let keywin = lock!(keywin_glkobj);
-                if keywin.wintype == WindowType::Pair {
-                    return Err(KeywinCantBePair);
+                {
+                    let keywin = lock!(keywin_glkobj);
+                    if keywin.wintype == WindowType::Pair {
+                        return Err(KeywinCantBePair);
+                    }
                 }
                 let mut win_parent = keywin_glkobj.downgrade();
                 loop {
                     if win_parent.as_ptr() == win_ptr {
                         break;
                     }
-                    let parent = Into::<GlkWindowShared>::into(&win_parent);
-                    let parent = lock!(parent);
-                    let parent = &parent.parent;
-                    if let Some(parent) = parent {
-                        win_parent = parent.clone();
+                    let parent_obj = Into::<GlkWindowShared>::into(&win_parent);
+                    let next_parent = {
+                        let parent = lock!(parent_obj);
+                        parent.parent.clone()
+                    };
+                    if let Some(next_parent) = next_parent {
+                        win_parent = next_parent;
                     }
                     else {
                         return Err(KeywinMustBeDescendant);
