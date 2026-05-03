@@ -13,6 +13,10 @@ https://github.com/curiousdannii/remglk-rs
 #include "glk.h"
 #include "support.h"
 
+#if defined(_MSC_VER) && !defined(__clang__)
+#define __builtin_unreachable() __assume(0)
+#endif
+
 gidispatch_rock_t gidispatch_get_objrock(void *obj, glui32 objclass) {
     switch (objclass) {
         case gidisp_Class_Fileref:
