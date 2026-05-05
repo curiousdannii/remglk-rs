@@ -18,6 +18,8 @@
 #ifndef GT_START_H
 #define GT_START_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
