@@ -207,7 +207,7 @@ unsafe fn glkunix_arguments() -> Vec<GlkUnixArgument> {
 }
 
 #[no_mangle]
-pub extern "C" fn glkunix_fileref_create_by_name_uncleaned(usage: u32, filename_ptr: *const i8, rock: u32) -> FileRefPtr {
+pub extern "C" fn glkunix_fileref_create_by_name_uncleaned(usage: u32, filename_ptr: *const c_char, rock: u32) -> FileRefPtr {
     let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
     let filename = filename_cstr.to_string_lossy().to_string();
     let result = GLKAPI.lock().unwrap().glkunix_fileref_create_by_name_uncleaned(usage, filename, rock);
@@ -215,7 +215,7 @@ pub extern "C" fn glkunix_fileref_create_by_name_uncleaned(usage: u32, filename_
 }
 
 #[no_mangle]
-pub extern "C" fn glkunix_fileref_get_filename(fileref: FileRefPtr) -> *const i8 {
+pub extern "C" fn glkunix_fileref_get_filename(fileref: FileRefPtr) -> *const c_char {
     let fileref = from_ptr(fileref, "glkunix_fileref_get_filename");
     let fileref = fileref.lock().unwrap();
     let result = &fileref.path_c;
@@ -229,7 +229,7 @@ pub extern "C" fn glkunix_set_base_file(filename_ptr: *const c_char) {
 }
 
 #[no_mangle]
-pub extern "C" fn glkunix_stream_get_filename(str: StreamPtr) -> *const i8 {
+pub extern "C" fn glkunix_stream_get_filename(str: StreamPtr) -> *const c_char {
     let str = from_ptr(str, "glkunix_stream_get_filename");
     let str = str.lock().unwrap();
     let result = str.file_path().unwrap();
@@ -237,12 +237,12 @@ pub extern "C" fn glkunix_stream_get_filename(str: StreamPtr) -> *const i8 {
 }
 
 #[no_mangle]
-pub extern "C" fn glkunix_stream_open_pathname(filename_ptr: *const i8, textmode: u32, rock: u32) -> StreamPtr {
+pub extern "C" fn glkunix_stream_open_pathname(filename_ptr: *const c_char, textmode: u32, rock: u32) -> StreamPtr {
     glkunix_stream_open_pathname_gen(filename_ptr, 0, textmode, rock)
 }
 
 #[no_mangle]
-pub extern "C" fn glkunix_stream_open_pathname_gen(filename_ptr: *const i8, writemode: u32, textmode: u32, rock: u32) -> StreamPtr {
+pub extern "C" fn glkunix_stream_open_pathname_gen(filename_ptr: *const c_char, writemode: u32, textmode: u32, rock: u32) -> StreamPtr {
     // Remglk says this can only be called during glkunix_startup_code, but I don't think that's really necessary
     let fileref = glkunix_fileref_create_by_name_uncleaned(fileusage_Data | if textmode > 0 {fileusage_TextMode} else {fileusage_BinaryMode}, filename_ptr, 0);
     let fileref = reclaim(fileref, "glkunix_stream_open_pathname_gen");

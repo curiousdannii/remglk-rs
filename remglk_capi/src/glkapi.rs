@@ -9,7 +9,7 @@ https://github.com/curiousdannii/remglk-rs
 
 */
 
-use std::ffi::{CStr, c_void};
+use std::ffi::{CStr, c_char, c_void};
 use std::sync::{Mutex};
 
 use remglk::glkapi;
@@ -22,7 +22,7 @@ type BufferU8Ptr = *const u8;
 type BufferU32Ptr = *const u32;
 type BufferMutU8Ptr = *mut u8;
 type BufferMutU32Ptr = *mut u32;
-type CStringU8Ptr = *const i8;
+type CStringU8Ptr = *const c_char;
 type CStringU32Ptr = *const u32;
 pub type FileRefPtr = *const Mutex<GlkObjectMetadata<GlkFileRef>>;
 pub type SchannelPtr = *const Mutex<GlkObjectMetadata<GlkSoundChannel>>;
@@ -137,7 +137,7 @@ pub extern "C" fn glk_exit() {
 }
 
 #[no_mangle]
-pub extern "C" fn glk_fileref_create_by_name(usage: u32, filename_ptr: *const i8, rock: u32) -> FileRefPtr {
+pub extern "C" fn glk_fileref_create_by_name(usage: u32, filename_ptr: *const c_char, rock: u32) -> FileRefPtr {
     let filename_cstr = unsafe {CStr::from_ptr(filename_ptr)};
     let filename = filename_cstr.to_string_lossy().to_string();
     let result = GLKAPI.lock().unwrap().glk_fileref_create_by_name(usage, filename, rock);

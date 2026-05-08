@@ -10,7 +10,7 @@ https://github.com/curiousdannii/remglk-rs
 */
 
 use core::slice;
-use std::ffi::CStr;
+use std::ffi::{CStr, c_char};
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
@@ -111,7 +111,7 @@ where T: Clone {
     unsafe {slice::from_raw_parts_mut(buf, buflen as usize)}
 }
 
-pub fn cstring_u8<'a>(buf: *const i8) -> &'a [u8] {
+pub fn cstring_u8<'a>(buf: *const c_char) -> &'a [u8] {
     unsafe {CStr::from_ptr(buf).to_bytes()}
 }
 
