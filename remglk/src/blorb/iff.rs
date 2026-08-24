@@ -34,11 +34,17 @@ pub fn parse_iff(str: &mut GlkStream) -> Result<Vec<IFFChunk>, u32> {
     if read_four_cc(str) != giblorb_ID_FORM {
         return Err(giblorb_err_Format)
     }
-    let length = read4(str);
+    let _form_length = read4(str);
     _ = read4(str);
 
+    // ADRIFT 5 Developer writes Blorbs whose FORM length undercounts the chunks
+    // actually present; walk the physical stream length instead (as AsyncGlk does).
+    str.do_operation(SetPosition(SeekMode::End, 0)).unwrap();
+    let filelength = getpos(str);
+    setpos(str, 12);
+
     let mut chunks = Vec::new();
-    while getpos(str) <= length {
+    while getpos(str) < filelength {
         let offset_header = getpos(str);
         let chunktype = read_four_cc(str);
         let length = read4(str);
@@ -49,6 +55,9 @@ pub fn parse_iff(str: &mut GlkStream) -> Result<Vec<IFFChunk>, u32> {
             offset_header,
         });
         let newpos = offset_header + 8 + length + (length % 2);
+        if newpos > filelength + 1 {
+            return Err(giblorb_err_Format);
+        }
         setpos(str, newpos);
     }
     
