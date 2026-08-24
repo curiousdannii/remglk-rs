@@ -28,19 +28,22 @@ pub struct IFFChunk {
 }
 
 /** Parse an IFF file from a stream */
-pub fn parse_iff(str: &mut GlkStream) -> Result<Vec<IFFChunk>, u32> {
+pub fn parse_iff(str: &mut GlkStream, allow_invalid_length: bool) -> Result<Vec<IFFChunk>, u32> {
 
     setpos(str, 0);
     if read_four_cc(str) != giblorb_ID_FORM {
         return Err(giblorb_err_Format)
     }
-    let _form_length = read4(str);
-    _ = read4(str);
 
-    // ADRIFT 5 Developer writes Blorbs whose FORM length undercounts the chunks
-    // actually present; walk the physical stream length instead (as AsyncGlk does).
-    str.do_operation(SetPosition(SeekMode::End, 0)).unwrap();
-    let filelength = getpos(str);
+    // ADRIFT 5 creates Blorbs with an incorrect FORM length; use the file length instead.
+    // https://github.com/jcwild/ADRIFT-5/issues/12
+    let filelength = if allow_invalid_length {
+        str.do_operation(SetPosition(SeekMode::End, 0)).unwrap();
+        getpos(str)
+    }
+    else {
+        read4(str)
+    };
     setpos(str, 12);
 
     let mut chunks = Vec::new();

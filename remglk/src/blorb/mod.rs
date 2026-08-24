@@ -107,7 +107,7 @@ impl BlorbMap {
     pub fn new(str_glkobj: GlkStreamShared) -> BlorbResult<Self> {
         let mut str = lock!(str_glkobj);
 
-        let iff_chunks = parse_iff(&mut str)?;
+        let iff_chunks = parse_iff(&mut str, true)?;
         let mut chunks = Vec::new();
         let mut resources = Vec::new();
         let mut resources_by_offset = Vec::new();
