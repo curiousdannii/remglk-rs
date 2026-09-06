@@ -94,6 +94,7 @@ extern "C" fn main(argc: c_int, argv: *const *const c_char) -> c_int {
                     "timer".to_string(),
                 ],
                 tzoffset: None,
+                theme: None,
             }),
             gen: 0,
             partial: None,

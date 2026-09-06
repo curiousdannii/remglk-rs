@@ -61,6 +61,7 @@ pub type PartialInputs = Option<HashMap<u32, String>>;
 #[derive(Deserialize)]
 pub struct ArrangeEvent {
     pub metrics: Box<Metrics>,
+    pub theme: Option<Theme>,
 }
 
 /** Character (single key) event */
@@ -98,6 +99,7 @@ pub struct InitEvent {
     pub support: Vec<String>,
     /** Timezone offset in minutes (UTC+10 = `600`) */
     pub tzoffset: Option<i32>,
+    pub theme: Option<Theme>,
 }
 
 /** Line (text) event */
@@ -227,6 +229,30 @@ pub struct Metrics {
     /** Spacing Y */
     pub spacingy: Option<f64>,
     pub width: f64,
+}
+
+/** Runner theme colors and font attributes for glk_style_measure */
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct Theme {
+    /** Whether the client is honoring game-suggested styles (stylehints, zcolors, CSS) */
+    pub honor_game_styles: bool,
+    pub buffer: StyleTable,
+    pub grid: StyleTable,
+}
+
+pub type StyleTable = HashMap<String, StyleEntry>;
+
+/** Effective theme values for one Glk style (all fields optional; inherit from `normal`) */
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+pub struct StyleEntry {
+    pub fg: Option<u32>,
+    pub bg: Option<u32>,
+    pub weight: Option<i32>,
+    pub oblique: Option<u32>,
+    pub proportional: Option<u32>,
+    pub reverse: Option<u32>,
+    /** Font size in CSS pixels */
+    pub size: Option<u32>,
 }
 
 /** Normalised screen and font metrics */

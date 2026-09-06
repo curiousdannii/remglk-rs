@@ -18,6 +18,7 @@ pub mod protocol;
 mod protocol_impl;
 mod schannels;
 mod streams;
+mod theme;
 mod windows;
 
 use std::cmp::min;
@@ -46,6 +47,7 @@ use objects::*;
 use protocol::*;
 use schannels::*;
 use streams::*;
+use theme::{clear_hint, measure_style, set_hint, ThemeState};
 use windows::*;
 
 // Expose for so they can be turned into pointers
@@ -79,6 +81,9 @@ where S: Default + GlkSystem {
     pub streams: GlkObjectStore<GlkStream>,
     stylehints_buffer: WindowStyles,
     stylehints_grid: WindowStyles,
+    hint_values_buffer: theme::HintMatrix,
+    hint_values_grid: theme::HintMatrix,
+    theme: ThemeState,
     support: SupportedFeatures,
     pub system: S,
     tempfile_counter: u32,
@@ -714,12 +719,15 @@ where S: Default + GlkSystem {
     }
 
     pub fn glk_stylehint_clear(&mut self, wintype: WindowType, style: u32, hint: u32) {
+        if !self.theme.honor_game_styles {
+            return;
+        }
         if hint >= stylehint_NUMHINTS {
             return;
         }
 
         let selector = style_selector(style, hint);
-        let remove_styles = |stylehints: &mut WindowStyles| {
+        let remove_styles = |stylehints: &mut WindowStyles, hint_matrix: &mut theme::HintMatrix| {
             if stylehints.contains_key(&selector) {
                 let props = stylehints.get_mut(&selector).unwrap();
                 props.remove(stylehint_name(hint));
@@ -727,20 +735,24 @@ where S: Default + GlkSystem {
                     stylehints.remove(&selector);
                 }
             }
+            clear_hint(hint_matrix, style, hint);
         };
 
         if wintype == WindowType::All || wintype == WindowType::Buffer {
-            remove_styles(&mut self.stylehints_buffer);
+            remove_styles(&mut self.stylehints_buffer, &mut self.hint_values_buffer);
             if style == style_Normal && hint == stylehint_BackColor {
                 self.page_margin.set_stylehint(None);
             }
         }
         if wintype == WindowType::All || wintype == WindowType::Grid {
-            remove_styles(&mut self.stylehints_grid);
+            remove_styles(&mut self.stylehints_grid, &mut self.hint_values_grid);
         }
     }
 
     pub fn glk_stylehint_set(&mut self, wintype: WindowType, style: u32, hint: u32, value: i32) {
+        if !self.theme.honor_game_styles {
+            return;
+        }
         if hint >= stylehint_NUMHINTS {
             return;
         }
@@ -758,6 +770,7 @@ where S: Default + GlkSystem {
         };
 
         let stylehints = if wintype == WindowType::Buffer {&mut self.stylehints_buffer} else {&mut self.stylehints_grid};
+        let hint_matrix = if wintype == WindowType::Buffer {&mut self.hint_values_buffer} else {&mut self.hint_values_grid};
         let selector = style_selector(style, hint);
 
         #[allow(non_upper_case_globals)]
@@ -779,10 +792,24 @@ where S: Default + GlkSystem {
 
         let props = stylehints.get_mut(&selector).unwrap();
         props.insert(stylehint_name(hint).to_string(), css_value);
+        set_hint(hint_matrix, style, hint, value);
 
         if wintype == WindowType::Buffer && style == style_Normal && hint == stylehint_BackColor {
             self.page_margin.set_stylehint(Some(value as u32));
         }
+    }
+
+    pub fn glk_style_measure(&self, win: &GlkWindow, style: u32, hint: u32) -> Option<u32> {
+        let wintype = match win.wintype {
+            WindowType::Buffer | WindowType::Grid => win.wintype,
+            _ => return None,
+        };
+        let hint_matrix = if wintype == WindowType::Buffer {
+            &self.hint_values_buffer
+        } else {
+            &self.hint_values_grid
+        };
+        measure_style(&self.theme, self.theme.honor_game_styles, hint_matrix, wintype, style, hint)
     }
 
     pub fn glk_time_to_date_local(&self, time: &GlkTime) -> GlkDate {
@@ -1256,6 +1283,9 @@ where S: Default + GlkSystem {
         match event.data {
             EventData::Init(data) => {
                 self.metrics = normalise_metrics(*data.metrics)?;
+                if let Some(theme) = data.theme {
+                    self.theme.apply(theme);
+                }
                 for support in data.support {
                     match support.as_ref() {
                         "garglktext" => self.support.garglktext = true,
@@ -1278,6 +1308,9 @@ where S: Default + GlkSystem {
 
             EventData::Arrange(data) => {
                 self.metrics = normalise_metrics(*data.metrics)?;
+                if let Some(theme) = data.theme {
+                    self.theme.apply(theme);
+                }
                 if let Some(win) = self.root_window.as_ref() {
                     let win = Into::<GlkWindowShared>::into(win);
                     self.rearrange_window(&win, WindowBox {

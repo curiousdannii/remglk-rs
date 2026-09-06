@@ -590,9 +590,17 @@ pub extern "C" fn glk_style_distinguish(_win: WindowPtr, _style1: u32, _style2: 
 }
 
 #[no_mangle]
-pub extern "C" fn glk_style_measure(_win: WindowPtr, _style: u32, _hint: u32, result_ptr: *mut u32) -> u32 {
-    write_ptr(result_ptr, 0);
-    0
+pub extern "C" fn glk_style_measure(win: WindowPtr, style: u32, hint: u32, result_ptr: *mut u32) -> u32 {
+    let win_obj = from_ptr(win, "glk_style_measure");
+    let win = lock!(win_obj);
+    let result = GLKAPI.lock().unwrap().glk_style_measure(&win, style, hint);
+    if let Some(value) = result {
+        write_ptr(result_ptr, value);
+        1
+    } else {
+        write_ptr(result_ptr, 0);
+        0
+    }
 }
 
 #[no_mangle]

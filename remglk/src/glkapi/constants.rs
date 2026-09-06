@@ -176,6 +176,22 @@ pub const fn style_name(style: u32) -> &'static str {
         _ => panic!("extra style"),
     }
 }
+pub fn style_from_name(name: &str) -> Option<u32> {
+    match name {
+        "normal" => Some(style_Normal),
+        "emphasized" => Some(style_Emphasized),
+        "preformatted" => Some(style_Preformatted),
+        "header" => Some(style_Header),
+        "subheader" => Some(style_Subheader),
+        "alert" => Some(style_Alert),
+        "note" => Some(style_Note),
+        "blockquote" => Some(style_BlockQuote),
+        "input" => Some(style_Input),
+        "user1" => Some(style_User1),
+        "user2" => Some(style_User2),
+        _ => None,
+    }
+}
 pub fn serialize_style_name<S>(style: &u32, s: S) -> Result<S::Ok, S::Error>
 where S: Serializer {
     if style <= &style_User2 {
