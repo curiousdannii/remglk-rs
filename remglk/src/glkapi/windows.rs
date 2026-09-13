@@ -137,6 +137,7 @@ impl GlkObjectClass for GlkWindow {
 pub trait WindowOperations {
     fn clear(&mut self) -> Option<u32> {None}
     fn put_string(&mut self, _str: &str, _style: Option<u32>) {}
+    fn set_background_immediate(&mut self, _colour: Option<u32>) {}
     fn set_colours(&mut self, _fg: u32, _bg: u32) {}
     fn set_css(&mut self, _name: &str, _val: Option<&CSSValue>) {}
     fn set_hyperlink(&mut self, _val: u32) {}
@@ -167,6 +168,8 @@ pub struct BufferWindow {
     last_bg: Option<u32>,
     last_fg: Option<u32>,
     pub line_input_buffer: Option<GlkOwnedBuffer>,
+    /// Pending immediate background colour to send (without clearing)
+    pending_bg: Option<Option<u32>>,
     sent_stylehints: bool,
     stylehints: WindowStyles,
 }
@@ -227,6 +230,7 @@ impl WindowOperations for BufferWindow {
         self.cleared_bg = self.last_bg;
         self.cleared_fg = self.last_fg;
         self.clear_content(None);
+        self.pending_bg = None;
         self.cleared_bg
     }
 
@@ -245,6 +249,29 @@ impl WindowOperations for BufferWindow {
         if style.is_some() {
             self.set_style(old_style);
         }
+    }
+
+    fn set_background_immediate(&mut self, colour: Option<u32>) {
+        self.last_bg = colour;
+        self.pending_bg = Some(colour);
+        // Update Normal style so existing text runs track the window fill
+        match colour {
+            Some(colour) => {
+                self.stylehints.entry(".Style_normal".to_string()).or_default()
+                    .insert("background-color".to_string(), CSSValue::String(colour_code_to_css(colour)));
+            },
+            None => {
+                let empty = self.stylehints.get_mut(".Style_normal").map(|props| {
+                    props.remove("background-color");
+                    props.is_empty()
+                }).unwrap_or(false);
+                if empty {
+                    self.stylehints.remove(".Style_normal");
+                }
+            },
+        }
+        // Resend styles on the next update
+        self.sent_stylehints = false;
     }
 
     fn set_colours(&mut self, fg: u32, bg: u32) {
@@ -300,17 +327,22 @@ impl WindowOperations for BufferWindow {
                 LineData::TextRun(textrun) => !textrun.text.is_empty(),
             }).collect());
         }
-        // Only send an update if there is new content or the window has been cleared
-        if self.cleared || self.content.len() > 1 || !self.content[0].content.is_empty() {
+        let pending_bg = self.pending_bg.take();
+        let has_content = self.cleared || self.content.len() > 1 || !self.content[0].content.is_empty();
+        // Only send an update if there is new content, the window has been cleared, or an immediate bg change
+        if has_content || pending_bg.is_some() {
             let mut content_update = BufferWindowContentUpdate {
                 base: TextualWindowUpdate::new(update.id),
-                text: mem::take(&mut self.content),
+                text: if has_content {mem::take(&mut self.content)} else {vec![]},
             };
             if self.cleared {
                 content_update.base.clear = true;
                 content_update.base.bg = Some(self.cleared_bg.map(colour_code_to_css));
                 content_update.base.fg = Some(self.cleared_fg.map(colour_code_to_css));
                 self.cleared = false;
+            }
+            else if let Some(bg) = pending_bg {
+                content_update.base.bg = Some(bg.map(colour_code_to_css));
             }
             update.content = Some(ContentUpdate::Buffer(content_update));
         }
@@ -339,6 +371,16 @@ impl WindowOperations for GraphicsWindow {
         None
     }
 
+    fn set_background_immediate(&mut self, colour: Option<u32>) {
+        // Match glk_window_set_background_color: store for later clear/resize.
+        // Existing pixels are left alone (no fill).
+        if let Some(colour) = colour {
+            self.draw.push(GraphicsWindowOperation::SetColor(SetColorOperation {
+                color: colour_code_to_css(colour),
+            }));
+        }
+    }
+
     fn update(&mut self, mut update: WindowUpdate) -> WindowUpdate {
         if !self.draw.is_empty() {
             update.content = Some(ContentUpdate::Graphics(GraphicsWindowContentUpdate {
@@ -363,6 +405,8 @@ pub struct GridWindow {
     last_fg: Option<u32>,
     pub line_input_buffer: Option<GlkOwnedBuffer>,
     lines: Vec<GridLine>,
+    /// Pending immediate background colour to send (without clearing)
+    pending_bg: Option<Option<u32>>,
     sent_stylehints: bool,
     stylehints: WindowStyles,
     pub width: usize,
@@ -426,6 +470,7 @@ impl WindowOperations for GridWindow {
         self.update_size(height, self.width);
         self.x = 0;
         self.y = 0;
+        self.pending_bg = None;
         self.cleared_bg
     }
 
@@ -452,6 +497,29 @@ impl WindowOperations for GridWindow {
         if style.is_some() {
             self.set_style(old_style);
         }
+    }
+
+    fn set_background_immediate(&mut self, colour: Option<u32>) {
+        self.last_bg = colour;
+        self.pending_bg = Some(colour);
+        // Update Normal style so existing text runs track the window fill
+        match colour {
+            Some(colour) => {
+                self.stylehints.entry(".Style_normal".to_string()).or_default()
+                    .insert("background-color".to_string(), CSSValue::String(colour_code_to_css(colour)));
+            },
+            None => {
+                let empty = self.stylehints.get_mut(".Style_normal").map(|props| {
+                    props.remove("background-color");
+                    props.is_empty()
+                }).unwrap_or(false);
+                if empty {
+                    self.stylehints.remove(".Style_normal");
+                }
+            },
+        }
+        // Resend styles on the next update
+        self.sent_stylehints = false;
     }
 
     fn set_colours(&mut self, fg: u32, bg: u32) {
@@ -492,7 +560,8 @@ impl WindowOperations for GridWindow {
             }
         }
 
-        if self.lines.iter().any(|line| line.changed) {
+        let pending_bg = self.pending_bg.take();
+        if self.lines.iter().any(|line| line.changed) || pending_bg.is_some() {
             let mut grid_content = GridWindowContentUpdate {
                 base: TextualWindowUpdate::new(update.id),
                 lines: self.lines.iter_mut().enumerate().filter_map(|(i, line)| {
@@ -528,6 +597,9 @@ impl WindowOperations for GridWindow {
                 grid_content.base.bg = Some(self.cleared_bg.map(colour_code_to_css));
                 grid_content.base.fg = Some(self.cleared_fg.map(colour_code_to_css));
                 self.cleared = false;
+            }
+            else if let Some(bg) = pending_bg {
+                grid_content.base.bg = Some(bg.map(colour_code_to_css));
             }
             update.content = Some(ContentUpdate::Grid(grid_content));
         }

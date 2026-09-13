@@ -46,6 +46,7 @@ pub const gestalt_GraphicsCharInput: u32 = 23;
 pub const gestalt_GarglkText: u32 = 0x1100;
 pub const gestalt_Stylehints: u32 = 0x1101;
 pub const gestalt_ExtraStyles: u32 = 0x1102;
+pub const gestalt_WindowBackgroundImmediate: u32 = 0x1120;
 
 pub const keycode_Unknown: u32 = 0xffffffff;
 pub const keycode_Left: u32 = 0xfffffffe;
