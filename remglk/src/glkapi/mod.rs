@@ -326,6 +326,8 @@ where S: Default + GlkSystem {
 
             gestalt_ExtraStyles => 1,
 
+            gestalt_WindowBackgroundImmediate => 1,
+
             _ => 0,
         }
     }
@@ -1139,6 +1141,28 @@ where S: Default + GlkSystem {
         else {
             Err(NotGraphicsWindow)
         }
+    }
+
+    pub fn glk_window_set_background_color_immediate(&mut self, win: &mut GlkWindow, colour: u32) -> GlkResult<'_, ()> {
+        match win.wintype {
+            WindowType::Buffer | WindowType::Grid | WindowType::Graphics => {}
+            _ => return Err(NotBackgroundImmediateWindow),
+        }
+
+        let colour = if colour == zcolor_Default {None} else {Some(colour)};
+        win.data.set_background_immediate(colour);
+
+        // Text buffers own the page margin; keep it in sync (status grids do not).
+        if win.wintype == WindowType::Buffer {
+            self.page_margin.set_garglk(colour);
+        }
+
+        // Force a windows update so updated Style_normal styles are resent
+        if win.wintype == WindowType::Buffer || win.wintype == WindowType::Grid {
+            self.windows_changed = true;
+        }
+
+        Ok(())
     }
 
     pub fn glk_window_set_echo_stream(win: &mut GlkWindow, str: Option<&GlkStreamShared>) {

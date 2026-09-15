@@ -34,6 +34,7 @@ typedef int32_t glsi32;
 #define GLK_MODULE_RESOURCE_STREAM
 #define GLK_MODULE_GARGLKTEXT
 #define GLK_MODULE_EXTRA_STYLES
+#define GLK_MODULE_WINDOW_BACKGROUND_IMMEDIATE
 
 /* Define a macro for a function attribute that indicates a function that
     never returns. (E.g., glk_exit().) We try to do this only in C compilers
@@ -84,6 +85,7 @@ typedef struct glk_schannel_struct *schanid_t;
 #define gestalt_GarglkText (0x1100)
 #define gestalt_Stylehints (0x1101)
 #define gestalt_ExtraStyles (0x1102)
+#define gestalt_WindowBackgroundImmediate (0x1120)
 
 #define evtype_None (0)
 #define evtype_Timer (1)
@@ -478,5 +480,13 @@ extern void garglk_set_zcolors(glui32 fg, glui32 bg);
 extern void garglk_set_zcolors_stream(strid_t str, glui32 fg, glui32 bg);
 extern void garglk_set_reversevideo(glui32 reverse);
 extern void garglk_set_reversevideo_stream(strid_t str, glui32 reverse);
+
+#ifdef GLK_MODULE_WINDOW_BACKGROUND_IMMEDIATE
+/* Update window background immediately (text buffer, text grid, graphics).
+   Unlike glk_window_set_background_color, this applies at once and is not
+   limited to graphics windows. Color 0xffffffff (zcolor_Default) restores
+   the interpreter default. */
+extern void glk_window_set_background_color_immediate(winid_t win, glui32 color);
+#endif /* GLK_MODULE_WINDOW_BACKGROUND_IMMEDIATE */
 
 #endif /* GLK_H */

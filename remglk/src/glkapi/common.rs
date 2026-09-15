@@ -51,6 +51,8 @@ pub enum GlkApiError {
     NotFileStream,
     #[error("invalid window: not a graphics window")]
     NotGraphicsWindow,
+    #[error("invalid window: not a graphics, text buffer, or text grid window")]
+    NotBackgroundImmediateWindow,
     #[error("invalid window: not a grid window")]
     NotGridWindow,
     #[error("invalid window: not a pair window")]

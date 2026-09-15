@@ -728,6 +728,11 @@ pub extern "C" fn glk_window_set_background_color(win: WindowPtr, colour: u32) {
 }
 
 #[no_mangle]
+pub extern "C" fn glk_window_set_background_color_immediate(win: WindowPtr, colour: u32) {
+    GLKAPI.lock().unwrap().glk_window_set_background_color_immediate(&mut lock!(from_ptr(win, "glk_window_set_background_color_immediate")), colour).unwrap();
+}
+
+#[no_mangle]
 pub extern "C" fn glk_window_set_echo_stream(win: WindowPtr, str: StreamPtr) {
     GlkApi::glk_window_set_echo_stream(&mut lock!(from_ptr(win, "glk_window_set_echo_stream")), from_ptr_opt(str).as_ref())
 }
