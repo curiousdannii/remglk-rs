@@ -1,0 +1,59 @@
+! echolinetest: glk_set_echo_line_event() must not affect a pending line
+! input request. Compile with: inform6 -G echolinetest.inf
+
+Array linebuf -> 256;
+Array gg_event --> 4;
+Global mainwin;
+
+[ glk0 id  res;
+  @glk id 0 res;
+  return res;
+];
+
+[ glk1 id a  res;
+  @copy a sp;
+  @glk id 1 res;
+  return res;
+];
+
+[ glk2 id a b  res;
+  @copy b sp; @copy a sp;
+  @glk id 2 res;
+  return res;
+];
+
+[ glk4 id a b c d  res;
+  @copy d sp; @copy c sp; @copy b sp; @copy a sp;
+  @glk id 4 res;
+  return res;
+];
+
+[ glk5 id a b c d e  res;
+  @copy e sp; @copy d sp; @copy c sp; @copy b sp; @copy a sp;
+  @glk id 5 res;
+  return res;
+];
+
+! Request line input with echo set to start_echo, then change it to
+! pending_echo while the request is pending, and wait for the line.
+[ ReadLine start_echo pending_echo;
+  glk2($0150, mainwin, start_echo);     ! glk_set_echo_line_event
+  print ">";
+  glk4($00D0, mainwin, linebuf, 256, 0); ! glk_request_line_event
+  glk2($0150, mainwin, pending_echo);   ! glk_set_echo_line_event
+  do {
+    glk1($00C0, gg_event);              ! glk_select
+  } until (gg_event-->0 == 3);          ! evtype_LineInput
+  print "Read ", gg_event-->2, " characters.^";
+];
+
+[ Main;
+  @setiosys 2 0;
+  mainwin = glk5($0023, 0, 0, 0, 3, 0); ! glk_window_open: text buffer
+  glk1($002F, mainwin);                 ! glk_set_window
+  print "EchoLineTest^^";
+  ReadLine(1, 0);
+  ReadLine(0, 1);
+  print "Done.^";
+  glk0($0001);                          ! glk_exit
+];

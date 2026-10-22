@@ -1,0 +1,17 @@
+** game: echolinetest.ulx
+** remformat: yes
+
+# glk_set_echo_line_event() does not affect a pending line input request
+
+* echo
+
+EchoLineTest
+
+> xyzzy
+xyzzy
+Read 5 characters.
+
+> plugh
+!plugh
+Read 5 characters.
+Done.

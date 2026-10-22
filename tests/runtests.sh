@@ -17,6 +17,8 @@ run_test advent.ulx.regtest
 echo 'Glk tests'
 echo ' datetimetest'
 run_test datetimetest.ulx.regtest
+echo ' echolinetest'
+run_test echolinetest.ulx.regtest
 echo ' extbinaryfile'
 run_test extbinaryfile.ulx.regtest
 rm binfile.glkdata

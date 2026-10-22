@@ -167,6 +167,8 @@ pub struct BufferWindow {
     last_bg: Option<u32>,
     last_fg: Option<u32>,
     pub line_input_buffer: Option<GlkOwnedBuffer>,
+    /** Whether the pending line input request echoes its input (`echo_line_input` when it was requested) */
+    pub line_input_echo: bool,
     sent_stylehints: bool,
     stylehints: WindowStyles,
 }

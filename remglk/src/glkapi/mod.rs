@@ -1618,7 +1618,7 @@ where S: Default + GlkSystem {
 
     fn handle_line_input(&mut self, win: &mut GlkWindowMetadata, input: &str, termkey: Option<TerminatorCode>) -> GlkResult<'_, GlkEvent> {
         let (request_echo_line_input, mut line_input_buffer) = match &mut win.data {
-            WindowData::Buffer(data) => (data.echo_line_input, data.line_input_buffer.take().unwrap()),
+            WindowData::Buffer(data) => (data.line_input_echo, data.line_input_buffer.take().unwrap()),
             WindowData::Grid(data) => (true, data.line_input_buffer.take().unwrap()),
             _ => unreachable!(),
         };
@@ -1831,6 +1831,8 @@ where S: Default + GlkSystem {
         match win.data {
             WindowData::Buffer(ref mut data) => {
                 data.line_input_buffer = Some(buf);
+                // glk_set_echo_line_event() does not affect a pending line input request
+                data.line_input_echo = data.echo_line_input;
             },
             WindowData::Grid(ref mut data) => {
                 data.line_input_buffer = Some(buf);
